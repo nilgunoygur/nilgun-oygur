@@ -1659,7 +1659,7 @@ h1 {
   border-radius: 24px;
   min-height: 496px;
   padding: 120px 60px;
-  background: white;
+  background: linear-gradient(90deg, #b7dadd 0%, #d7ebeb 48%, #fff 100%);
 }
 .social-banner .social-portrait {
   width: calc(100% + 60px) !important;
@@ -1668,17 +1668,20 @@ h1 {
   inset: -172px -30px !important;
   object-fit: cover;
   border-radius: 0;
-  z-index: -2;
+  z-index: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent 37%, #000 60%);
+  mask-image: linear-gradient(90deg, transparent 37%, #000 60%);
 }
 .social-banner::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #b7dadd 0%, #b7dadd99 43%, #b7dadd15 100%);
+  background: linear-gradient(90deg, #b7dadd 0%, #d7ebeb 48%, #fff 100%);
   z-index: -1;
 }
 .social-copy {
   position: relative;
+  z-index: 1;
   max-width: 580px;
 }
 .social-copy .eyebrow {
@@ -1851,6 +1854,8 @@ h1 {
     width: 800px !important;
     height: 528px !important;
     inset: auto -70px -10px auto !important;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 32%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 32%);
   }
   .social-banner::after {
     background: linear-gradient(
