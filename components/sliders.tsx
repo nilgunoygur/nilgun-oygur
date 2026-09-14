@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, Copy } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 export function PhotoCarousel({
   images,
@@ -21,7 +21,7 @@ export function PhotoCarousel({
       aria-label={label}
     >
       <div className="gallery-window">
-        <AnimatePresence mode="wait">
+        <AnimatePresence initial={false}>
           <motion.div
             key={index}
             initial={{ opacity: reduced ? 1 : 0 }}
@@ -29,6 +29,7 @@ export function PhotoCarousel({
             exit={{ opacity: reduced ? 1 : 0 }}
             transition={{ duration: 0.25 }}
             className="gallery-photo"
+            style={{ position: "absolute", inset: 0 }}
           >
             <Image
               src={images[index]}
@@ -149,5 +150,44 @@ export function CopyLink() {
         {status}
       </span>
     </>
+  );
+}
+
+export function GalleryStrip({ images }: { images: string[] }) {
+  const [paused, setPaused] = useState(false);
+  return (
+    <div className="journey-gallery">
+      <div className="gallery-strip" data-paused={paused}>
+        <div className="gallery-strip-track">
+          {[0, 1].map((copy) => (
+            <div
+              className="gallery-strip-group"
+              key={copy}
+              aria-hidden={copy === 1}
+            >
+              {images.map((src, i) => (
+                <div className="gallery-strip-photo" key={src}>
+                  <Image
+                    src={src}
+                    alt={copy ? "" : `Etkinliklerimizden ${i + 1}. fotoğraf`}
+                    fill
+                    sizes="300px"
+                  />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="pill"
+        onClick={() => setPaused(!paused)}
+        aria-pressed={paused}
+      >
+        {paused ? <Play /> : <Pause />}
+        {paused ? "Fotoğrafları oynat" : "Fotoğrafları duraklat"}
+      </Button>
+    </div>
   );
 }

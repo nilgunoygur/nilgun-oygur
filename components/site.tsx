@@ -1,10 +1,17 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpRight, Check, Camera, Video, Mail } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  Camera,
+  Video,
+  Mail,
+} from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/reveal";
-import { PhotoCarousel, ArticleCarousel } from "@/components/sliders";
+import { GalleryStrip, ArticleCarousel } from "@/components/sliders";
 import {
   asset,
   pages,
@@ -27,14 +34,20 @@ export function Booking({
   credit?: boolean;
 }) {
   return (
-    <div className="booking">
+    <div className={cn("booking", !credit && "booking-soft")}>
       <a
-        className={cn(buttonVariants({ variant: "glow", size: "hero" }))}
+        className={cn(
+          buttonVariants({
+            variant: credit ? "glow" : "secondary",
+            size: "hero",
+          }),
+        )}
         href={bookingUrl}
         target="_blank"
         rel="noopener noreferrer"
       >
         {label}
+        {label === "Görüşme Ayarlayın" && <ArrowRight />}
       </a>
       {credit && (
         <span className="calendly">
@@ -61,12 +74,18 @@ export function Hero({
 }) {
   return (
     <section className="hero page-width">
-      <Reveal className="hero-copy">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="hero-description">{description}</p>
-        <Booking label={contact ? "Şimdi Başlayalım" : undefined} />
-      </Reveal>
+      <div className="hero-copy">
+        <Reveal from="top">
+          <p className="eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+        </Reveal>
+        <Reveal from="top" delay={0.3}>
+          <p className="hero-description">{description}</p>
+        </Reveal>
+        <Reveal from="top" delay={0.5}>
+          <Booking label={contact ? "Şimdi Başlayalım" : undefined} />
+        </Reveal>
+      </div>
       <Reveal className="hero-art" delay={0.12}>
         <div className="ribbon ribbon-one" />
         <div className="ribbon ribbon-two" />
@@ -167,34 +186,38 @@ export function About({ full = false }: { full?: boolean }) {
 export function SocialSection() {
   return (
     <section className="social-section page-width">
-      <Reveal>
+      <Reveal className="social-banner">
         <Image
           src={asset(pages["/"].images[3])}
-          alt="Nilgün Oygur Sosyal Medyaları"
-          width={650}
-          height={420}
-          sizes="(max-width: 760px) 90vw, 50vw"
+          alt="Nilgün Oygur"
+          fill
+          sizes="(max-width: 760px) 160vw, 100vw"
+          className="social-portrait"
         />
-      </Reveal>
-      <Reveal>
-        <p className="eyebrow">Beni İnternette Keşfedin</p>
-        <h2>
-          Dönüşüm Her Zaman
-          <br /> İçeriden Gelir
-        </h2>
-        <div className="social-links">
-          {socials.map((s) => (
-            <a
-              key={s.label}
-              href={s.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "secondary", size: "pill" })}
-            >
-              {s.label}
-              <ArrowUpRight data-icon="inline-end" />
-            </a>
-          ))}
+        <div className="social-copy">
+          <p className="eyebrow">Beni İnternette Keşfedin</p>
+          <h2>
+            Dönüşüm Her Zaman
+            <br />
+            İçeriden Gelir
+          </h2>
+          <div className="social-links">
+            {socials.map((s) => (
+              <a
+                key={s.label}
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({
+                  variant: "secondary",
+                  size: "pill",
+                })}
+              >
+                <SocialIcon name={s.label} />
+                {s.label}
+              </a>
+            ))}
+          </div>
         </div>
       </Reveal>
     </section>
@@ -214,7 +237,7 @@ export function Journey({ gallery = true }: { gallery?: boolean }) {
           <Booking label="Şimdi Başlayalım" credit={false} />
         </Reveal>
         {gallery && (
-          <PhotoCarousel
+          <GalleryStrip
             images={pages["/nilgun-oygur"].images.slice(4, 10).map(asset)}
           />
         )}
@@ -281,5 +304,35 @@ export function Footer() {
       <Separator />
       <p className="copyright">Nilgün Oygur © 2024.</p>
     </footer>
+  );
+}
+
+export function SocialIcon({ name }: { name: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      {name === "Instagram" ? (
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.5" cy="6.5" r=".7" fill="currentColor" />
+        </>
+      ) : name === "Youtube" ? (
+        <>
+          <rect x="2" y="5" width="20" height="14" rx="4" />
+          <path d="m10 9 6 3-6 3Z" />
+        </>
+      ) : (
+        <>
+          <rect x="3" y="2" width="18" height="20" rx="3" />
+          <path d="M13 6v10a3 3 0 1 1-3-3m3-7c.5 3 2 4 4 4" />
+        </>
+      )}
+    </svg>
   );
 }

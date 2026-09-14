@@ -1645,3 +1645,317 @@ h1 {
     height: 28px;
   }
 }
+
+/* Reference-site section proportions and progressive entrance motion. */
+.social-section {
+  display: block;
+  padding-block: 140px 180px;
+  position: relative;
+}
+.social-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 24px;
+  min-height: 496px;
+  padding: 120px 60px;
+  background: white;
+}
+.social-banner .social-portrait {
+  width: calc(100% + 60px) !important;
+  height: calc(100% + 344px) !important;
+  max-width: none;
+  inset: -172px -30px !important;
+  object-fit: cover;
+  border-radius: 0;
+  z-index: -2;
+}
+.social-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #b7dadd 0%, #b7dadd99 43%, #b7dadd15 100%);
+  z-index: -1;
+}
+.social-copy {
+  position: relative;
+  max-width: 580px;
+}
+.social-copy .eyebrow {
+  color: #249fa4;
+}
+.social-links {
+  margin-top: 48px;
+  gap: 10px;
+}
+.social-links a {
+  background: white;
+  font-size: 20px;
+  min-height: 56px;
+  padding: 14px 20px;
+}
+.social-links svg {
+  width: 23px;
+  height: 23px;
+}
+.service-grid {
+  max-width: 736px;
+  gap: 20px;
+}
+.service-image {
+  height: 300px;
+}
+.service-card h3 {
+  font-size: 20px;
+  margin: 20px 10px 12px;
+}
+.service-card p {
+  margin-inline: 10px;
+}
+.focus-section {
+  column-gap: 80px;
+  row-gap: 45px;
+}
+.focus-section > :first-child {
+  grid-column: 1 / -1;
+}
+.focus-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 0;
+  align-self: start;
+}
+.focus-links a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 186px;
+  padding: 20px 10px;
+  background: white;
+  color: var(--foreground);
+  font-size: 21px;
+  text-align: center;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px #00000008;
+}
+.focus-links a > span {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  background: #e8f4ee;
+  border-radius: 12px;
+  color: #33959b;
+}
+.focus-links a:nth-child(2) > span {
+  background: #fff2e1;
+}
+.focus-links a:nth-child(3) > span {
+  background: #eaf0ff;
+}
+.focus-links a:nth-child(4) > span {
+  background: #ffe9e9;
+}
+.focus-links svg {
+  width: 48px;
+  height: 48px;
+}
+.focus-list {
+  grid-template-rows: repeat(4, auto);
+  grid-auto-flow: column;
+}
+.journey {
+  background: white;
+  border-radius: 0;
+  overflow: hidden;
+}
+.journey-gallery {
+  text-align: center;
+}
+.gallery-strip {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  overflow: hidden;
+  padding-block: 40px;
+}
+.gallery-strip-track {
+  display: flex;
+  width: max-content;
+  animation: gallery-drift 65s linear infinite;
+}
+.gallery-strip-group {
+  display: flex;
+  gap: 16px;
+  padding-right: 16px;
+}
+.gallery-strip-photo {
+  width: 300px;
+  height: 400px;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.gallery-strip-photo:nth-child(even) {
+  transform: translateY(-30px);
+}
+.gallery-strip-photo img {
+  object-fit: cover;
+}
+.gallery-strip[data-paused="true"] .gallery-strip-track,
+.gallery-strip:focus-within .gallery-strip-track {
+  animation-play-state: paused;
+}
+@keyframes gallery-drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.blog-section {
+  display: block;
+}
+.blog-intro {
+  max-width: 780px;
+  margin: 0 auto 54px;
+  text-align: center;
+}
+.blog-intro > p:not(.eyebrow) {
+  font-size: 16px;
+  margin-block: 24px;
+}
+.article-track .article-card {
+  flex-basis: calc((100% - 48px) / 3);
+}
+.gallery-window {
+  height: 470px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .gallery-strip:hover .gallery-strip-track {
+    animation-play-state: paused;
+  }
+  .social-links a:hover {
+    background: #f4faf8;
+  }
+}
+@media (max-width: 760px) {
+  .social-section {
+    padding-block: 70px 90px;
+  }
+  .social-banner {
+    min-height: 660px;
+    padding: 36px 24px;
+  }
+  .social-banner .social-portrait {
+    width: 800px !important;
+    height: 528px !important;
+    inset: auto -70px -10px auto !important;
+  }
+  .social-banner::after {
+    background: linear-gradient(
+      180deg,
+      #b7dadd 0%,
+      #b7dadd55 60%,
+      transparent 100%
+    );
+  }
+  .social-section h2 {
+    font-size: 32px;
+  }
+  .social-links {
+    margin-top: 24px;
+    gap: 8px;
+  }
+  .social-links a {
+    font-size: 15px;
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+  .social-links svg {
+    width: 18px;
+    height: 18px;
+  }
+  .focus-section {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .focus-links a {
+    font-size: 16px;
+    min-height: 164px;
+  }
+  .focus-list {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+  .service-image {
+    height: 280px;
+  }
+  .article-track .article-card {
+    flex-basis: 88%;
+  }
+  .gallery-strip-photo {
+    width: 240px;
+    height: 320px;
+  }
+  .gallery-window {
+    height: 350px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .gallery-strip-track {
+    animation: none;
+  }
+  .gallery-strip {
+    overflow-x: auto;
+  }
+  .gallery-strip-group[aria-hidden="true"] {
+    display: none;
+  }
+  .journey-gallery > button {
+    display: none;
+  }
+}
+.social-section::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 calc(50% - 50vw);
+  background: #f5f5f7;
+  border-radius: 0 0 0 55% / 0 0 0 10%;
+}
+.booking-soft > a {
+  background: #dff1e9;
+  border-radius: 10px;
+  gap: 12px;
+}
+.booking-soft > a svg {
+  width: 24px;
+  height: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-header {
+    opacity: 1 !important;
+    transform: translateX(-50%) !important;
+  }
+}
+.social-copy h2 {
+  font-weight: 400;
+  letter-spacing: -1px;
+}
+.social-links a {
+  border-radius: 24px;
+  font-weight: 400;
+}
+@media (hover: none), (pointer: coarse) {
+  .service-card:hover img,
+  .article-card:hover img,
+  .course-card:hover img {
+    transform: none;
+  }
+}

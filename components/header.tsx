@@ -2,6 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,19 @@ const links = [
 ];
 export function Header() {
   const pathname = usePathname();
+  const reduced = useReducedMotion();
   const [open, setOpen] = useState(false);
   return (
-    <header className="site-header">
+    <motion.header
+      className="site-header"
+      initial={{ opacity: 0, transform: "translateX(-50%) translateY(-100px)" }}
+      animate={{ opacity: 1, transform: "translateX(-50%) translateY(0px)" }}
+      transition={{
+        duration: reduced ? 0 : 0.65,
+        delay: reduced ? 0 : 0.7,
+        ease: [0.23, 1, 0.32, 1],
+      }}
+    >
       <Link href="/" className="brand" aria-label="Nilgün Oygur — Anasayfa">
         <Image
           src="/images/TsTjnwVPkEfzrtoq3abevoFKEpU.png"
@@ -78,6 +89,6 @@ export function Header() {
           </SheetContent>
         </Sheet>
       </div>
-    </header>
+    </motion.header>
   );
 }

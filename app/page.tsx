@@ -2,6 +2,10 @@ import Image from "next/image";
 import { IntroVideo } from "@/components/intro-video";
 import Link from "next/link";
 import {
+  Armchair,
+  Headphones,
+  Camera,
+  Video,
   CalendarDays,
   Fingerprint,
   Sprout,
@@ -109,16 +113,29 @@ export default function Home() {
         <Reveal>
           <p className="eyebrow">Neler Sunuyorum</p>
           <h2>Psikolog ve Eğitmen Kimliğimle Ruhsal Rehberlik</h2>
-          <div className="focus-links">
-            <span>1-1 Seanslar</span>
-            <span>Online Seanslar</span>
-            <a href="https://www.instagram.com/nilgun_oygur/">
-              Instagram İçeriklerim ↗
-            </a>
-            <a href="https://www.youtube.com/@nilgunoygur4942">
-              Youtube Videolarım ↗
-            </a>
-          </div>
+        </Reveal>
+        <Reveal className="focus-links">
+          {[
+            { label: "1-1 Seanslar", icon: Armchair, href: "/iletisim" },
+            { label: "Online Seanslar", icon: Headphones, href: "/iletisim" },
+            {
+              label: "Instagram İçeriklerim",
+              icon: Camera,
+              href: "https://www.instagram.com/nilgun_oygur/",
+            },
+            {
+              label: "Youtube Videolarım",
+              icon: Video,
+              href: "https://www.youtube.com/@nilgunoygur4942",
+            },
+          ].map(({ label, icon: Icon, href }) => (
+            <Link key={label} href={href}>
+              <span>
+                <Icon strokeWidth={1.25} />
+              </span>
+              {label}
+            </Link>
+          ))}
         </Reveal>
         <Reveal>
           <h2>Odak Alanlarım</h2>
