@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Package manager
+
+Always use pnpm for this project. Use `pnpm install`, `pnpm run <script>`, `pnpm exec`, and `pnpm dlx`; do not use npm, npx, or yarn. Commit `pnpm-lock.yaml` as the only dependency lockfile.

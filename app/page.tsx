@@ -1,69 +1,153 @@
 import Image from "next/image";
-
+import { IntroVideo } from "@/components/intro-video";
+import Link from "next/link";
+import {
+  CalendarDays,
+  Fingerprint,
+  Sprout,
+  Check,
+  ArrowUpRight,
+} from "lucide-react";
+import {
+  Hero,
+  About,
+  SocialSection,
+  Journey,
+  BlogSection,
+  SectionHeading,
+  Booking,
+} from "@/components/site";
+import { Reveal } from "@/components/reveal";
+import { asset, pages } from "@/lib/content";
+const steps = [
+  {
+    icon: CalendarDays,
+    title: "Ücretsiz Danışmanlık Randevusu Alın",
+    text: "Randevunuzu planlamak için formu doldurun. Dönüşüm yolculuğunuza başlamak için 15 dakikalık ücretsiz bir telefon görüşmesi planlayın.",
+  },
+  {
+    icon: Fingerprint,
+    title: "Yolculuğunuzu Tasarlayalım",
+    text: "15 dk. konuşma sonrasında belirlenen ilk randevu için yapılan ücret ödemesinden sonra yaklaşık 2 saatlik bir danışmanlık ve tespit süreci",
+  },
+  {
+    icon: Sprout,
+    title: "İlerlemeye Başlayalım",
+    text: "Detaylı analizden sonra hangi yaşam tasarımına ihtiyacınız olduğunu belirlenir ve 5-6 saatlik planlanan seansınız yapılır.",
+  },
+];
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <>
+      <Hero
+        eyebrow="Potansiyelinizi Keşfedin"
+        title="Kendinizi Keşfetme Yolculuğuna Çıkın"
+        description="Deneyim ve çalışmalarımızla potansiyelinizi ortaya çıkaralım. Bugün daha parlak bir geleceğe giden yola çıkmak için ilk adımı atın."
+        stats
+      />
+      <About />
+      <section className="process-section">
+        <div className="page-width">
+          <SectionHeading
+            eyebrow="Temel Yaklaşım"
+            title="Sürdürülebilir Prosedür"
+          />
+          <div className="process-layout">
+            <IntroVideo />
+            <div className="process-grid">
+              {steps.map((step, i) => (
+                <Reveal key={step.title} delay={i * 0.1}>
+                  <step.icon className="process-icon" strokeWidth={1} />
+                  <div>
+                    <h3>{step.title}</h3>
+                    <p>{step.text}</p>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+          <Booking label="Görüşme Ayarlayın" credit={false} />
+        </div>
+      </section>
+      <SocialSection />
+      <section className="services-section page-width">
+        <SectionHeading eyebrow="Temel Konular" title="Sunduğum Servisler" />
+        <div className="service-grid">
+          {[
+            {
+              title: "Yüz Yüze veya Online Seanslar",
+              text: "Psikolog ve spiritüel eğitmen olan benimle yüz yüze ve online seansı deneyimleyin.",
+              href: "/iletisim",
+            },
+            {
+              title: "Yüz Yüze ve Online Eğitimler",
+              text: "Bilgi ve tecrübelerimi size sunduğum eğitimlerden yararlanın.",
+              href: "/egitimlerim",
+            },
+          ].map((s, i) => (
+            <Reveal key={s.href}>
+              <Link href={s.href} className="service-card">
+                <div className="service-image">
+                  <Image
+                    src={asset(pages["/"].images[4 + i])}
+                    alt={s.title}
+                    fill
+                    sizes="(max-width:760px) 90vw, 40vw"
+                  />
+                </div>
+                <h3>
+                  {s.title}
+                  <ArrowUpRight />
+                </h3>
+                <p>{s.text}</p>
+              </Link>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+      <section className="focus-section page-width">
+        <Reveal>
+          <p className="eyebrow">Neler Sunuyorum</p>
+          <h2>Psikolog ve Eğitmen Kimliğimle Ruhsal Rehberlik</h2>
+          <div className="focus-links">
+            <span>1-1 Seanslar</span>
+            <span>Online Seanslar</span>
+            <a href="https://www.instagram.com/nilgun_oygur/">
+              Instagram İçeriklerim ↗
+            </a>
+            <a href="https://www.youtube.com/@nilgunoygur4942">
+              Youtube Videolarım ↗
+            </a>
+          </div>
+        </Reveal>
+        <Reveal>
+          <h2>Odak Alanlarım</h2>
+          <p>
+            Bilgi ve tecrübelerimle size sunduğum eğitimlerde öğrenmenin ve
+            doğru bilginin konforundan yararlanın.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          <ul className="focus-list">
+            {[
+              "Kişilik Tasarımı",
+              "Parasal ve Finansal tasarım",
+              "Spiritüel Gelişim",
+              "Potansiyelin Farkında Olma",
+              "Kariyer Tasarımı",
+              "İlişki Tasarımı",
+              "Denge ve Bütünsel Yaklaşım",
+              "Ruh, Beden ve Zihin Kombinasyonu",
+            ].map((s) => (
+              <li key={s}>
+                <Check />
+                {s}
+              </li>
+            ))}
+          </ul>
+          <Booking label="Görüşme Ayarlayın" credit={false} />
+        </Reveal>
+      </section>
+      <Journey />
+      <BlogSection />
+    </>
   );
 }
