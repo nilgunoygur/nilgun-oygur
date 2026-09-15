@@ -23,7 +23,7 @@ export default function Academy() {
           <p>Merakla başlayın, öğrenerek derinleşin. Kendinizi keşfetme yolculuğunuzda size eşlik edecek eğitimlerle tanışın.</p>
           <div className="academy-promotion-actions">
             <Link href="#egitimler" className={buttonVariants({ size: "hero", variant: "default" })}>Eğitimleri keşfet <ArrowDown size={18} aria-hidden="true" /></Link>
-            <Link href="/akademi/giris" className={buttonVariants({ size: "pill", variant: "outline" })}>Öğrenci girişi <ArrowUpRight aria-hidden="true" /></Link>
+            <Link href="/akademi/giris" className={buttonVariants({ size: "hero", variant: "outline" })}>Öğrenci girişi <ArrowUpRight aria-hidden="true" /></Link>
           </div>
           <p className="academy-promotion-note">Yeni bir başlangıç, sizin ritminizde. Online eğitim deneyimini keşfedin.</p>
         </div>
