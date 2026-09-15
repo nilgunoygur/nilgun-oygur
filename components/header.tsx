@@ -14,12 +14,7 @@ import {
   SheetTrigger,
   SheetDescription,
 } from "@/components/ui/sheet";
-const links = [
-  { label: "Kitaplarım", href: "/kitaplarim" },
-  { label: "Eğitimlerim", href: "/egitimlerim" },
-  { label: "Yazılarım", href: "/blog" },
-  { label: "İletişim", href: "/iletisim" },
-];
+import { nav as links } from "@/lib/content";
 export function Header() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
@@ -49,6 +44,7 @@ export function Header() {
           <Link
             key={link.href}
             href={link.href}
+            className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
             aria-current={pathname.startsWith(link.href) ? "page" : undefined}
           >
             {link.label}
@@ -74,11 +70,13 @@ export function Header() {
             <nav className="flex flex-col gap-6 p-6" aria-label="Mobil menü">
               {[
                 { label: "Anasayfa", href: "/" },
-                ...links,
+                ...links.filter(link => link.href !== "/akademi"),
                 { label: "Hakkımda", href: "/nilgun-oygur" },
+                ...links.filter(link => link.href === "/akademi"),
               ].map((link) => (
                 <Link
                   href={link.href}
+                  className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
                   key={link.href}
                   onClick={() => setOpen(false)}
                 >

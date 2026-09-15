@@ -29,7 +29,7 @@ pnpm start
 
 ## Contact and external services
 
-Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form validates input and prepares an email for the visitor to review and send in their email application; it does not claim delivery or store messages. Newsletter requests also use an email handoff. No email service credentials or database are configured.
+Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form validates input and prepares an email for the visitor to review and send in their email application; it does not claim delivery or store messages. Newsletter requests also use an email handoff. Live email remains unconfigured; Akademi has a separate development/preview Neon database.
 
 Set `NEXT_PUBLIC_SITE_URL` to the deployed origin before a production build to generate the correct sitemap and Open Graph URLs.
 
@@ -41,3 +41,9 @@ pnpm test
 pnpm run build
 node tests/check-routes.mjs
 ```
+
+## Akademi development
+
+The database/access-policy foundation, migrated development/preview Neon database, Better Auth/email backend, Turkish authentication forms, and protected account/MFA entry pages are implemented. Resend/DNS are deferred and registration stays disabled. Scheduled retries, payment fulfillment, course learning pages, and the full owner panel remain pending. See [development plan](AKADEMI_DEVELOPMENT_PLAN.md) and [implementation status and database setup](docs/akademi/IMPLEMENTATION.md).
+
+Copy `.env.example` to `.env.local` and supply a development database URL before running `pnpm run db:migrate`. `pnpm run db:generate` generates reviewed migrations from `lib/db/schema.ts`; `pnpm run db:check` checks migration history. Existing public pages build without database credentials. `pnpm test` includes isolated PostgreSQL migration/constraint tests and access-policy tests, real Better Auth flows, and email queue retry tests.

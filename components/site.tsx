@@ -280,6 +280,7 @@ export function Footer() {
         </div>
         <div className="footer-column">
           <Link href="/egitimlerim">Eğitimlerim</Link>
+          <Link href="/akademi">Akademi</Link>
           {courses.map((c) => (
             <Link key={c.slug} href={c.href}>
               {c.title}

@@ -24,6 +24,7 @@ export const nav = [
   { label: "Eğitimlerim", href: "/egitimlerim" },
   { label: "Yazılarım", href: "/blog" },
   { label: "İletişim", href: "/iletisim" },
+  { label: "Akademi", href: "/akademi" },
 ];
 export const courses = [
   "kuatum-egitimi",
