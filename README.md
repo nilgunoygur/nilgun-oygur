@@ -44,6 +44,6 @@ node tests/check-routes.mjs
 
 ## Akademi development
 
-The first database/access-policy slice is implemented. Authentication, payment providers, and Academy pages are still pending. See [development plan](AKADEMI_DEVELOPMENT_PLAN.md) and [implementation status and database setup](docs/akademi/IMPLEMENTATION.md).
+The database/access-policy foundation and Better Auth/email backend are implemented. Live provider setup, authentication forms, payment fulfillment, and Academy pages are still pending. See [development plan](AKADEMI_DEVELOPMENT_PLAN.md) and [implementation status and database setup](docs/akademi/IMPLEMENTATION.md).
 
-Copy `.env.example` to `.env.local` and supply a development database URL before running `pnpm run db:migrate`. `pnpm run db:generate` generates reviewed migrations from `lib/db/schema.ts`; `pnpm run db:check` checks migration history. Existing public pages build without database credentials. `pnpm test` includes isolated PostgreSQL migration/constraint tests and access-policy tests.
+Copy `.env.example` to `.env.local` and supply a development database URL before running `pnpm run db:migrate`. `pnpm run db:generate` generates reviewed migrations from `lib/db/schema.ts`; `pnpm run db:check` checks migration history. Existing public pages build without database credentials. `pnpm test` includes isolated PostgreSQL migration/constraint tests and access-policy tests, real Better Auth flows, and email queue retry tests.

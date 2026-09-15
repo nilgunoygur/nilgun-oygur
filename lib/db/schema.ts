@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable,
+  bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable,
   primaryKey, text, timestamp, unique, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 
@@ -56,6 +56,9 @@ export const twoFactor = pgTable("two_factor", {
   userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
   secret: text("secret").notNull(),
   backupCodes: text("backup_codes").notNull(),
+  verified: boolean("verified").notNull().default(true),
+  failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+  lockedUntil: time("locked_until"),
 });
 // Kept outside editable auth profile data. No public write endpoint may expose this table.
 export const owners = pgTable("academy_owners", {
@@ -241,3 +244,33 @@ export const adminAuditLog = pgTable("admin_audit_log", {
   reason: text("reason").notNull(),
   createdAt: time("created_at").notNull().defaultNow(),
 }, (t) => [check("audit_reason_required", sql`length(trim(${t.reason})) > 0`), index("audit_resource_idx").on(t.resourceType, t.resourceId)]);
+
+// Database-backed rate limits survive serverless instance recycling.
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+// A server-only proof for this session, not merely the user's MFA-enabled flag.
+export const ownerMfaSessions = pgTable("owner_mfa_sessions", {
+  sessionId: text("session_id").primaryKey().references(() => session.id, { onDelete: "cascade" }),
+  verifiedAt: time("verified_at").notNull().defaultNow(),
+});
+export const emailDeliveries = pgTable("email_deliveries", {
+  id: id(),
+  deduplicationKey: text("deduplication_key").notNull().unique(),
+  encryptedMessage: text("encrypted_message"),
+  status: text("status", { enum: ["pending", "sending", "sent", "failed", "expired"] }).notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  availableAt: time("available_at").notNull().defaultNow(),
+  expiresAt: time("expires_at").notNull(),
+  leaseId: uuid("lease_id"),
+  leaseExpiresAt: time("lease_expires_at"),
+  providerMessageId: text("provider_message_id"),
+  lastError: text("last_error"),
+  ...timestamps(),
+}, (t) => [
+  check("email_delivery_status", sql`${t.status} IN ('pending', 'sending', 'sent', 'failed', 'expired')`),
+  index("email_delivery_queue_idx").on(t.status, t.availableAt),
+]);

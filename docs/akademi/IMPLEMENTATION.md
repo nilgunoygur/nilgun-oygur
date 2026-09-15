@@ -1,6 +1,6 @@
 # Akademi implementation status
 
-15 September 2026 — first execution slice, database and access rules.
+15 September 2026 — database foundation and authentication backend.
 
 ## Implemented
 
@@ -10,6 +10,20 @@
 - Pure access predicates covering student/course identity, expiry, revocation, ten-minute playback expiry, and the live join window. These are internal rules, not authenticated endpoints. Future callers must load the session and records on the server, enforce publication status, and never accept a grant supplied by the browser.
 - Migration integration tests using PGlite (embedded PostgreSQL), plus time-boundary tests. These do not require provider credentials or modify a remote database.
 
+## Authentication backend added
+
+- Better Auth is pinned to 1.7.5, mounted at `/api/auth/[...all]`, with verified email/password login, neutral registration/reset responses, one-hour verification/reset links, no automatic sign-in, and database-backed rate limits.
+- The installed two-factor plugin schema was inspected and its `verified`, `failedVerificationCount`, and `lockedUntil` fields added in migration `0001`. Real Better Auth adapter flows run against the migrated PostgreSQL schema in tests.
+- Owner authorization requires a verified student session, a protected `academy_owners` row, enabled MFA, and a server-written `owner_mfa_sessions` proof for that exact session. Only a successful TOTP/backup-code endpoint writes the proof. A trusted-device password login alone does not qualify for owner access.
+- Enabling MFA revokes earlier sessions. As a conservative policy, profile updates on MFA-enabled accounts also revoke sessions. Better Auth's MFA enrollment then issues the replacement session.
+- Auth emails are encrypted in `email_deliveries` with a separate stable `EMAIL_ENCRYPTION_KEY`. Successful/expired messages have their payload erased. Failures retain a generic error for the future attention UI. Claims use expiring leases; retries use a stable Resend idempotency key, exponential backoff, and a five-attempt limit.
+- Relevant auth POST requests run a delivery batch through Next.js `after`. `POST /api/internal/email-delivery` accepts only `Authorization: Bearer <CRON_SECRET>` for retries. No scheduler is configured yet: configure a periodic caller before opening registration. Vercel Cron uses GET, so this POST endpoint is currently an explicit worker entry point, not a configured Vercel Cron job.
+- Authentication returns an uncached 503 until database, auth, encryption, and Resend environment variables are supplied. No fake success or console-printed verification links are used. Existing public pages continue to build without them.
+
+These are backend capabilities. Turkish auth forms, reset landing page, owner enrollment UI, account pages, live Neon migration, verified sending domain, and real email delivery are still pending. Do not enable public registration before the forms and retry scheduler are ready.
+
+Email verification replay is an idempotent success in Better Auth once the address is verified; it does not issue a session or repeat verification side effects. Password reset tokens are consumed once, and expired tokens are rejected. This refines the plan's blanket “tokens cannot be reused” wording without adding custom token authentication.
+
 ## Review decisions and implementation requirements
 
 1. **Renewal:** the partial unique index includes expired, unrevoked grants. In the future fulfillment transaction, lock the student's user row (also for owner grants), check existing access, retire an expired grant with reason `expired_replaced`, then insert the new grant. Concurrent callbacks must also lock the order and verify its state. Never replace an active grant. The integration tests exercise the index and replacement sequence; the fulfillment service is not implemented yet.
@@ -18,9 +32,9 @@
 4. **Publication:** the schema rejects published recorded lessons with no asset, but cross-table readiness checks belong in the publication transaction and playback handler. A ready asset must have a signed playback identifier. Draft lessons/modules remain inaccessible to students. The preview flag does not authorize anonymous media; launch playback remains authenticated until preview behavior is explicitly defined.
 5. **Legal snapshots:** required version identifiers are present in order storage. The checkout service must select current server-owned versions and make order/item snapshots immutable after creation. Keep the actual versioned legal documents permanently retrievable; never rely only on a mutable legal page.
 6. **Provider callbacks:** only verified events belong in `provider_events`. Avoid retaining unrestricted raw payment payloads/PII. Confirm Shopier's signature and trusted amount lookup before implementing fulfillment. A callback without authenticated amount verification goes to review and grants no access. Provider event identity and payload hash conflicts must be handled explicitly.
-7. **Emails:** add a durable transactional outbox before fulfillment. The plan's send-after-commit sequence alone loses confirmation messages if the process stops after commit. Deduplicate each message, retain failures for the attention list, and key live reminders by session/calendar revision. Email failure must never reverse a payment.
+7. **Emails:** the auth outbox is implemented; extend it transactionally before fulfillment. The plan's send-after-commit sequence alone loses confirmation messages if the process stops after commit. Deduplicate each message, retain failures for the attention list, and key live reminders by session/calendar revision. Email failure must never reverse a payment.
 8. **Calendar:** increment `calendar_sequence` on rescheduling/cancellation and retain a stable event UID derived from session ID. Calendar files and emails must contain the lesson URL, never Zoom credentials.
-9. **Authentication:** the initial storage follows Better Auth's documented core fields. When installing Better Auth, compare its generated schema for the pinned version and configured plugins before wiring the adapter. Validate actual registration, verification, reset, rate limits, and MFA flows; having the tables does not establish authentication.
+9. **Authentication:** the adapter and two-factor storage now match the installed Better Auth 1.7.5 plugin fields, with real registration, verification, reset, rate-limit, and MFA integration tests. Recheck schema compatibility when updating the pinned version. Production/provider behavior still needs verification.
 10. **Scope and estimates:** provider pricing/free limits, Google course listing eligibility, and Turkish legal wording are planning assumptions requiring confirmation before launch. No provider accounts, prices, legal texts, or production behavior were approved by this implementation.
 
 ## Local database workflow
@@ -52,17 +66,17 @@ The runtime database module must only be used behind an authenticated data acces
 
 ## Verification completed
 
-- `pnpm test`: 13 tests passed, including migration application/idempotency and PostgreSQL constraints.
+- `pnpm test`: 23 tests passed, including PostgreSQL migration constraints, real Better Auth flows, expiry, MFA, concurrent email claims, and retry recovery.
 - `pnpm run lint`, `pnpm exec tsc --noEmit`, and `pnpm run db:check`: passed.
 - `pnpm run build`: passed without academy credentials.
 - `TEST_ORIGIN=http://localhost:3107 pnpm run test:routes`: all 18 existing content routes returned 200 with headings; unknown route returned 404.
 - `git diff --check`: passed.
 
-Next.js reported an unrelated lockfile outside this repository (`/Users/harman/pnpm-lock.yaml`). No files outside this project were changed. Neon connectivity, concurrent production transactions, Better Auth compatibility with an installed version, and real provider flows remain unverified.
+Next.js reported an unrelated lockfile outside this repository (`/Users/harman/pnpm-lock.yaml`). No files outside this project were changed. Neon connectivity, production concurrency, and real provider delivery remain unverified. Better Auth 1.7.5 compatibility was tested with the actual adapter and plugin.
 
 ## Next execution slices
 
-1. Install/configure Better Auth and Resend, verify generated schema, implement verified email/password flows and owner MFA gates with integration tests. Add durable email delivery storage.
+1. Provision development Neon, apply reviewed migrations, and configure Resend with a verified domain. Add Turkish auth forms, reset landing page, MFA enrollment UI, and a scheduled email retry worker. Validate the full browser/email journey.
 2. Prove Shopier form signing, callback authenticity, amount verification, reconciliation and refund capabilities against Nilgün's merchant account; record observed fields and a test result. Until proven, leave checkout unavailable.
 3. Prove one signed Mux upload/playback lifecycle using Nilgün's development environment.
 4. Build database-backed public catalog, authenticated student routes, and the owner content panel. Add route checks and UI QA as each route is implemented.

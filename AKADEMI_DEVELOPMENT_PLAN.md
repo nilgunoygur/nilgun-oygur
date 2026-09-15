@@ -6,12 +6,13 @@ Commercial terms (agreed proposal): ₺55.000 + KDV, 50% at start and 50% at lau
 
 ## Execution status — 15 September 2026
 
-Implementation has started with the week 1 database foundation. See [implementation notes and next slices](docs/akademi/IMPLEMENTATION.md) for review findings and operational instructions.
+Implementation has started with the week 1 database foundation and authentication backend. See [implementation notes and next slices](docs/akademi/IMPLEMENTATION.md) for review findings and operational instructions.
 
 - [x] Initial Drizzle schema, generated migration, server-only connection, and environment template.
 - [x] Automated migration/constraint tests and access, expiry, playback lifetime, and live join-window rules.
 - [ ] Development Neon provisioning and remote migration.
-- [ ] Better Auth/Resend flows and owner MFA (storage only is present).
+- [x] Better Auth backend, owner MFA authorization, encrypted Resend delivery queue, and local integration tests.
+- [ ] Authentication/MFA forms, scheduled email retries, and real provider/email verification.
 - [ ] Shopier test payment and capability proof; Mux signed playback proof.
 - [ ] Catalog, student and owner UI, payment fulfillment, and remaining launch scope.
 
