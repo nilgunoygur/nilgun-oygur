@@ -70,12 +70,13 @@ export function Header() {
             <nav className="flex flex-col gap-6 p-6" aria-label="Mobil menü">
               {[
                 { label: "Anasayfa", href: "/" },
-                ...links,
+                ...links.filter(link => link.href !== "/akademi"),
                 { label: "Hakkımda", href: "/nilgun-oygur" },
+                ...links.filter(link => link.href === "/akademi"),
               ].map((link) => (
                 <Link
                   href={link.href}
-            className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
+                  className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
                   key={link.href}
                   onClick={() => setOpen(false)}
                 >
