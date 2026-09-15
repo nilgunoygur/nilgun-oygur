@@ -1,6 +1,6 @@
 # Akademi implementation status
 
-15 September 2026 — database foundation and authentication backend.
+15 September 2026 — database foundation, development Neon, authentication screens, and protected account/MFA pages.
 
 ## Implemented
 
@@ -17,10 +17,18 @@
 - Owner authorization requires a verified student session, a protected `academy_owners` row, enabled MFA, and a server-written `owner_mfa_sessions` proof for that exact session. Only a successful TOTP/backup-code endpoint writes the proof. A trusted-device password login alone does not qualify for owner access.
 - Enabling MFA revokes earlier sessions. As a conservative policy, profile updates on MFA-enabled accounts also revoke sessions. Better Auth's MFA enrollment then issues the replacement session.
 - Auth emails are encrypted in `email_deliveries` with a separate stable `EMAIL_ENCRYPTION_KEY`. Successful/expired messages have their payload erased. Failures retain a generic error for the future attention UI. Claims use expiring leases; retries use a stable Resend idempotency key, exponential backoff, and a five-attempt limit.
-- Relevant auth POST requests run a delivery batch through Next.js `after`. `POST /api/internal/email-delivery` accepts only `Authorization: Bearer <CRON_SECRET>` for retries. No scheduler is configured yet: configure a periodic caller before opening registration. Vercel Cron uses GET, so this POST endpoint is currently an explicit worker entry point, not a configured Vercel Cron job.
+- Relevant auth POST requests run a delivery batch through Next.js `after`. `GET /api/internal/email-delivery` and `POST /api/internal/email-delivery` accepts only `Authorization: Bearer <CRON_SECRET>` for retries. No scheduler is configured yet: configure a periodic caller before opening registration. The GET entry point supports Vercel Cron, but the current Hobby team only permits daily schedules. Frequent retries need an appropriate scheduler or a separately approved plan change; no paid upgrade or schedule was configured.
 - Authentication returns an uncached 503 until database, auth, encryption, and Resend environment variables are supplied. No fake success or console-printed verification links are used. Existing public pages continue to build without them.
 
-These are backend capabilities. Turkish auth forms, reset landing page, owner enrollment UI, account pages, live Neon migration, verified sending domain, and real email delivery are still pending. Do not enable public registration before the forms and retry scheduler are ready.
+## Screens and development infrastructure
+
+- Turkish login, registration, forgotten-password, reset, and verification screens are implemented under `/akademi`. Unconfigured authentication displays an unavailable state and disables submission.
+- `/akademi/hesabim` requires a verified session and lists actual active access grants. Lesson navigation and the full learning experience remain pending.
+- `/yonetim/guvenlik` provides owner-only TOTP enrollment and backup codes; `/yonetim` requires MFA proof for the current session. The content/order management panel remains pending.
+- Auth destinations are allowlisted, sensitive pages are noindex, and reset pages use a no-referrer policy.
+- Vercel-managed Neon resource `nilgun-akademi-development` uses the Free plan in Frankfurt, connected only to development and preview. Both migrations were applied: 20 public tables and two migration records verified. A disposable real-Neon registration/verification smoke test passed and its user was removed; no email was sent.
+- `vercel.json` selects pnpm builds and Frankfurt functions. Production database setup remains pending.
+- Resend access and DNS verification were explicitly deferred by the owner. Registration remains disabled until email/auth configuration and retry scheduling are ready. The full browser/email journey has not been verified.
 
 Email verification replay is an idempotent success in Better Auth once the address is verified; it does not issue a session or repeat verification side effects. Password reset tokens are consumed once, and expired tokens are rejected. This refines the plan's blanket “tokens cannot be reused” wording without adding custom token authentication.
 
@@ -48,7 +56,7 @@ pnpm run db:check
 pnpm run db:migrate
 ```
 
-Use a separate development database. The migration command changes the database named in the environment; take the planned snapshot and review the generated SQL before migrating production. No database has been provisioned or remotely migrated in this slice.
+Use a separate development database. The migration command changes the database named in the environment; take the planned snapshot and review the generated SQL before migrating production. The development/preview resource described above is migrated. Production has not been migrated.
 
 For a schema change:
 
@@ -66,17 +74,17 @@ The runtime database module must only be used behind an authenticated data acces
 
 ## Verification completed
 
-- `pnpm test`: 23 tests passed, including PostgreSQL migration constraints, real Better Auth flows, expiry, MFA, concurrent email claims, and retry recovery.
+- `pnpm test`: 25 tests passed, including PostgreSQL migration constraints, real Better Auth flows, expiry, MFA, concurrent email claims, and retry recovery.
 - `pnpm run lint`, `pnpm exec tsc --noEmit`, and `pnpm run db:check`: passed.
 - `pnpm run build`: passed without academy credentials.
-- `TEST_ORIGIN=http://localhost:3107 pnpm run test:routes`: all 18 existing content routes returned 200 with headings; unknown route returned 404.
+- `TEST_ORIGIN=http://localhost:3107 pnpm run test:routes`: all 18 existing content routes returned 200 with headings; unknown route returned 404. Five auth screens returned noindex pages; three protected routes redirected anonymous users; GET/POST email workers rejected unauthorized requests. Desktop and mobile registration layouts were inspected.
 - `git diff --check`: passed.
 
-Next.js reported an unrelated lockfile outside this repository (`/Users/harman/pnpm-lock.yaml`). No files outside this project were changed. Neon connectivity, production concurrency, and real provider delivery remain unverified. Better Auth 1.7.5 compatibility was tested with the actual adapter and plugin.
+Next.js reported an unrelated lockfile outside this repository (`/Users/harman/pnpm-lock.yaml`). No files outside this project were changed. Neon connectivity and a disposable auth flow passed. Production concurrency and real provider delivery remain unverified. Better Auth 1.7.5 compatibility was tested with the actual adapter and plugin.
 
 ## Next execution slices
 
-1. Provision development Neon, apply reviewed migrations, and configure Resend with a verified domain. Add Turkish auth forms, reset landing page, MFA enrollment UI, and a scheduled email retry worker. Validate the full browser/email journey.
+1. When owner access becomes available, configure Resend and verified DNS, configure a frequent retry scheduler, and validate the full browser/email journey. Development Neon and the authentication screens are implemented.
 2. Prove Shopier form signing, callback authenticity, amount verification, reconciliation and refund capabilities against Nilgün's merchant account; record observed fields and a test result. Until proven, leave checkout unavailable.
 3. Prove one signed Mux upload/playback lifecycle using Nilgün's development environment.
 4. Build database-backed public catalog, authenticated student routes, and the owner content panel. Add route checks and UI QA as each route is implemented.

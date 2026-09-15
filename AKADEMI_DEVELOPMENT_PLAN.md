@@ -6,13 +6,14 @@ Commercial terms (agreed proposal): ₺55.000 + KDV, 50% at start and 50% at lau
 
 ## Execution status — 15 September 2026
 
-Implementation has started with the week 1 database foundation and authentication backend. See [implementation notes and next slices](docs/akademi/IMPLEMENTATION.md) for review findings and operational instructions.
+Week 1 now includes the database foundation, a migrated development Neon database, authentication screens, and protected account/MFA pages. See [implementation notes and next slices](docs/akademi/IMPLEMENTATION.md) for review findings and operational instructions.
 
 - [x] Initial Drizzle schema, generated migration, server-only connection, and environment template.
 - [x] Automated migration/constraint tests and access, expiry, playback lifetime, and live join-window rules.
-- [ ] Development Neon provisioning and remote migration.
+- [x] Development Neon provisioning and remote migration (development and preview only; 20 tables, two migrations).
 - [x] Better Auth backend, owner MFA authorization, encrypted Resend delivery queue, and local integration tests.
-- [ ] Authentication/MFA forms, scheduled email retries, and real provider/email verification.
+- [x] Turkish authentication/MFA forms and protected account/owner entry pages.
+- [ ] Scheduled email retries and real provider/email verification. Resend/DNS connection deferred by the owner; registration remains disabled. Frequent retry scheduling needs a suitable scheduler; the current Vercel Hobby project has no schedule configured.
 - [ ] Shopier test payment and capability proof; Mux signed playback proof.
 - [ ] Catalog, student and owner UI, payment fulfillment, and remaining launch scope.
 

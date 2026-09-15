@@ -1964,3 +1964,41 @@ h1 {
     transform: none;
   }
 }
+
+/* Akademi account pages reuse the site's mint palette and Recoleta headings. */
+.academy-auth { display: grid; grid-template-columns: 1fr 1fr; gap: 90px; padding-block: 150px 90px; align-items: start; }
+.academy-auth-story { background: var(--accent); border-radius: 28px; padding: 44px; min-height: 650px; display: flex; flex-direction: column; justify-content: space-between; gap: 60px; }
+.academy-wordmark { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 500; }
+.academy-wordmark svg { color: var(--primary); }
+.academy-kicker { font-size: 11px; letter-spacing: 1.8px; font-weight: 600; color: var(--foreground); margin-bottom: 18px; }
+.academy-auth-story h2 { font-family: var(--font-recoleta), Georgia, serif; font-size: clamp(32px, 3.5vw, 48px); font-weight: 400; letter-spacing: -1.4px; line-height: 1.2; margin-bottom: 26px; }
+.academy-auth-story h2 em { font-style: normal; color: var(--primary); }
+.academy-auth-story p:not(.academy-kicker) { color: var(--foreground); font-size: 17px; max-width: 340px; }
+.academy-auth-story > a { display: flex; align-items: center; gap: 14px; width: fit-content; font-size: 14px; }
+.academy-auth-panel { padding-block: 28px; max-width: 420px; width: 100%; }
+.academy-auth-panel header { margin-bottom: 34px; }
+.academy-auth-panel h1 { font-size: 40px; margin-bottom: 16px; }
+.academy-auth-panel header > p:last-child { font-size: 16px; color: var(--foreground); }
+.academy-form-stack { display: flex; flex-direction: column; gap: 22px; }
+.academy-form-stack [data-slot="input"] { min-height: 48px; }
+.academy-form-options { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13px; }
+.academy-form-options [data-slot="field"] { width: auto; }
+.academy-form-options a { white-space: nowrap; }
+.academy-auth-links { display: flex; flex-direction: column; gap: 16px; font-size: 14px; text-align: center; }
+.academy-auth-links a, .academy-form-options a, .academy-form-stack [data-slot="alert-description"] a { text-decoration: underline; text-underline-offset: 4px; }
+.academy-account { padding-block: 155px 100px; min-height: 65vh; }
+.academy-account > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 48px; }
+.academy-account h1 { font-size: 44px; margin-bottom: 12px; }
+.academy-account-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.academy-security-key { overflow-wrap: anywhere; padding: 16px; background: var(--muted); border-radius: 12px; font-size: 14px; }
+@media (max-width: 900px) { .academy-auth { gap: 38px; } .academy-auth-story { padding: 30px; } }
+@media (max-width: 680px) {
+  .academy-auth { grid-template-columns: 1fr; gap: 28px; padding-block: 116px 60px; }
+  .academy-auth-story { min-height: auto; padding: 24px; gap: 24px; }
+  .academy-auth-story > div, .academy-auth-story > a { display: none; }
+  .academy-auth-panel { max-width: none; padding: 0; }
+  .academy-auth-panel h1 { font-size: 36px; }
+  .academy-form-options { flex-wrap: wrap; }
+  .academy-account { padding-top: 125px; }
+  .academy-account h1 { font-size: 36px; }
+}

@@ -17,3 +17,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Email delivery is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
+
+// Vercel Cron invokes GET with the same bearer secret as the manual POST worker.
+export const GET = POST;
