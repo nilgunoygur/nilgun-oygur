@@ -13,7 +13,7 @@ export function AuthShell({ title, description, children }: {
           <h2>Yolculuğunuz,<br /><em>kaldığınız yerden.</em></h2>
           <p>Öğrenmek, keşfetmek ve kendinize alan açmak için kişisel eğitim alanınız.</p>
         </div>
-        <Link href="/egitimlerim">Eğitimleri keşfedin <ArrowUpRight aria-hidden="true" /></Link>
+        <Link href="/akademi">Eğitimleri keşfedin <ArrowUpRight aria-hidden="true" /></Link>
       </aside>
       <div className="academy-auth-panel">
         <header><p className="academy-kicker">AKADEMİ HESABINIZ</p><h1>{title}</h1><p>{description}</p></header>

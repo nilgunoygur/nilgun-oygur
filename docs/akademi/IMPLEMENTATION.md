@@ -22,6 +22,8 @@
 
 ## Screens and development infrastructure
 
+- Public `/akademi` promotion page lists the four existing training programs, explains participation, and links to `/akademi/giris`. Desktop/mobile navigation, footer, auth return links, and sitemap include the public landing route. Course cards link to existing program details; online sales remain explicitly unavailable until checkout is implemented. Desktop/mobile layout and login navigation were checked.
+
 - Turkish login, registration, forgotten-password, reset, and verification screens are implemented under `/akademi`. Unconfigured authentication displays an unavailable state and disables submission.
 - `/akademi/hesabim` requires a verified session and lists actual active access grants. Lesson navigation and the full learning experience remain pending.
 - `/yonetim/guvenlik` provides owner-only TOTP enrollment and backup codes; `/yonetim` requires MFA proof for the current session. The content/order management panel remains pending.

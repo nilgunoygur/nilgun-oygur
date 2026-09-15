@@ -15,7 +15,8 @@ Week 1 now includes the database foundation, a migrated development Neon databas
 - [x] Turkish authentication/MFA forms and protected account/owner entry pages.
 - [ ] Scheduled email retries and real provider/email verification. Resend/DNS connection deferred by the owner; registration remains disabled. Frequent retry scheduling needs a suitable scheduler; the current Vercel Hobby project has no schedule configured.
 - [ ] Shopier test payment and capability proof; Mux signed playback proof.
-- [ ] Catalog, student and owner UI, payment fulfillment, and remaining launch scope.
+- [x] Public Akademi promotion page, course previews, header/footer navigation, and student-login routing.
+- [ ] Database-backed sales catalog, full student and owner UI, payment fulfillment, and remaining launch scope.
 
 Review clarifications: renewal must retire an expired unrevoked grant in the same transaction; playback accepts audited owner grants as well as purchase grants; email delivery needs a durable outbox; draft/preview behavior must not bypass authenticated playback. Details are recorded in the implementation notes. This is an initial foundation, not completion of week 1.
 

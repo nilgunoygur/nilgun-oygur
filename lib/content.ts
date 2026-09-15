@@ -22,6 +22,7 @@ export const socials = [
 export const nav = [
   { label: "Kitaplarım", href: "/kitaplarim" },
   { label: "Eğitimlerim", href: "/egitimlerim" },
+  { label: "Akademi", href: "/akademi" },
   { label: "Yazılarım", href: "/blog" },
   { label: "İletişim", href: "/iletisim" },
 ];

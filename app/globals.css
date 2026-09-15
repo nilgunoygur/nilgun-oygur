@@ -2002,3 +2002,53 @@ h1 {
   .academy-account { padding-top: 125px; }
   .academy-account h1 { font-size: 36px; }
 }
+
+/* Public Akademi storefront */
+.site-header { width: min(860px, calc(100% - 40px)); }
+.desktop-nav { gap: 28px; }
+.academy-promotion { display: grid; grid-template-columns: 1.15fr 1fr; gap: 80px; align-items: center; padding-top: 160px; padding-bottom: 100px; }
+.academy-promotion .academy-kicker { display: flex; align-items: center; gap: 9px; }
+.academy-promotion h1 { font-size: clamp(48px, 5.7vw, 76px); line-height: 1.09; letter-spacing: -2.5px; margin: 25px 0; }
+.academy-promotion h1 em { color: var(--primary); font-style: normal; }
+.academy-promotion-copy > p:not(.academy-kicker) { max-width: 470px; line-height: 1.8; }
+.academy-promotion-actions { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; margin: 30px 0 22px; }
+.academy-promotion-actions > a { gap: 12px; border-radius: 40px; }
+.academy-promotion-copy .academy-promotion-note { font-size: 13px; color: #64645f; }
+.academy-promotion-portrait { position: relative; height: 540px; overflow: hidden; border-radius: 180px 180px 24px 24px; background: var(--accent); }
+.academy-promotion-portrait img { object-fit: cover; }
+.academy-promotion-portrait figcaption { position: absolute; inset: auto 20px 20px; padding: 20px 25px; background: var(--accent); border-radius: 14px; line-height: 1.6; }
+.academy-offerings { padding-top: 30px; padding-bottom: 85px; scroll-margin-top: 110px; }
+.academy-section-heading { display: grid; grid-template-columns: 1.2fr 1fr; gap: 70px; align-items: end; margin-bottom: 40px; }
+.academy-landing h2 { font-size: clamp(32px, 3.4vw, 46px); line-height: 1.2; margin: 14px 0; }
+.academy-section-heading > p, .academy-how p { line-height: 1.8; color: #64645f; }
+.academy-offering-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 45px 32px; }
+.academy-offering { min-width: 0; }
+.academy-offering-image { display: block; position: relative; aspect-ratio: 1.65; overflow: hidden; border-radius: 20px; background: var(--accent); }
+.academy-offering-image img { object-fit: cover; transition: transform .3s; }
+.academy-offering-image:hover img { transform: scale(1.03); }
+.academy-offering-image span { position: absolute; top: 18px; left: 18px; border-radius: 50%; background: white; padding: 11px; font-size: 12px; }
+.academy-offering-body { padding: 24px 4px 0; }
+.academy-offering-body h3 { font-size: 30px; margin: 10px 0; }
+.academy-offering-body > p:not(.academy-kicker) { line-height: 1.7; margin-bottom: 20px; }
+.academy-text-link { display: inline-flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--primary); padding-bottom: 5px; }
+.academy-sales-note { display: flex; gap: 15px; padding: 24px; background: var(--muted); border-radius: 16px; margin-top: 40px; line-height: 1.7; font-size: 14px; }
+.academy-sales-note svg { flex-shrink: 0; }
+.academy-sales-note a { text-decoration: underline; text-underline-offset: 3px; }
+.academy-how { padding-block: 65px; border-top: 1px solid var(--border); }
+.academy-how-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 50px; margin-top: 40px; }
+.academy-how-grid span { font-size: 14px; color: var(--primary); }
+.academy-how-grid h3 { font-size: 24px; margin: 16px 0 12px; }
+.academy-return { display: flex; justify-content: space-between; align-items: center; gap: 30px; padding-block: 50px; margin-block: 35px 90px; background: var(--accent); border-radius: 24px; }
+.academy-return > a { gap: 14px; border-radius: 40px; }
+@media (max-width: 760px) {
+ .academy-promotion { grid-template-columns: 1fr; gap: 35px; padding-top: 130px; padding-bottom: 55px; }
+ .academy-promotion h1 { letter-spacing: -1.5px; }
+ .academy-promotion-portrait { height: 420px; max-width: 480px; width: 100%; margin-inline: auto; }
+ .academy-section-heading, .academy-offering-grid, .academy-how-grid { grid-template-columns: 1fr; gap: 30px; }
+ .academy-section-heading { gap: 5px; }
+ .academy-return { flex-direction: column; align-items: flex-start; margin-inline: 20px; }
+ .academy-offering-body h3 { font-size: 27px; }
+}
+@media (prefers-reduced-motion: reduce) {
+ .academy-offering-image img { transition: none; }
+}

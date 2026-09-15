@@ -14,12 +14,7 @@ import {
   SheetTrigger,
   SheetDescription,
 } from "@/components/ui/sheet";
-const links = [
-  { label: "Kitaplarım", href: "/kitaplarim" },
-  { label: "Eğitimlerim", href: "/egitimlerim" },
-  { label: "Yazılarım", href: "/blog" },
-  { label: "İletişim", href: "/iletisim" },
-];
+import { nav as links } from "@/lib/content";
 export function Header() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
