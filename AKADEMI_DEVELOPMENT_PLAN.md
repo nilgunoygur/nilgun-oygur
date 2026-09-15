@@ -4,6 +4,19 @@ Last reviewed: 15 September 2026
 
 Commercial terms (agreed proposal): ₺55.000 + KDV, 50% at start and 50% at launch. Testable environment by the end of week 2, launch target end of week 4. All code, the domain, and every provider account are handed over to Nilgün at launch.
 
+## Execution status — 15 September 2026
+
+Implementation has started with the week 1 database foundation. See [implementation notes and next slices](docs/akademi/IMPLEMENTATION.md) for review findings and operational instructions.
+
+- [x] Initial Drizzle schema, generated migration, server-only connection, and environment template.
+- [x] Automated migration/constraint tests and access, expiry, playback lifetime, and live join-window rules.
+- [ ] Development Neon provisioning and remote migration.
+- [ ] Better Auth/Resend flows and owner MFA (storage only is present).
+- [ ] Shopier test payment and capability proof; Mux signed playback proof.
+- [ ] Catalog, student and owner UI, payment fulfillment, and remaining launch scope.
+
+Review clarifications: renewal must retire an expired unrevoked grant in the same transaction; playback accepts audited owner grants as well as purchase grants; email delivery needs a durable outbox; draft/preview behavior must not bypass authenticated playback. Details are recorded in the implementation notes. This is an initial foundation, not completion of week 1.
+
 ## 1. Product decisions
 
 Build the Akademi inside the existing Next.js website under `/akademi`. Students buy individual courses through Shopier and can use only the courses they purchased for a configurable period, defaulting to 365 days from confirmed payment.
@@ -17,7 +30,7 @@ Confirmed launch decisions:
 - Nilgün receives an owner administration panel with authenticator-app two-factor login.
 - Videos use signed private streaming without DRM for the first version.
 - Existing public pages, URLs, and visual language remain intact. The existing `/egitimlerim` pages continue to describe in-person and online trainings and link to the matching `/akademi` course where one exists.
-- Every provider account is created in Nilgün's name from day one.
+- Provider ownership is handed over to Nilgün at launch. Development may use Hasan's Vercel project and transferable infrastructure integrations, as authorized on 15 September 2026; see section 4.
 
 Each purchase snapshots the course price, currency, access duration, and the accepted legal text versions. Later course changes cannot shorten an existing student's access. Students may watch without limits until expiry. New lessons, including newly scheduled live sessions, published within a purchased course are included for students whose access is still active. Active access blocks duplicate purchases; expired access can be renewed with a new purchase. Archiving stops new sales without removing existing access.
 
@@ -76,7 +89,11 @@ Mux is preferred over UploadThing and a custom AWS pipeline because it supplies 
 
 ## 4. Accounts and ownership
 
-Create every account with a Nilgün-owned email address and add the developer as a member or collaborator, never as the sole owner:
+Development exception authorized on 15 September 2026: use `hasanharmans-projects/nilgun-oygur` on Vercel and add required transferable infrastructure integrations there, then transfer them to Nilgün at handover. This supersedes the original day-one ownership requirement for that development infrastructure. Vercel project transfer and Neon Marketplace resource transfer are separate operations; the destination team needs the Neon integration installed, and the database must be disconnected and reconnected during transfer. Track ownership and billing for each resource. Other provider accounts should still use Nilgün-owned identities.
+
+References: [Vercel project transfer](https://vercel.com/docs/projects/transferring-projects), [Marketplace resource transfer](https://vercel.com/docs/integrations/install-an-integration/product-integration#transfer-a-resource-to-another-team).
+
+Target ownership at launch:
 
 - GitHub repository (transferred to Nilgün's account or organization at launch).
 - Domain registrar and DNS for `nilgunoygur.com`.
@@ -151,7 +168,7 @@ Entities:
 Constraints:
 
 - Unique `platform_order_id` and unique Shopier payment identifier.
-- One active grant per student and course, enforced with a partial unique index on `course_access (user_id, course_id) WHERE revoked_at IS NULL` plus an expiry check in the fulfillment transaction.
+- One unrevoked grant per student and course, enforced with a partial unique index on `course_access (user_id, course_id) WHERE revoked_at IS NULL`. The fulfillment transaction serializes grants per student, checks expiry, and retires an expired prior grant with reason `expired_replaced` before renewal. An active grant is never replaced.
 - Unique `(course_id, lesson slug)`.
 - Mark an order paid and create its access grant in one transaction, exactly once.
 
@@ -266,7 +283,7 @@ Use signed-only playback identifiers. Before issuing a playback token, the serve
 
 - A valid Better Auth session.
 - The requested lesson belongs to the course.
-- A paid, unrevoked course-access grant.
+- An unrevoked course-access grant from a verified purchase or an audited owner grant.
 - `starts_at <= now < expires_at` using server time.
 
 Issue a signed token valid for at most ten minutes or until access expiry, whichever comes first, and refresh during playback only after repeating the check. Do not expose signing keys, public playback IDs, or downloadable renditions, and do not publicly cache protected responses.

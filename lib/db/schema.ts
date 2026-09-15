@@ -1,0 +1,243 @@
+import { sql } from "drizzle-orm";
+import {
+  boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable,
+  primaryKey, text, timestamp, unique, uniqueIndex, uuid,
+} from "drizzle-orm/pg-core";
+
+const time = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+const timestamps = () => ({
+  createdAt: time("created_at").notNull().defaultNow(),
+  updatedAt: time("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+});
+const id = () => uuid("id").primaryKey().defaultRandom();
+
+// Better Auth core model names/field keys. Authentication wiring is the next slice.
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  ...timestamps(),
+});
+export const session = pgTable("session", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: time("expires_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  ...timestamps(),
+}, (t) => [index("session_user_idx").on(t.userId)]);
+export const account = pgTable("account", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: time("access_token_expires_at"),
+  refreshTokenExpiresAt: time("refresh_token_expires_at"),
+  scope: text("scope"),
+  password: text("password"),
+  ...timestamps(),
+}, (t) => [unique("account_provider_identity").on(t.providerId, t.accountId), index("account_user_idx").on(t.userId)]);
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: time("expires_at").notNull(),
+  ...timestamps(),
+}, (t) => [index("verification_identifier_idx").on(t.identifier)]);
+export const twoFactor = pgTable("two_factor", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
+  secret: text("secret").notNull(),
+  backupCodes: text("backup_codes").notNull(),
+});
+// Kept outside editable auth profile data. No public write endpoint may expose this table.
+export const owners = pgTable("academy_owners", {
+  userId: text("user_id").primaryKey().references(() => user.id),
+  createdAt: time("created_at").notNull().defaultNow(),
+});
+
+export const courseStatus = pgEnum("course_status", ["draft", "published", "archived"]);
+export const publicationStatus = pgEnum("publication_status", ["draft", "published"]);
+export const lessonKind = pgEnum("lesson_kind", ["video", "live"]);
+export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "cancelled", "completed"]);
+export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
+export const orderStatus = pgEnum("order_status", ["pending", "paid", "failed", "needs_review", "refunded"]);
+export const eventStatus = pgEnum("event_status", ["pending", "processed", "failed"]);
+
+export const courses = pgTable("courses", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  cover: text("cover"),
+  priceKurus: integer("price_kurus").notNull(),
+  currency: text("currency").notNull().default("TRY"),
+  accessDurationDays: integer("access_duration_days").notNull().default(365),
+  salesEndAt: time("sales_end_at"),
+  relatedTrainingSlug: text("related_training_slug"),
+  status: courseStatus("status").notNull().default("draft"),
+  ...timestamps(),
+}, (t) => [
+  check("courses_price_valid", sql`${t.priceKurus} > 0`),
+  check("courses_currency_try", sql`${t.currency} = 'TRY'`),
+  check("courses_duration_valid", sql`${t.accessDurationDays} > 0`),
+]);
+export const modules = pgTable("modules", {
+  id: id(),
+  courseId: uuid("course_id").notNull().references(() => courses.id),
+  title: text("title").notNull(),
+  position: integer("position").notNull().default(0),
+  status: publicationStatus("status").notNull().default("draft"),
+  ...timestamps(),
+}, (t) => [unique("modules_id_course").on(t.id, t.courseId), index("modules_course_position_idx").on(t.courseId, t.position), check("modules_position_valid", sql`${t.position} >= 0`)]);
+export const videoAssets = pgTable("video_assets", {
+  id: id(),
+  muxUploadId: text("mux_upload_id").unique(),
+  muxAssetId: text("mux_asset_id").unique(),
+  signedPlaybackId: text("signed_playback_id").unique(),
+  status: videoStatus("status").notNull().default("waiting"),
+  durationSeconds: integer("duration_seconds"),
+  aspectRatio: text("aspect_ratio"),
+  failureDetails: text("failure_details"),
+  ...timestamps(),
+}, (t) => [
+  check("video_duration_valid", sql`${t.durationSeconds} IS NULL OR ${t.durationSeconds} >= 0`),
+  check("video_ready_identifiers", sql`${t.status} <> 'ready' OR (${t.muxAssetId} IS NOT NULL AND ${t.signedPlaybackId} IS NOT NULL)`),
+]);
+export const lessons = pgTable("lessons", {
+  id: id(),
+  courseId: uuid("course_id").notNull().references(() => courses.id),
+  moduleId: uuid("module_id").notNull(),
+  slug: text("slug").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  position: integer("position").notNull().default(0),
+  kind: lessonKind("kind").notNull(),
+  isPreview: boolean("is_preview").notNull().default(false),
+  status: publicationStatus("status").notNull().default("draft"),
+  videoAssetId: uuid("video_asset_id").references(() => videoAssets.id),
+  ...timestamps(),
+}, (t) => [
+  unique("lessons_course_slug").on(t.courseId, t.slug),
+  unique("lessons_id_kind").on(t.id, t.kind),
+  foreignKey({ columns: [t.moduleId, t.courseId], foreignColumns: [modules.id, modules.courseId] }),
+  index("lessons_module_position_idx").on(t.moduleId, t.position),
+  check("lessons_position_valid", sql`${t.position} >= 0`),
+  check("published_video_has_asset", sql`${t.status} <> 'published' OR ${t.kind} <> 'video' OR ${t.videoAssetId} IS NOT NULL`),
+]);
+export const liveSessions = pgTable("live_sessions", {
+  id: id(),
+  lessonId: uuid("lesson_id").notNull().unique(),
+  lessonKind: lessonKind("lesson_kind").notNull().default("live"),
+  startsAt: time("starts_at").notNull(),
+  durationMinutes: integer("duration_minutes").notNull(),
+  zoomJoinUrl: text("zoom_join_url").notNull(),
+  zoomPasscode: text("zoom_passcode").notNull(),
+  status: liveStatus("status").notNull().default("scheduled"),
+  calendarSequence: integer("calendar_sequence").notNull().default(0),
+  reminderSentAt: time("reminder_sent_at"),
+  recordingPublishedAt: time("recording_published_at"),
+  ...timestamps(),
+}, (t) => [
+  foreignKey({ columns: [t.lessonId, t.lessonKind], foreignColumns: [lessons.id, lessons.kind] }),
+  check("live_session_kind", sql`${t.lessonKind} = 'live'`),
+  check("live_duration_valid", sql`${t.durationMinutes} > 0`),
+  check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
+  index("live_sessions_schedule_idx").on(t.status, t.startsAt),
+]);
+export type LegalConsent = {
+  distanceSales: string;
+  preliminaryInformation: string;
+  immediateDigitalDelivery: string;
+};
+export const orders = pgTable("orders", {
+  id: id(),
+  userId: text("user_id").notNull().references(() => user.id),
+  platformOrderId: uuid("platform_order_id").notNull().defaultRandom().unique(),
+  shopierPaymentId: text("shopier_payment_id").unique(),
+  amountKurus: integer("amount_kurus").notNull(),
+  currency: text("currency").notNull().default("TRY"),
+  status: orderStatus("status").notNull().default("pending"),
+  legalVersions: jsonb("legal_versions").$type<LegalConsent>().notNull(),
+  consentAcceptedAt: time("consent_accepted_at").notNull(),
+  paidAt: time("paid_at"),
+  ...timestamps(),
+}, (t) => [
+  unique("orders_id_user").on(t.id, t.userId),
+  index("orders_user_idx").on(t.userId),
+  index("orders_attention_idx").on(t.status, t.createdAt),
+  check("orders_amount_valid", sql`${t.amountKurus} > 0`),
+  check("orders_currency_try", sql`${t.currency} = 'TRY'`),
+  check("orders_paid_at_required", sql`${t.status} NOT IN ('paid', 'refunded') OR ${t.paidAt} IS NOT NULL`),
+  check("orders_legal_versions_required", sql`jsonb_typeof(${t.legalVersions}) = 'object' AND ${t.legalVersions} ?& ARRAY['distanceSales', 'preliminaryInformation', 'immediateDigitalDelivery'] AND length(trim(${t.legalVersions}->>'distanceSales')) > 0 AND length(trim(${t.legalVersions}->>'preliminaryInformation')) > 0 AND length(trim(${t.legalVersions}->>'immediateDigitalDelivery')) > 0 AND jsonb_typeof(${t.legalVersions}->'distanceSales') = 'string' AND jsonb_typeof(${t.legalVersions}->'preliminaryInformation') = 'string' AND jsonb_typeof(${t.legalVersions}->'immediateDigitalDelivery') = 'string'`),
+]);
+export const orderItems = pgTable("order_items", {
+  id: id(),
+  orderId: uuid("order_id").notNull().references(() => orders.id),
+  courseId: uuid("course_id").notNull().references(() => courses.id),
+  courseTitle: text("course_title").notNull(),
+  priceKurus: integer("price_kurus").notNull(),
+  currency: text("currency").notNull().default("TRY"),
+  accessDurationDays: integer("access_duration_days").notNull(),
+}, (t) => [
+  unique("order_items_order_course").on(t.orderId, t.courseId),
+  check("order_items_price_valid", sql`${t.priceKurus} > 0`),
+  check("order_items_currency_try", sql`${t.currency} = 'TRY'`),
+  check("order_items_duration_valid", sql`${t.accessDurationDays} > 0`),
+]);
+export const courseAccess = pgTable("course_access", {
+  id: id(),
+  userId: text("user_id").notNull().references(() => user.id),
+  courseId: uuid("course_id").notNull().references(() => courses.id),
+  sourceOrderId: uuid("source_order_id"),
+  grantedBy: text("granted_by").references(() => owners.userId),
+  grantReason: text("grant_reason"),
+  startsAt: time("starts_at").notNull(),
+  expiresAt: time("expires_at").notNull(),
+  revokedAt: time("revoked_at"),
+  revocationReason: text("revocation_reason"),
+  ...timestamps(),
+}, (t) => [
+  uniqueIndex("course_access_unrevoked_unique").on(t.userId, t.courseId).where(sql`${t.revokedAt} IS NULL`),
+  unique("course_access_source_once").on(t.sourceOrderId, t.courseId),
+  foreignKey({ columns: [t.sourceOrderId, t.userId], foreignColumns: [orders.id, orders.userId] }),
+  foreignKey({ columns: [t.sourceOrderId, t.courseId], foreignColumns: [orderItems.orderId, orderItems.courseId] }),
+  check("course_access_dates_valid", sql`${t.expiresAt} > ${t.startsAt}`),
+  check("course_access_source_valid", sql`(${t.sourceOrderId} IS NOT NULL AND ${t.grantedBy} IS NULL) OR (${t.sourceOrderId} IS NULL AND ${t.grantedBy} IS NOT NULL AND ${t.grantReason} IS NOT NULL AND length(trim(${t.grantReason})) > 0)`),
+  check("course_access_revocation_reason", sql`${t.revokedAt} IS NULL OR (${t.revocationReason} IS NOT NULL AND length(trim(${t.revocationReason})) > 0)`),
+  index("course_access_course_idx").on(t.courseId, t.expiresAt),
+]);
+export const lessonProgress = pgTable("lesson_progress", {
+  userId: text("user_id").notNull().references(() => user.id),
+  lessonId: uuid("lesson_id").notNull().references(() => lessons.id),
+  lastPositionSeconds: integer("last_position_seconds").notNull().default(0),
+  completedAt: time("completed_at"),
+  lastActivityAt: time("last_activity_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.lessonId] }), check("progress_position_valid", sql`${t.lastPositionSeconds} >= 0`)]);
+export const providerEvents = pgTable("provider_events", {
+  id: id(),
+  provider: text("provider").notNull(),
+  eventIdentity: text("event_identity").notNull(),
+  verifiedPayloadHash: text("verified_payload_hash").notNull(),
+  status: eventStatus("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  errorDetails: text("error_details"),
+  processedAt: time("processed_at"),
+  ...timestamps(),
+}, (t) => [unique("provider_event_identity").on(t.provider, t.eventIdentity), check("provider_attempts_valid", sql`${t.attemptCount} >= 0`)]);
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: id(),
+  actorId: text("actor_id").notNull().references(() => user.id),
+  action: text("action").notNull(),
+  resourceType: text("resource_type").notNull(),
+  resourceId: text("resource_id").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: time("created_at").notNull().defaultNow(),
+}, (t) => [check("audit_reason_required", sql`length(trim(${t.reason})) > 0`), index("audit_resource_idx").on(t.resourceType, t.resourceId)]);
