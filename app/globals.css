@@ -2052,3 +2052,74 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
  .academy-offering-image img { transition: none; }
 }
+
+/* Akademi campaign and demo storefront */
+.desktop-nav { align-items: center; gap: 22px; }
+.academy-nav-highlight { display: inline-flex; align-items: center; gap: 8px; padding: 10px 17px; border-radius: 99px; background: #224c40; color: #fff !important; box-shadow: 0 4px 16px #224c4020; }
+.academy-nav-highlight::after { content: "↗"; color: #d8ef9f; }
+.academy-nav-highlight:hover { background: #326551; }
+.academy-landing { background: linear-gradient(155deg,#f1f5e9 0%,#fff 29%,#fff 70%,#f4f7ef 100%); }
+.academy-promotion { position: relative; }
+.academy-promotion h1 em { color: #285747; }
+.academy-promotion-portrait { box-shadow: 16px 16px 0 #dcebb9; }
+.academy-promotion-actions > a:first-child { background: #224c40; }
+.academy-film-section { display: grid; grid-template-columns: .75fr 1.25fr; gap: 60px; align-items: center; padding-block: 30px 100px; }
+.academy-film-section p:not(.academy-kicker) { line-height: 1.8; margin-top: 20px; }
+.academy-film { border-radius: 24px; overflow: hidden; background: #19392f; aspect-ratio: 16/10; box-shadow: 0 15px 45px #19392f15; }
+.academy-film-trigger { width: 100%; height: 100%; position: relative; display: block; text-align: left; }
+.academy-film-trigger img { object-fit: cover; }
+.academy-film-trigger::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%,#122b24dc); }
+.academy-film-play { position: absolute; z-index: 1; top: 50%; left: 50%; transform: translate(-50%,-50%); display: grid; place-items: center; width: 78px; height: 78px; background: #f0f5d9; color: #224c40; border-radius: 50%; box-shadow: 0 0 0 12px #ffffff35; }
+.academy-film-caption { position: absolute; bottom: 25px; left: 28px; color: white; z-index: 1; font-size: 25px; }
+.academy-film-caption small { display: block; font-size: 12px; margin-top: 5px; }
+.academy-film video { width: 100%; height: 100%; object-fit: contain; }
+.academy-offering { border: 1px solid #e1e8dc; background: white; border-radius: 24px; padding: 10px; box-shadow: 0 6px 25px #19392f08; }
+.academy-offering-image { border-radius: 17px; }
+.academy-offering-body { padding: 24px 18px 18px; }
+.academy-offering-body > p:not(.academy-kicker) { min-height: 58px; }
+.academy-course-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; margin: 20px 0; }
+.academy-course-meta span { padding: 6px 10px; border-radius: 7px; background: #f1f4ed; }
+.academy-card-bottom { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding-top: 20px; border-top: 1px solid var(--border); }
+.academy-card-bottom small { display: block; color: #64645f; font-size: 11px; }
+.academy-card-bottom strong { font-size: 30px; letter-spacing: -1px; }
+.academy-card-bottom a { background: #224c40; }
+.academy-demo-label { font-size: 12px; color: #64645f; line-height: 1.7; }
+.academy-detail { padding-top: 140px; padding-bottom: 90px; }
+.academy-detail-grid { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(0,1fr); gap: 65px; margin-top: 45px; align-items: start; }
+.academy-detail h1 { font-size: clamp(40px,5vw,64px); margin: 20px 0; }
+.academy-detail-intro { font-size: 18px; line-height: 1.8; margin-bottom: 30px; }
+.academy-detail-image { position: relative; aspect-ratio: 1.5; border-radius: 22px; overflow: hidden; }
+.academy-detail-image img { object-fit: cover; }
+.academy-purchase-card { position: sticky; top: 115px; border-radius: 24px; padding: 32px; border: 1px solid #dce4d5; background: #f4f7ee; }
+.academy-purchase-card h2 { font-size: 32px; line-height: 1.25; margin: 20px 0; }
+.academy-detail-price { display: block; font-size: 44px; margin: 12px 0 25px; }
+.academy-purchase-card ul { list-style: none; padding: 0; display: grid; gap: 15px; margin-bottom: 30px; font-size: 14px; }
+.academy-purchase-card li { display: flex; gap: 10px; align-items: center; }
+.academy-purchase-card > a:first-of-type { width: 100%; background: #224c40; gap: 12px; border-radius: 30px; }
+.academy-purchase-card > p { margin-block: 20px; }
+.academy-purchase-card .academy-text-link { font-size: 12px; }
+.academy-syllabus { padding-top: 50px; }
+.academy-syllabus h2 { font-size: 34px; margin: 14px 0; }
+.academy-syllabus > p { margin-bottom: 25px; }
+.academy-syllabus details { border-top: 1px solid var(--border); padding: 20px 0; }
+.academy-syllabus summary { cursor: pointer; font-size: 18px; }
+.academy-syllabus summary span { color: var(--primary); margin-right: 14px; font-size: 13px; }
+.academy-syllabus details p { padding-top: 15px; line-height: 1.8; font-size: 14px; }
+.academy-syllabus details svg { display: inline; }
+.academy-demo-checkout { max-width: 740px; padding-block: 160px 100px; }
+.academy-demo-checkout h1 { font-size: 48px; margin: 20px 0 35px; }
+.academy-checkout-summary { padding: 30px; background: #f1f5e9; border-radius: 20px; }
+.academy-checkout-summary h2 { font-size: 28px; margin-bottom: 15px; }
+.academy-checkout-summary strong { font-size: 34px; }
+.academy-demo-complete { display: flex; flex-direction: column; align-items: flex-start; gap: 25px; margin-top: 35px; line-height: 1.8; }
+.academy-demo-complete h2 { font-size: 30px; }
+@media (max-width:760px) {
+ .academy-film-section, .academy-detail-grid { grid-template-columns: 1fr; gap: 30px; }
+ .academy-film-section { padding-block: 20px 55px; }
+ .academy-promotion-portrait { box-shadow: 8px 8px 0 #dcebb9; }
+ .academy-purchase-card { position: static; padding: 24px; }
+ .academy-detail-grid { margin-top: 25px; }
+ .academy-card-bottom strong { font-size: 27px; }
+ .academy-offering-body { padding-inline: 10px; }
+ .academy-film-caption { font-size: 21px; bottom: 20px; left: 20px; }
+}

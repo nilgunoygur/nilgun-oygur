@@ -44,6 +44,7 @@ export function Header() {
           <Link
             key={link.href}
             href={link.href}
+            className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
             aria-current={pathname.startsWith(link.href) ? "page" : undefined}
           >
             {link.label}
@@ -74,6 +75,7 @@ export function Header() {
               ].map((link) => (
                 <Link
                   href={link.href}
+            className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
                   key={link.href}
                   onClick={() => setOpen(false)}
                 >

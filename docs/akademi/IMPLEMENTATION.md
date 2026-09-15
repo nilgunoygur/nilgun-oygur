@@ -22,7 +22,7 @@
 
 ## Screens and development infrastructure
 
-- Public `/akademi` promotion page lists the four existing training programs, explains participation, and links to `/akademi/giris`. Desktop/mobile navigation, footer, auth return links, and sitemap include the public landing route. Course cards link to existing program details; online sales remain explicitly unavailable until checkout is implemented. Desktop/mobile layout and login navigation were checked.
+- Public `/akademi` promotion page lists the four existing training programs, explains participation, and links to `/akademi/giris`. Desktop/mobile navigation, footer, auth return links, and sitemap include the public landing route. Course cards now link to dedicated `/akademi/[slug]` demo pages with sample prices, curricula and `/satin-al` checkout previews. No real payment, order, or access grant is created. Mock detail/checkout pages are noindex and excluded from the sitemap. Real checkout remains pending. Generated artwork and the silent sample video are documented in GENERATED_ASSETS.md. Desktop/mobile layout and login navigation were checked.
 
 - Turkish login, registration, forgotten-password, reset, and verification screens are implemented under `/akademi`. Unconfigured authentication displays an unavailable state and disables submission.
 - `/akademi/hesabim` requires a verified session and lists actual active access grants. Lesson navigation and the full learning experience remain pending.
