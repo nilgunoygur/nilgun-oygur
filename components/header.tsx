@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { nav as links } from "@/lib/content";
 import { AccountLink } from "@/components/account-link";
+import { AcademyNavLink } from "@/components/academy-nav-link";
 export function Header() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
@@ -41,16 +42,13 @@ export function Header() {
         <span>Nilgün Oygur</span>
       </Link>
       <nav aria-label="Ana menü" className="desktop-nav">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
-            aria-current={pathname.startsWith(link.href) ? "page" : undefined}
-          >
-            {link.label}
-          </Link>
-        ))}
+        {links.map((link) => link.href === "/akademi"
+          ? <AcademyNavLink key={link.href} label={link.label} href={link.href} current={pathname.startsWith(link.href)} />
+          : (
+            <Link key={link.href} href={link.href} aria-current={pathname.startsWith(link.href) ? "page" : undefined}>
+              {link.label}
+            </Link>
+          ))}
         <AccountLink />
       </nav>
       <div className="mobile-nav">
@@ -75,16 +73,13 @@ export function Header() {
                 ...links.filter(link => link.href !== "/akademi"),
                 { label: "Hakkımda", href: "/nilgun-oygur" },
                 ...links.filter(link => link.href === "/akademi"),
-              ].map((link) => (
-                <Link
-                  href={link.href}
-                  className={link.href === "/akademi" ? "academy-nav-highlight" : undefined}
-                  key={link.href}
-                  onClick={() => setOpen(false)}
-                >
-                  {link.label}
-                </Link>
-              ))}
+              ].map((link) => link.href === "/akademi"
+                ? <AcademyNavLink key={link.href} label={link.label} href={link.href} onNavigate={() => setOpen(false)} />
+                : (
+                  <Link href={link.href} key={link.href} onClick={() => setOpen(false)}>
+                    {link.label}
+                  </Link>
+                ))}
               <AccountLink onNavigate={() => setOpen(false)} />
             </nav>
           </SheetContent>

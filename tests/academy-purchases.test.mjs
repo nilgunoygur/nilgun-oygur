@@ -148,3 +148,30 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
   assert.equal(failed.status, "failed");
   assert.ok(!failed.errorDetails.includes("c@example.com"));
 });
+
+test("course details are read from the public Shopier product page", async () => {
+  const { parseShopierProductPage, parsePriceKurus } = await import("../lib/shopier/public-product.ts");
+  const { syncCourseFromShopier, syncAllCoursesFromShopier } = await import("../lib/akademi/course-sync.ts");
+  assert.equal(parsePriceKurus("950"), 95000);
+  assert.equal(parsePriceKurus("2.490,50"), 249050);
+  assert.equal(parsePriceKurus("2490.5"), 249050);
+  assert.equal(parsePriceKurus("abc"), null);
+  const page = (title, price, image = "https://cdn.shopier.app/pictures_large/a.jpg", currency = "TRY") => `<html><head>
+    <meta property="og:title" content="${title}"/><meta property="og:description" content="Kısa &amp; öz açıklama"/>
+    <meta property="og:image" content="${image}"/><meta property="product:price:amount" content="${price}"/>
+    <meta property="product:price:currency" content="${currency}"/></head></html>`;
+  assert.deepEqual(parseShopierProductPage(page("Doğal Taş Eğitimi", "950")), { title: "Doğal Taş Eğitimi", description: "Kısa & öz açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 95000, currency: "TRY" });
+  assert.equal(parseShopierProductPage(page("X", "950", "https://evil.example/x.jpg")).imageUrl, null);
+  assert.equal(parseShopierProductPage("<html>Not found</html>"), null);
+
+  const pages = { "51075042": page("Yeni Başlık", "2490"), "51075057": page("Dolar", "5", undefined, "USD") };
+  const fake = async (url) => { const id = url.split("/").pop(); return pages[id] ? new Response(pages[id]) : new Response("<html></html>"); };
+  assert.equal(await syncCourseFromShopier(db, course.id, fake), "updated");
+  assert.equal(await syncCourseFromShopier(db, course.id, fake), "unchanged");
+  const [synced] = await db.select().from(schema.courses).where(eq(schema.courses.id, course.id));
+  assert.equal(synced.title, "Yeni Başlık");
+  assert.equal(synced.priceKurus, 249000);
+  assert.equal(synced.cover, "https://cdn.shopier.app/pictures_large/a.jpg");
+  assert.equal(await syncCourseFromShopier(db, other.id, fake), "unsupported_currency");
+  assert.deepEqual(await syncAllCoursesFromShopier(db, fake), { updated: 0, unchanged: 1, unavailable: 0, unsupported_currency: 1, failed: 0 });
+});

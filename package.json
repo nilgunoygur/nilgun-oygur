@@ -13,7 +13,8 @@
     "db:migrate": "drizzle-kit migrate",
     "test:routes": "node tests/check-routes.mjs",
     "db:seed-demo": "node --experimental-strip-types scripts/seed-demo-courses.mjs",
-    "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs"
+    "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
+    "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

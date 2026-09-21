@@ -60,9 +60,28 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 - **Owner panel** `/yonetim/egitimler`: add a course by pasting a Shopier product link, or let the site create a digital product (optionally hidden from the Shopier store); publish, unpublish and archive; see sales and whether each is attached to an account. Price changes must be made in both Shopier and the panel.
 - **Refunds** are deliberately not implemented yet (owner decision pending).
 
+### Course details come from Shopier
+
+Every Shopier product page, hidden ones included, publishes `og:title`, `og:description`, `og:image` and `product:price:amount/currency`. The site copies these onto the course when it is added by link, from the owner panel's "Shopier’den güncelle" button, and in the daily sync, so title, description, image and price are edited only in Shopier. Covers load from `cdn.shopier.app`. Only TRY products are accepted. Access duration stays a site setting.
+
 ### Test products
 
-Three hidden `[TEST]` digital products exist in Nilgün's Shopier account (`51075042` ₺1, `51075057` ₺2, `51075059` ₺3). `pnpm run db:seed-demo` adds them as published courses to the configured database. Remove them in the Shopier panel and archive the courses before launch.
+Hidden `[TEST]` demo products using the Akademi artwork: `51076812` (₺1), `51076813` (₺2), `51076814` (₺3). `pnpm run db:seed-demo` links them to published demo courses and syncs their details. The first test products (`51075042`, `51075057`, `51075059`) are no longer used; delete all six in the Shopier panel and archive the demo courses before launch.
+
+### Testing without a card
+
+Shopier has no sandbox or test cards. Instead:
+
+- **Local auth**: with `NODE_ENV=development` and no `RESEND_API_KEY`, verification and reset emails are printed to the `next dev` terminal, so registration and login work locally. Never active in deployments.
+- **Purchases**: `pnpm run shopier:simulate <email> <product-id>` sends a correctly signed `order.created` webhook to the local server using the development-only `SHOPIER_WEBHOOK_TOKEN`. It refuses non-local URLs, and the production token is sensitive in Vercel, so it cannot forge production orders.
+- **End to end**: one real ₺1 purchase of a hidden test product after the production webhook is registered, then a refund in the Shopier panel.
+
+### Security notes
+
+- Secrets exist only in Vercel and ignored local `.env*` files. Only `NEXT_PUBLIC_SITE_URL` reaches the browser. A scan of the full public git history and the client bundles found no secret values. Database, Shopier and email modules import `server-only`.
+- Webhooks require the HMAC signature; the sync and email workers require `CRON_SECRET`; owner actions require the owner role and a session-specific MFA proof; claims are rate-limited; auth has database-backed rate limits.
+- Baseline headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`.
+- Open items: Development currently shares the production Neon branch (use a separate Neon branch or local PostgreSQL via `.env.development.local` before real customer data exists); revoke the first Shopier token; the Shopier token has full account access, so keep Vercel access limited to the owner.
 
 ### Infrastructure (21 September 2026)
 

@@ -8,15 +8,17 @@ import { adminAuditLog, courses } from "@/lib/db/schema";
 import { getShopier, isShopierConfigured } from "@/lib/shopier";
 import { parseShopierProduct } from "@/lib/shopier/api";
 import { courseSlug } from "@/lib/akademi/slug";
+import { refreshCourseFromShopier } from "@/lib/akademi/server";
+import { fetchShopierProduct } from "@/lib/shopier/public-product";
 
 export type CourseFormState = { status: "idle" | "success" | "error"; message: string };
 
 
 const courseSchema = z.object({
-  title: z.string().trim().min(3, "Eğitim adı en az 3 karakter olmalı.").max(120),
+  title: z.string().trim().max(120),
   slug: z.string().trim().max(80).regex(/^[a-z0-9-]*$/, "Adres yalnızca küçük harf, rakam ve tire içerebilir."),
   description: z.string().trim().max(5000),
-  price: z.string().trim().regex(/^\d{1,7}([.,]\d{1,2})?$/, "Fiyatı TL olarak yazın, örneğin 2490 veya 2490,50."),
+  price: z.string().trim().regex(/^(\d{1,7}([.,]\d{1,2})?)?$/, "Fiyatı TL olarak yazın, örneğin 2490 veya 2490,50."),
   accessDays: z.coerce.number().int("Erişim süresi tam gün olmalı.").min(1).max(3650),
   cover: z.string().trim().max(500).refine(v => v === "" || /^\/images\/[\w./-]+\.(png|jpe?g)$/i.test(v) || /^https:\/\/cdn\.shopier\.app\/[\w./-]+\.(png|jpe?g)$/i.test(v), "Görsel, sitedeki /images/… yolu veya Shopier görsel adresi olmalı."),
   shopierLink: z.string().trim().max(300),
@@ -33,30 +35,38 @@ export async function createCourse(_: CourseFormState, formData: FormData): Prom
   });
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0].message };
   const input = parsed.data;
-  const slug = input.slug || courseSlug(input.title);
-  if (!slug) return { status: "error", message: "Eğitim için geçerli bir adres oluşturulamadı." };
-  const priceKurus = Math.round(Number(input.price.replace(",", ".")) * 100);
-  if (priceKurus <= 0) return { status: "error", message: "Fiyat sıfırdan büyük olmalı." };
-  const cover = input.cover || "/images/akademi/academy-art-v1.png";
   const db = getDatabase();
-  if ((await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1)).length) return { status: "error", message: "Bu adresle bir eğitim zaten var." };
-
   let product = input.shopierLink ? parseShopierProduct(input.shopierLink) : null;
   if (input.shopierLink && !product) return { status: "error", message: "Shopier ürün linki tanınmadı. Örnek: https://www.shopier.com/51075042" };
+
+  // An existing Shopier product is the source of truth for title, description, image and price.
+  let details = { title: input.title, description: input.description, cover: input.cover || "/images/akademi/academy-art-v1.png", priceKurus: input.price ? Math.round(Number(input.price.replace(",", ".")) * 100) : 0 };
+  if (product) {
+    const shopier = await fetchShopierProduct(product.id).catch(() => null);
+    if (!shopier) return { status: "error", message: "Shopier ürün sayfası okunamadı. Linki ve ürünün yayında olduğunu kontrol edin." };
+    if (shopier.currency !== "TRY") return { status: "error", message: "Akademi yalnızca TL fiyatlı Shopier ürünlerini destekler." };
+    details = { title: shopier.title, description: shopier.description, cover: shopier.imageUrl ?? details.cover, priceKurus: shopier.priceKurus };
+  } else if (details.title.length < 3 || details.priceKurus <= 0) {
+    return { status: "error", message: "Yeni Shopier ürünü için eğitim adı ve fiyat gerekli." };
+  }
+  const slug = input.slug || courseSlug(details.title);
+  if (!slug) return { status: "error", message: "Eğitim için geçerli bir adres oluşturulamadı." };
+  if ((await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1)).length) return { status: "error", message: "Bu adresle bir eğitim zaten var." };
+
   if (!product) {
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-    const imageUrl = cover.startsWith("https://") ? cover : site + cover;
+    const imageUrl = details.cover.startsWith("https://") ? details.cover : site + details.cover;
     if (!isShopierConfigured()) return { status: "error", message: "Shopier bağlantısı yapılandırılmamış. Ürün linkini yapıştırın." };
     if (!/^https:\/\/(?!localhost)/.test(imageUrl)) return { status: "error", message: "Shopier görseli okuyabilmek için sitenin herkese açık adresi gerekli. Ürünü Shopier’de oluşturup linkini yapıştırın." };
     try {
-      product = await getShopier().createProduct({ title: input.title, description: input.description || input.title, priceKurus, imageUrl, hidden: input.hidden });
+      product = await getShopier().createProduct({ title: details.title, description: details.description || details.title, priceKurus: details.priceKurus, imageUrl, hidden: input.hidden });
     } catch {
       return { status: "error", message: "Shopier ürünü oluşturulamadı. Lütfen daha sonra yeniden deneyin." };
     }
   }
   try {
     const [course] = await db.insert(courses).values({
-      slug, title: input.title, description: input.description, cover, priceKurus,
+      slug, ...details,
       accessDurationDays: input.accessDays, shopierProductId: product.id, shopierUrl: product.url, status: "draft",
     }).returning({ id: courses.id });
     await db.insert(adminAuditLog).values({ actorId: session.user.id, action: "course.create", resourceType: "course", resourceId: course.id, reason: `Shopier ürünü ${product.id}` });
@@ -79,4 +89,15 @@ export async function setCourseStatus(formData: FormData) {
   revalidatePath("/yonetim/egitimler");
   revalidatePath("/akademi");
   revalidatePath(`/akademi/${course.slug}`);
+}
+
+export async function refreshCourse(formData: FormData) {
+  const session = await requireOwner();
+  const courseId = z.uuid().parse(formData.get("courseId"));
+  const outcome = await refreshCourseFromShopier(courseId);
+  if (outcome === "updated") {
+    await getDatabase().insert(adminAuditLog).values({ actorId: session.user.id, action: "course.shopier_sync", resourceType: "course", resourceId: courseId, reason: "Shopier ürün bilgileri güncellendi" });
+    revalidatePath("/akademi", "layout");
+  }
+  revalidatePath("/yonetim/egitimler");
 }

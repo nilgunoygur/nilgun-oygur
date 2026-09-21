@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { syncRecentShopierOrders } from "@/lib/akademi/server";
 
 export const runtime = "nodejs";
@@ -12,7 +13,9 @@ export async function POST(request: Request) {
     return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
   }
   try {
-    return Response.json(await syncRecentShopierOrders(), { headers: { "Cache-Control": "no-store" } });
+    const result = await syncRecentShopierOrders();
+    if (result.courses.updated > 0) revalidatePath("/akademi", "layout");
+    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Shopier sync is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

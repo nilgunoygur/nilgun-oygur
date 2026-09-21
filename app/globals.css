@@ -2034,7 +2034,7 @@ h1 {
 .academy-offering-image { display: block; position: relative; aspect-ratio: 1.65; overflow: hidden; border-radius: 20px; background: var(--accent); }
 .academy-offering-image img { object-fit: cover; transition: transform .3s; }
 .academy-offering-image:hover img { transform: scale(1.03); }
-.academy-offering-image span { position: absolute; top: 18px; left: 18px; border-radius: 50%; background: white; padding: 11px; font-size: 12px; }
+.academy-offering-image span { position: absolute; top: 18px; left: 18px; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: white; font-size: 12px; line-height: 1; font-variant-numeric: tabular-nums; }
 .academy-offering-body { padding: 24px 4px 0; }
 .academy-offering-body h3 { font-size: 30px; margin: 10px 0; }
 .academy-offering-body > p:not(.academy-kicker) { line-height: 1.7; margin-bottom: 20px; }
@@ -2064,7 +2064,7 @@ h1 {
 /* Akademi campaign and demo storefront */
 .desktop-nav { align-items: center; gap: 22px; }
 .academy-nav-highlight { display: inline-flex; align-items: center; gap: 8px; padding: 10px 17px; border-radius: 99px; background: #224c40; color: #fff !important; box-shadow: 0 4px 16px #224c4020; }
-.academy-nav-highlight::after { content: "↗"; color: #d8ef9f; }
+.academy-nav-arrow { display: inline-flex; color: #d8ef9f; }
 .academy-nav-highlight:hover { background: #326551; }
 .account-link { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
 .account-link-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dcebb9; color: #224c40; font-size: 14px; }

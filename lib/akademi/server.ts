@@ -4,6 +4,7 @@ import { getDatabase } from "@/lib/db";
 import { rateLimit } from "@/lib/db/schema";
 import { getShopier } from "@/lib/shopier";
 import { claimPurchasesByEmail, claimShopierOrder, recordShopierOrder } from "./purchases";
+import { syncAllCoursesFromShopier, syncCourseFromShopier } from "./course-sync";
 
 /** Grants purchases made with the student's verified email. Call only with a verified session. */
 export function claimPendingPurchases(userId: string, verifiedEmail: string) {
@@ -26,7 +27,12 @@ export async function syncRecentShopierOrders(days = 7) {
     purchases += result.purchaseIds.length;
     granted += result.granted;
   }
-  return { orders: orders.length, purchases, granted };
+  return { orders: orders.length, purchases, granted, courses: await syncAllCoursesFromShopier(db) };
+}
+
+/** Owner action: refresh one course's title, description, image and price from Shopier. */
+export function refreshCourseFromShopier(courseId: string) {
+  return syncCourseFromShopier(getDatabase(), courseId);
 }
 
 /** Five order-claim attempts per student per hour, stored in the shared rate-limit table. */

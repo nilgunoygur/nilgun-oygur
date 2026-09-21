@@ -4,7 +4,7 @@ import { ownerPageSession } from "@/lib/auth/page-session";
 import { getDatabase } from "@/lib/db";
 import { courses, shopierPurchases } from "@/lib/db/schema";
 import { formatAccess, formatPrice } from "@/lib/akademi/catalog";
-import { setCourseStatus } from "./actions";
+import { refreshCourse, setCourseStatus } from "./actions";
 import { CourseForm } from "@/components/akademi/course-form";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +25,7 @@ export default async function OwnerCourses() {
       .from(shopierPurchases).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).orderBy(desc(shopierPurchases.purchasedAt)).limit(25),
   ]);
   return <section className="academy-account page-width">
-    <header><div><p className="academy-kicker">AKADEMİ YÖNETİMİ</p><h1>Eğitimler ve satışlar</h1><p>Ödemeler Shopier’de alınır; onaylanan siparişler öğrencinin hesabına otomatik eklenir.</p></div><Link className="underline" href="/yonetim">Yönetim ana sayfası</Link></header>
+    <header><div><p className="academy-kicker">AKADEMİ YÖNETİMİ</p><h1>Eğitimler ve satışlar</h1><p>Ödemeler Shopier’de alınır; onaylanan siparişler öğrencinin hesabına otomatik eklenir. Başlık, açıklama, görsel ve fiyat Shopier ürününden her gün güncellenir.</p></div><Link className="underline" href="/yonetim">Yönetim ana sayfası</Link></header>
     <div className="academy-owner-grid">
       <div>
         <h2 className="mb-4 text-2xl">Eğitimler</h2>
@@ -39,7 +39,7 @@ export default async function OwnerCourses() {
               {course.status !== "published" && <Button size="sm" name="status" value="published">Yayınla</Button>}
               {course.status === "published" && <Button size="sm" variant="outline" name="status" value="draft">Yayından kaldır</Button>}
               {course.status !== "archived" && <Button size="sm" variant="ghost" name="status" value="archived">Arşivle</Button>}
-            </form></td>
+            </form><form action={refreshCourse} className="mt-2"><input type="hidden" name="courseId" value={course.id} /><Button size="sm" variant="ghost">Shopier’den güncelle</Button></form></td>
           </tr>)}</tbody>
         </table>}
         <h2 className="mb-4 mt-12 text-2xl">Son satışlar</h2>
