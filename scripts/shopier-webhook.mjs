@@ -1,5 +1,6 @@
 // Subscribes order.created, product.created and product.updated to <base-url>/api/shopier/webhook.
-// Prints only the comma-separated one-time tokens to stdout. Usage: pnpm run --silent shopier:webhook https://example.com
+// Prints only the comma-separated one-time tokens to stdout; capture them before saving (see docs/akademi/IMPLEMENTATION.md).
+// Usage: pnpm run --silent shopier:webhook https://example.com
 import nextEnv from "@next/env";
 import { createShopierClient } from "../lib/shopier/api.ts";
 

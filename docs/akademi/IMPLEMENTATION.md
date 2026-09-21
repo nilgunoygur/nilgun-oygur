@@ -106,7 +106,8 @@ Shopier has no sandbox or test cards. Instead:
 1. Run `pnpm run db:migrate` **before** each deploy that adds migrations: `/akademi` is prerendered from the database at build time.
 2. Revoke the first Shopier token (it was shared in chat); only the token stored in Vercel should remain.
 3. Deploy, then subscribe the webhook and store its one-time token without printing it:
-   `pnpm run --silent shopier:webhook https://<domain> | vercel env add SHOPIER_WEBHOOK_TOKEN production --global-config ~/.vercel-nilgun`
+   `TOKENS=$(pnpm run --silent shopier:webhook https://<domain>) && printf '%s' "$TOKENS" | vercel env add SHOPIER_WEBHOOK_TOKEN production --sensitive --global-config ~/.vercel-nilgun; unset TOKENS`
+   This subscribes order.created, product.created and product.updated. Capturing first avoids losing the one-time tokens. It was done for `nilgun-oygur.vercel.app` on 21 September 2026; delete the three subscriptions and re-run it when the custom domain goes live.
    and redeploy.
 4. Make a ₺1 purchase of a test product with a registered account email and confirm the course appears in `/akademi/hesabim`.
 
