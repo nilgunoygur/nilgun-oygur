@@ -62,7 +62,8 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Shopier is the course catalog
 
-- **Discovery:** every visible *digital* product on the public store page (`shopier.com/$SHOPIER_STORE`) becomes a published course with 365 days of access, which can be changed in the owner panel. Physical products are ignored.
+- **Product webhooks (primary):** the product-read API returns 403 for this account, but it can subscribe to `product.created` and `product.updated`. Shopier then pushes each product (title, description, images, price, discount, type, hidden flag). New visible digital products are published immediately, and linked courses, including hidden ones, update immediately. Each subscription signs with its own token, so `SHOPIER_WEBHOOK_TOKEN` holds a comma-separated list.
+- **Store-page sync (backfill):** every visible *digital* product on the public store page (`shopier.com/$SHOPIER_STORE`) becomes a published course with 365 days of access, which can be changed in the owner panel. Physical products are ignored.
 - **Details:** title, description, image, price and discount are copied from each product page's Open Graph tags and old-price block.
 - **Removal:** a product deleted in Shopier redirects to the store or a not-found page, and its course is archived. Network errors, timeouts or an unreadable store page never archive anything.
 - **Owner decisions stick:** the sync never re-publishes a course the owner archived or unpublished.

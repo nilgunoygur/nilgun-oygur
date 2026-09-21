@@ -137,13 +137,13 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
   const body = JSON.stringify({ id: "555000111", paymentStatus: "paid", dateCreated: "2026-09-21T12:00:00+0300", currency: "TRY", shippingInfo: { email: "c@example.com" }, lineItems: [{ productId: "51075057", total: "2.00" }] });
   const sign = (raw, token = "hook-token") => createHmac("sha256", token).update(raw).digest("hex");
   const headers = (raw, extra = {}) => new Headers({ "shopier-event": "order.created", "shopier-webhook-id": "wh-1", "shopier-signature": sign(raw), ...extra });
-  assert.deepEqual(await handleShopierWebhook(db, body, headers(body, { "shopier-signature": sign(body, "wrong") }), "hook-token"), { status: 401, outcome: "invalid_signature" });
-  assert.equal((await handleShopierWebhook(db, body, headers(body, { "shopier-event": "product.updated" }), "hook-token")).outcome, "ignored_event");
-  assert.deepEqual(await handleShopierWebhook(db, body, headers(body), "hook-token"), { status: 200, outcome: "recorded" });
-  assert.deepEqual(await handleShopierWebhook(db, body, headers(body), "hook-token"), { status: 200, outcome: "duplicate" });
+  assert.deepEqual(await handleShopierWebhook(db, body, headers(body, { "shopier-signature": sign(body, "wrong") }), ["hook-token"]), { status: 401, outcome: "invalid_signature" });
+  assert.equal((await handleShopierWebhook(db, body, headers(body, { "shopier-event": "refund.updated" }), ["hook-token"])).outcome, "ignored_event");
+  assert.deepEqual(await handleShopierWebhook(db, body, headers(body), ["hook-token"]), { status: 200, outcome: "recorded" });
+  assert.deepEqual(await handleShopierWebhook(db, body, headers(body), ["hook-token"]), { status: 200, outcome: "duplicate" });
   assert.equal((await activeGrants("student-c")).filter(g => g.courseId === other.id).length, 1);
   const broken = '{"id":"1"}';
-  assert.deepEqual(await handleShopierWebhook(db, broken, headers(broken, { "shopier-webhook-id": "wh-2" }), "hook-token"), { status: 500, outcome: "failed" });
+  assert.deepEqual(await handleShopierWebhook(db, broken, headers(broken, { "shopier-webhook-id": "wh-2" }), ["hook-token"]), { status: 500, outcome: "failed" });
   const [failed] = await db.select().from(schema.providerEvents).where(eq(schema.providerEvents.eventIdentity, "order.created:wh-2"));
   assert.equal(failed.status, "failed");
   assert.ok(!failed.errorDetails.includes("c@example.com"));
@@ -199,4 +199,28 @@ test("course details are read from the public Shopier product page", async () =>
   // A store outage never archives anything.
   await assert.rejects(() => syncCatalogFromShopier(db, "TestStore", async () => new Response("", { status: 503 })));
   assert.equal((await syncCourseFromShopier(db, course.id, async () => { throw new Error("timeout"); })), "unavailable");
+});
+
+test("product webhooks publish new visible digital products and keep linked courses current", async () => {
+  const { handleShopierWebhook } = await import("../lib/akademi/shopier-webhook.ts");
+  const product = (fields) => JSON.stringify({ id: "70000001", title: "Kuantum Eğitimi", description: "Açıklama", type: "digital", customListing: false,
+    media: [{ type: "image", url: "https://cdn.shopier.app/pictures_large/k.jpg", placement: 1 }],
+    priceData: { currency: "TRY", price: "2490.00", discount: false, discountedPrice: "" }, ...fields });
+  const send = (raw, event, id) => handleShopierWebhook(db, raw, new Headers({ "shopier-event": event, "shopier-webhook-id": id, "shopier-signature": createHmac("sha256", "product-token").update(raw).digest("hex") }), ["order-token", "product-token"]);
+  assert.deepEqual(await send(product({}), "product.created", "p-1"), { status: 200, outcome: "added" });
+  const [added] = await db.select().from(schema.courses).where(eq(schema.courses.shopierProductId, "70000001"));
+  assert.equal(added.status, "published");
+  assert.equal(added.slug, "kuantum-egitimi");
+  assert.equal(added.priceKurus, 249000);
+  assert.equal(added.cover, "https://cdn.shopier.app/pictures_large/k.jpg");
+  const onSale = product({ priceData: { currency: "TRY", price: "2490.00", discount: true, discountedPrice: "1990.00" } });
+  assert.equal((await send(onSale, "product.updated", "p-2")).outcome, "updated");
+  const [sale] = await db.select().from(schema.courses).where(eq(schema.courses.shopierProductId, "70000001"));
+  assert.deepEqual([sale.priceKurus, sale.compareAtPriceKurus], [199000, 249000]);
+  assert.equal((await send(product({ id: "70000002", customListing: true }), "product.created", "p-3")).outcome, "ignored");
+  assert.equal((await send(product({ id: "70000003", type: "physical" }), "product.created", "p-4")).outcome, "ignored");
+  await db.update(schema.courses).set({ status: "archived" }).where(eq(schema.courses.id, sale.id));
+  assert.equal((await send(product({ title: "Yeni ad" }), "product.updated", "p-5")).outcome, "updated");
+  const [stillArchived] = await db.select().from(schema.courses).where(eq(schema.courses.id, sale.id));
+  assert.equal(stillArchived.status, "archived");
 });

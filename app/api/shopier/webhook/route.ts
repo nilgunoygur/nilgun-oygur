@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { getDatabase } from "@/lib/db";
 import { handleShopierWebhook } from "@/lib/akademi/shopier-webhook";
 
@@ -8,10 +9,11 @@ const noStore = { "Cache-Control": "no-store" };
 
 // Shopier retries non-200 responses for up to 72 hours.
 export async function POST(request: Request) {
-  const token = process.env.SHOPIER_WEBHOOK_TOKEN;
-  if (!token || !process.env.DATABASE_URL) return new Response(null, { status: 503, headers: noStore });
+  const tokens = (process.env.SHOPIER_WEBHOOK_TOKEN ?? "").split(",").map(token => token.trim()).filter(Boolean);
+  if (tokens.length === 0 || !process.env.DATABASE_URL) return new Response(null, { status: 503, headers: noStore });
   const rawBody = await request.text();
   if (rawBody.length > 256_000) return new Response(null, { status: 413, headers: noStore });
-  const { status, outcome } = await handleShopierWebhook(getDatabase(), rawBody, request.headers, token);
+  const { status, outcome } = await handleShopierWebhook(getDatabase(), rawBody, request.headers, tokens);
+  if (outcome === "added" || outcome === "updated") revalidatePath("/akademi", "layout");
   return Response.json({ outcome }, { status, headers: noStore });
 }

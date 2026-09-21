@@ -26,6 +26,23 @@ export const shopierOrderSchema = z.object({
 });
 export type ShopierOrder = z.output<typeof shopierOrderSchema>;
 
+const id = z.union([z.string(), z.number()]).transform(String);
+export const shopierProductSchema = z.object({
+  id,
+  title: z.string().min(1),
+  description: z.string().nullish().transform(value => value ?? ""),
+  type: z.string(),
+  customListing: z.boolean().nullish(),
+  media: z.array(z.object({ url: z.string(), placement: z.coerce.number().optional() })).nullish(),
+  priceData: z.object({
+    currency: z.string(),
+    price: z.string(),
+    discount: z.boolean().nullish(),
+    discountedPrice: z.string().nullish(),
+  }),
+});
+export type ShopierProduct = z.output<typeof shopierProductSchema>;
+
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {
   for (const candidate of [order.billingInfo?.email, order.shippingInfo?.email]) {

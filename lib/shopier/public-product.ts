@@ -1,4 +1,4 @@
-import { parsePriceKurus } from "./api.ts";
+import { parsePriceKurus, type ShopierProduct } from "./api.ts";
 
 // Course details come from the product page's Open Graph tags; the product API is 403 for this account.
 export type ShopierProductDetails = {
@@ -44,6 +44,23 @@ export function parseShopierProductPage(html: string): ShopierProductDetails | n
     priceKurus,
     compareAtPriceKurus: compareAt && compareAt > priceKurus ? compareAt : null,
     currency: meta(html, "product:price:currency") ?? "TRY",
+  };
+}
+
+/** Maps a webhook Product model to the same shape the product page yields. */
+export function productDetailsFromModel(product: ShopierProduct): ShopierProductDetails | null {
+  const regular = parsePriceKurus(product.priceData.price);
+  const sale = product.priceData.discount && product.priceData.discountedPrice ? parsePriceKurus(product.priceData.discountedPrice) : null;
+  const priceKurus = sale ?? regular;
+  if (!priceKurus || priceKurus <= 0) return null;
+  const image = [...(product.media ?? [])].sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99))[0]?.url;
+  return {
+    title: product.title,
+    description: product.description,
+    imageUrl: image && isShopierImageUrl(image) ? image : null,
+    priceKurus,
+    compareAtPriceKurus: sale && regular && regular > sale ? regular : null,
+    currency: product.priceData.currency,
   };
 }
 

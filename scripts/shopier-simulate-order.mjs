@@ -6,7 +6,7 @@ nextEnv.loadEnvConfig(process.cwd());
 const [email, productId, base = "http://localhost:3000"] = process.argv.slice(2);
 if (!email || !/^\d+$/.test(productId ?? "")) throw new Error("Usage: pnpm run shopier:simulate <buyer-email> <shopier-product-id> [base-url]");
 if (!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base)) throw new Error("Simulated orders may only be sent to a local server.");
-const token = process.env.SHOPIER_WEBHOOK_TOKEN;
+const token = process.env.SHOPIER_WEBHOOK_TOKEN?.split(",")[0];
 if (!token) throw new Error("SHOPIER_WEBHOOK_TOKEN is not set in .env.local.");
 
 const orderId = String(900_000_000 + randomInt(99_999_999));
