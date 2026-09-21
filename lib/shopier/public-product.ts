@@ -1,10 +1,12 @@
-// Shopier's product API is forbidden for this account, but every product page (hidden ones
-// included) publishes Open Graph tags. Those are the source of truth for course details.
+import { parsePriceKurus } from "./api.ts";
+
+// Course details come from the product page's Open Graph tags; the product API is 403 for this account.
 export type ShopierProductDetails = {
   title: string;
   description: string;
   imageUrl: string | null;
   priceKurus: number;
+  compareAtPriceKurus: number | null;
   currency: string;
 };
 
@@ -25,14 +27,7 @@ function meta(html: string, property: string): string | null {
   return null;
 }
 
-/** "950", "2490.50", "2.490,50" → kuruş. */
-export function parsePriceKurus(value: string): number | null {
-  let normalized = value.replace(/\s|TL|₺/g, "");
-  if (normalized.includes(",")) normalized = normalized.replace(/\./g, "").replace(",", ".");
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
-  const [lira, kurus = ""] = normalized.split(".");
-  return Number(lira) * 100 + Number(kurus.padEnd(2, "0"));
-}
+export const isShopierImageUrl = (url: string) => /^https:\/\/cdn\.shopier\.app\/[\w./-]+$/.test(url);
 
 export function parseShopierProductPage(html: string): ShopierProductDetails | null {
   const title = meta(html, "og:title");
@@ -40,11 +35,14 @@ export function parseShopierProductPage(html: string): ShopierProductDetails | n
   const priceKurus = price ? parsePriceKurus(price) : null;
   if (!title || priceKurus === null || priceKurus <= 0) return null;
   const image = meta(html, "og:image");
+  const oldPrice = /class="product-price-old[^"]*"[^>]*data-price="([^"]+)"/.exec(html)?.[1];
+  const compareAt = oldPrice ? parsePriceKurus(decode(oldPrice)) : null;
   return {
     title,
     description: meta(html, "og:description") ?? "",
-    imageUrl: image && /^https:\/\/cdn\.shopier\.app\//.test(image) ? image : null,
+    imageUrl: image && isShopierImageUrl(image) ? image : null,
     priceKurus,
+    compareAtPriceKurus: compareAt && compareAt > priceKurus ? compareAt : null,
     currency: meta(html, "product:price:currency") ?? "TRY",
   };
 }
@@ -58,6 +56,5 @@ export async function fetchShopierProduct(productId: string, fetcher: typeof fet
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) return null;
-  // A missing product redirects to the store or an error page without product tags.
   return parseShopierProductPage(await response.text());
 }

@@ -3,8 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStudent } from "@/lib/auth/authorization";
 import { claimOrderForStudent, consumeClaimAttempt } from "@/lib/akademi/server";
-
-export type ClaimState = { status: "idle" | "success" | "error"; message: string };
+import type { FormState } from "@/components/akademi/form-status";
 
 const claimSchema = z.object({
   orderNumber: z.string().trim().regex(/^\d{5,20}$/, "Sipariş numarası yalnızca rakamlardan oluşur."),
@@ -19,7 +18,7 @@ const messages = {
   not_academy: "Bu sipariş bir Akademi eğitimi içermiyor.",
 } as const;
 
-export async function claimOrder(_: ClaimState, formData: FormData): Promise<ClaimState> {
+export async function claimOrder(_: FormState, formData: FormData): Promise<FormState> {
   let session;
   try { session = await requireStudent(); } catch { return { status: "error", message: "Lütfen yeniden giriş yapın." }; }
   const input = claimSchema.safeParse({ orderNumber: formData.get("orderNumber"), email: formData.get("email") });

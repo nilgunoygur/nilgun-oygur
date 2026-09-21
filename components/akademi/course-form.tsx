@@ -1,17 +1,15 @@
 "use client";
 import { useActionState } from "react";
-import { createCourse, type CourseFormState } from "@/app/yonetim/egitimler/actions";
+import { createCourse } from "@/app/yonetim/egitimler/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-
-const initial: CourseFormState = { status: "idle", message: "" };
+import { FormStatus, idleForm } from "@/components/akademi/form-status";
 
 export function CourseForm() {
-  const [state, action, pending] = useActionState(createCourse, initial);
+  const [state, action, pending] = useActionState(createCourse, idleForm);
   return <form action={action}>
     <FieldGroup>
       <Field><FieldLabel htmlFor="shopierLink">Shopier ürün linki</FieldLabel><Input id="shopierLink" name="shopierLink" placeholder="https://www.shopier.com/51075042" /><FieldDescription>Ürünü Shopier’de oluşturduysanız linkini yapıştırın. Başlık, açıklama, görsel ve fiyat Shopier’den otomatik alınır ve her gün güncellenir. Boş bırakırsanız ürün aşağıdaki bilgilerle Shopier’de oluşturulur.</FieldDescription></Field>
@@ -22,7 +20,7 @@ export function CourseForm() {
       <Field><FieldLabel htmlFor="price">Fiyat (TL, yalnızca yeni ürün için)</FieldLabel><Input id="price" name="price" inputMode="decimal" placeholder="2490" /></Field>
       <Field><FieldLabel htmlFor="cover">Kapak görseli (isteğe bağlı)</FieldLabel><Input id="cover" name="cover" placeholder="/images/akademi/dogal-tas-v1.png" /></Field>
       <Field orientation="horizontal"><Checkbox id="hidden" name="hidden" defaultChecked /><FieldLabel htmlFor="hidden">Otomatik oluşturulan ürünü Shopier mağazasında gizle</FieldLabel></Field>
-      {state.status !== "idle" && <Alert variant={state.status === "error" ? "destructive" : "default"}><AlertDescription>{state.message}</AlertDescription></Alert>}
+      <FormStatus state={state} />
       <Button type="submit" disabled={pending}>{pending ? "Kaydediliyor…" : "Eğitimi ekle"}</Button>
     </FieldGroup>
   </form>;

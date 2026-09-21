@@ -2041,7 +2041,6 @@ h1 {
 .academy-text-link { display: inline-flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--primary); padding-bottom: 5px; }
 .academy-sales-note { display: flex; gap: 15px; padding: 24px; background: var(--muted); border-radius: 16px; margin-top: 40px; line-height: 1.7; font-size: 14px; }
 .academy-sales-note svg { flex-shrink: 0; }
-.academy-sales-note a { text-decoration: underline; text-underline-offset: 3px; }
 .academy-how { padding-block: 65px; border-top: 1px solid var(--border); }
 .academy-how-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 50px; margin-top: 40px; }
 .academy-how-grid span { font-size: 14px; color: var(--primary); }
@@ -2068,7 +2067,7 @@ h1 {
 .academy-nav-highlight:hover { background: #326551; }
 .account-link { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
 .account-link-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dcebb9; color: #224c40; font-size: 14px; }
-.academy-landing { background: linear-gradient(155deg,#f1f5e9 0%,#fff 29%,#fff 70%,#f4f7ef 100%); }
+.academy-landing { background: linear-gradient(to bottom, transparent 70%, var(--background)), linear-gradient(155deg,#f1f5e9 0%,#fff 29%,#fff 70%,#f4f7ef 100%); }
 .academy-promotion { position: relative; }
 .academy-promotion h1 em { color: #285747; }
 .academy-promotion-portrait { box-shadow: 16px 16px 0 #dcebb9; }
@@ -2102,10 +2101,15 @@ h1 {
 .academy-detail-image img { object-fit: cover; }
 .academy-purchase-card { position: sticky; top: 115px; border-radius: 24px; padding: 32px; border: 1px solid #dce4d5; background: #f4f7ee; }
 .academy-purchase-card h2 { font-size: 32px; line-height: 1.25; margin: 20px 0; }
-.academy-detail-price { display: block; font-size: 44px; margin: 12px 0 25px; }
+.academy-detail-price { font-size: 44px; }
+.academy-purchase-card .course-price { margin: 12px 0 25px; }
+.course-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.course-price del { color: #7a7a74; font-size: 17px; }
+.academy-purchase-card .course-price del, .academy-checkout-summary .course-price del { font-size: 22px; }
+.course-price-badge { align-self: center; padding: 3px 9px; border-radius: 99px; background: #224c40; color: #d8ef9f; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .academy-purchase-card ul { list-style: none; padding: 0; display: grid; gap: 15px; margin-bottom: 30px; font-size: 14px; }
 .academy-purchase-card li { display: flex; gap: 10px; align-items: center; }
-.academy-purchase-card > a:first-of-type { width: 100%; background: #224c40; gap: 12px; border-radius: 30px; }
+.academy-buy-button { width: 100%; background: #224c40; gap: 12px; border-radius: 30px; }
 .academy-purchase-card > p { margin-block: 20px; }
 .academy-purchase-card .academy-text-link { font-size: 12px; }
 .academy-syllabus { padding-top: 50px; }
@@ -2122,7 +2126,6 @@ h1 {
 .academy-checkout-summary h2 { font-size: 28px; margin-bottom: 15px; }
 .academy-checkout-summary strong { font-size: 34px; }
 .academy-checkout-steps { display: flex; flex-direction: column; align-items: flex-start; gap: 25px; margin-top: 35px; line-height: 1.8; }
-.academy-checkout-steps h2 { font-size: 30px; }
 @media (max-width:760px) {
  .academy-film-section, .academy-detail-grid { grid-template-columns: 1fr; gap: 30px; }
  .academy-film-section { padding-block: 20px 55px; }

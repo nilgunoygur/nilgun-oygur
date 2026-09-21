@@ -1,18 +1,13 @@
 import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { providerEvents } from "../db/schema.ts";
-import type * as schema from "../db/schema.ts";
 import { isValidWebhookSignature, shopierOrderSchema } from "../shopier/api.ts";
 import { recordShopierOrder } from "./purchases.ts";
+import type { Database } from "../db/types.ts";
 
-type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
-export type WebhookResult = { status: 200 | 401 | 500; outcome: string };
+type WebhookResult = { status: 200 | 401 | 500; outcome: string };
 
-/**
- * Verifies and applies one Shopier webhook. Only authentic `order.created` events are stored;
- * we keep the payload hash, never the buyer's personal data. A 500 makes Shopier retry.
- */
+/** Verifies and applies one order.created webhook; stores only the payload hash. A 500 makes Shopier retry. */
 export async function handleShopierWebhook(db: Database, rawBody: string, headers: Headers, token: string): Promise<WebhookResult> {
   if (!isValidWebhookSignature(rawBody, headers.get("shopier-signature"), token)) return { status: 401, outcome: "invalid_signature" };
   if (headers.get("shopier-event") !== "order.created") return { status: 200, outcome: "ignored_event" };

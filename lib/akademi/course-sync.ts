@@ -1,31 +1,39 @@
 import { and, eq, isNotNull, ne } from "drizzle-orm";
-import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { courses } from "../db/schema.ts";
-import type * as schema from "../db/schema.ts";
-import { fetchShopierProduct } from "../shopier/public-product.ts";
+import type { Database } from "../db/types.ts";
+import { fetchShopierProduct, type ShopierProductDetails } from "../shopier/public-product.ts";
 
-type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
-export type SyncOutcome = "updated" | "unchanged" | "unavailable" | "unsupported_currency";
+type Course = typeof courses.$inferSelect;
+type SyncOutcome = "updated" | "unchanged" | "unavailable" | "unsupported_currency";
 
-/** Copies title, description, image and price from the Shopier product page onto the course. */
-export async function syncCourseFromShopier(db: Database, courseId: string, fetcher: typeof fetch = fetch): Promise<SyncOutcome> {
-  const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
-  if (!course?.shopierProductId) return "unavailable";
-  const product = await fetchShopierProduct(course.shopierProductId, fetcher);
+export const courseFieldsFromProduct = (product: ShopierProductDetails, fallbackCover: string | null) => ({
+  title: product.title,
+  description: product.description,
+  cover: product.imageUrl ?? fallbackCover,
+  priceKurus: product.priceKurus,
+  compareAtPriceKurus: product.compareAtPriceKurus,
+});
+
+async function syncCourse(db: Database, course: Course, fetcher: typeof fetch): Promise<SyncOutcome> {
+  const product = course.shopierProductId ? await fetchShopierProduct(course.shopierProductId, fetcher) : null;
   if (!product) return "unavailable";
   if (product.currency !== "TRY") return "unsupported_currency";
-  const next = { title: product.title, description: product.description, cover: product.imageUrl ?? course.cover, priceKurus: product.priceKurus };
-  if (next.title === course.title && next.description === course.description && next.cover === course.cover && next.priceKurus === course.priceKurus) return "unchanged";
-  await db.update(courses).set(next).where(eq(courses.id, courseId));
+  const next = courseFieldsFromProduct(product, course.cover);
+  if ((Object.keys(next) as (keyof typeof next)[]).every(key => next[key] === course[key])) return "unchanged";
+  await db.update(courses).set(next).where(eq(courses.id, course.id));
   return "updated";
 }
 
-/** Refreshes every non-archived course linked to Shopier; one failure never stops the rest. */
+export async function syncCourseFromShopier(db: Database, courseId: string, fetcher: typeof fetch = fetch): Promise<SyncOutcome> {
+  const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
+  return course ? syncCourse(db, course, fetcher) : "unavailable";
+}
+
 export async function syncAllCoursesFromShopier(db: Database, fetcher: typeof fetch = fetch) {
-  const linked = await db.select({ id: courses.id }).from(courses).where(and(isNotNull(courses.shopierProductId), ne(courses.status, "archived")));
+  const linked = await db.select().from(courses).where(and(isNotNull(courses.shopierProductId), ne(courses.status, "archived")));
   const result: Record<SyncOutcome | "failed", number> = { updated: 0, unchanged: 0, unavailable: 0, unsupported_currency: 0, failed: 0 };
-  for (const course of linked) {
-    try { result[await syncCourseFromShopier(db, course.id, fetcher)]++; } catch { result.failed++; }
+  for (const outcome of await Promise.allSettled(linked.map(course => syncCourse(db, course, fetcher)))) {
+    result[outcome.status === "fulfilled" ? outcome.value : "failed"]++;
   }
   return result;
 }

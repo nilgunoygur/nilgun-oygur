@@ -80,11 +80,11 @@ export const courses = pgTable("courses", {
   description: text("description").notNull().default(""),
   cover: text("cover"),
   priceKurus: integer("price_kurus").notNull(),
+  compareAtPriceKurus: integer("compare_at_price_kurus"),
   currency: text("currency").notNull().default("TRY"),
   accessDurationDays: integer("access_duration_days").notNull().default(365),
   salesEndAt: time("sales_end_at"),
   relatedTrainingSlug: text("related_training_slug"),
-  // Payment happens on this Shopier product; its order webhooks identify the course.
   shopierProductId: text("shopier_product_id").unique(),
   shopierUrl: text("shopier_url"),
   status: courseStatus("status").notNull().default("draft"),
@@ -92,6 +92,7 @@ export const courses = pgTable("courses", {
 }, (t) => [
   check("courses_published_sellable", sql`${t.status} <> 'published' OR (${t.shopierProductId} IS NOT NULL AND ${t.shopierUrl} IS NOT NULL)`),
   check("courses_price_valid", sql`${t.priceKurus} > 0`),
+  check("courses_compare_at_valid", sql`${t.compareAtPriceKurus} IS NULL OR ${t.compareAtPriceKurus} > ${t.priceKurus}`),
   check("courses_currency_try", sql`${t.currency} = 'TRY'`),
   check("courses_duration_valid", sql`${t.accessDurationDays} > 0`),
 ]);
@@ -158,8 +159,7 @@ export const liveSessions = pgTable("live_sessions", {
   check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
   index("live_sessions_schedule_idx").on(t.status, t.startsAt),
 ]);
-// One row per paid Shopier order line for an academy course. Matched to a student by
-// verified email, or claimed with order number + buyer email. Snapshots never change.
+// One row per paid Shopier order line for a course, matched to a student by email.
 export const shopierPurchases = pgTable("shopier_purchases", {
   id: id(),
   shopierOrderId: text("shopier_order_id").notNull(),

@@ -1,6 +1,4 @@
-// Sends a signed, fake Shopier `order.created` webhook to a LOCAL server so the purchase →
-// access flow can be tested without a card. Uses SHOPIER_WEBHOOK_TOKEN from .env.local.
-// Usage: pnpm run shopier:simulate <buyer-email> <shopier-product-id> [http://localhost:3000]
+// Sends a signed fake order.created webhook to a local server. Usage: pnpm run shopier:simulate <buyer-email> <shopier-product-id> [http://localhost:3000]
 import { createHmac, randomInt } from "node:crypto";
 import nextEnv from "@next/env";
 

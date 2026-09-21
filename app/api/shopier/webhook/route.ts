@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 const noStore = { "Cache-Control": "no-store" };
 
-// Shopier expects 200 within five seconds; any other status is retried for up to 72 hours.
+// Shopier retries non-200 responses for up to 72 hours.
 export async function POST(request: Request) {
   const token = process.env.SHOPIER_WEBHOOK_TOKEN;
   if (!token || !process.env.DATABASE_URL) return new Response(null, { status: 503, headers: noStore });

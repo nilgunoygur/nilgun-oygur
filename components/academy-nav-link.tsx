@@ -6,7 +6,6 @@ import { ArrowUpRight } from "lucide-react";
 const MotionLink = motion.create(Link);
 const spring = { type: "spring", stiffness: 420, damping: 24 } as const;
 
-/** Header call-to-action: the arrow turns from ↗ to → and nudges forward on hover/focus. */
 export function AcademyNavLink({ label, href, current, onNavigate }: { label: string; href: string; current?: boolean; onNavigate?: () => void }) {
   const reduced = useReducedMotion();
   return <MotionLink

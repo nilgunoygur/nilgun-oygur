@@ -1,13 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, isNotNull, lt, lte, or, sql } from "drizzle-orm";
-import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { emailDeliveries } from "../db/schema.ts";
-import type * as schema from "../db/schema.ts";
 import type { AuthEmail } from "../auth/create-auth.ts";
+import type { Database } from "../db/types.ts";
 
-// Internal service. The exported runtime entry point is in server-only index.ts.
-type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 export type DeliverEmail = (message: Pick<AuthEmail, "to" | "subject" | "text">, key: string) => Promise<string>;
 
 export function createEmailOutbox(db: Database, encryptionKey: string) {

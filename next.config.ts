@@ -8,7 +8,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Course covers use images uploaded to Shopier.
   images: { remotePatterns: [new URL("https://cdn.shopier.app/**")] },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

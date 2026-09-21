@@ -2,11 +2,7 @@
 import Link from "next/link";
 import { authClient } from "@/lib/auth/client";
 
-/**
- * Shows the signed-in student in the site header. The session is read through Better Auth's
- * get-session endpoint with the httpOnly cookie, so pages stay static and no token reaches JS.
- * Renders nothing while loading, when signed out, or when authentication is not configured.
- */
+/** Signed-in student chip; the session is read client-side (httpOnly cookie) so pages stay static. */
 export function AccountLink({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = authClient.useSession();
   if (!data?.user.emailVerified) return null;

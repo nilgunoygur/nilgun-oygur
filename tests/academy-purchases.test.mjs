@@ -150,7 +150,8 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
 });
 
 test("course details are read from the public Shopier product page", async () => {
-  const { parseShopierProductPage, parsePriceKurus } = await import("../lib/shopier/public-product.ts");
+  const { parseShopierProductPage } = await import("../lib/shopier/public-product.ts");
+  const { parsePriceKurus } = await import("../lib/shopier/api.ts");
   const { syncCourseFromShopier, syncAllCoursesFromShopier } = await import("../lib/akademi/course-sync.ts");
   assert.equal(parsePriceKurus("950"), 95000);
   assert.equal(parsePriceKurus("2.490,50"), 249050);
@@ -160,7 +161,10 @@ test("course details are read from the public Shopier product page", async () =>
     <meta property="og:title" content="${title}"/><meta property="og:description" content="Kısa &amp; öz açıklama"/>
     <meta property="og:image" content="${image}"/><meta property="product:price:amount" content="${price}"/>
     <meta property="product:price:currency" content="${currency}"/></head></html>`;
-  assert.deepEqual(parseShopierProductPage(page("Doğal Taş Eğitimi", "950")), { title: "Doğal Taş Eğitimi", description: "Kısa & öz açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 95000, currency: "TRY" });
+  assert.deepEqual(parseShopierProductPage(page("Doğal Taş Eğitimi", "950")), { title: "Doğal Taş Eğitimi", description: "Kısa & öz açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 95000, compareAtPriceKurus: null, currency: "TRY" });
+  const sale = page("İndirimli", "4") + '<div class="product-price-old shopier-store--product-price-old" data-price="5,00 TL">';
+  assert.equal(parseShopierProductPage(sale).compareAtPriceKurus, 500);
+  assert.equal(parseShopierProductPage(page("X", "6") + '<div class="product-price-old" data-price="5,00 TL">').compareAtPriceKurus, null);
   assert.equal(parseShopierProductPage(page("X", "950", "https://evil.example/x.jpg")).imageUrl, null);
   assert.equal(parseShopierProductPage("<html>Not found</html>"), null);
 

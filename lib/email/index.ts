@@ -7,10 +7,7 @@ export function getEmailOutbox() {
   return createEmailOutbox(getDatabase(), process.env.EMAIL_ENCRYPTION_KEY ?? "");
 }
 
-/**
- * Local development without Resend: auth emails (verification, reset links) are printed to the
- * `next dev` terminal. Never active in deployments, where NODE_ENV is always "production".
- */
+/** Dev only: print auth emails to the terminal when Resend is not configured. */
 export function isConsoleEmail() {
   return process.env.NODE_ENV === "development" && !process.env.RESEND_API_KEY;
 }

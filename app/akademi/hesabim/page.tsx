@@ -17,7 +17,6 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const session = await studentPageSession();
   const db = getDatabase();
-  // Purchases paid with this verified email before the account existed are granted here.
   await claimPendingPurchases(session.user.id, session.user.email);
   const now = new Date();
   const [access, owner] = await Promise.all([

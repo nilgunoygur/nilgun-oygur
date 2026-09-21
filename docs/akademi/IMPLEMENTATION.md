@@ -62,11 +62,11 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Course details come from Shopier
 
-Every Shopier product page, hidden ones included, publishes `og:title`, `og:description`, `og:image` and `product:price:amount/currency`. The site copies these onto the course when it is added by link, from the owner panel's "Shopier’den güncelle" button, and in the daily sync, so title, description, image and price are edited only in Shopier. Covers load from `cdn.shopier.app`. Only TRY products are accepted. Access duration stays a site setting.
+Every Shopier product page, hidden ones included, publishes `og:title`, `og:description`, `og:image` and `product:price:amount/currency`. The site copies these onto the course when it is added by link, from the owner panel's "Shopier’den güncelle" button, and in the daily sync, so title, description, image and price are edited only in Shopier. Covers load from `cdn.shopier.app`. A Shopier discount is read from the page's old-price block into `compare_at_price_kurus` and shown as the struck-through price with a percentage badge. Only TRY products are accepted. Access duration stays a site setting.
 
 ### Test products
 
-Hidden `[TEST]` demo products using the Akademi artwork: `51076812` (₺1), `51076813` (₺2), `51076814` (₺3). `pnpm run db:seed-demo` links them to published demo courses and syncs their details. The first test products (`51075042`, `51075057`, `51075059`) are no longer used; delete all six in the Shopier panel and archive the demo courses before launch.
+Hidden `[TEST]` demo products using the Akademi artwork: `51076812` (₺1), `51076813` (₺2), `51076814` (₺3) and the discounted `51076937` (₺5 → ₺4). `pnpm run db:seed-demo` links them to demo courses, syncs their details and publishes the ones that synced. The first test products (`51075042`, `51075057`, `51075059`) are no longer used; delete all seven in the Shopier panel and archive the demo courses before launch.
 
 ### Testing without a card
 

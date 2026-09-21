@@ -1,7 +1,5 @@
-// Subscribes Shopier's order.created webhook to <base-url>/api/shopier/webhook.
-// Prints ONLY the signing token on stdout (shown once by Shopier) so it can be piped into
-// `vercel env add SHOPIER_WEBHOOK_TOKEN ...`; status messages go to stderr.
-// Usage: node --experimental-strip-types scripts/shopier-webhook.mjs https://example.com
+// Subscribes order.created to <base-url>/api/shopier/webhook; prints only the one-time token to stdout.
+// Usage: pnpm run shopier:webhook https://example.com
 import nextEnv from "@next/env";
 import { createShopierClient } from "../lib/shopier/api.ts";
 

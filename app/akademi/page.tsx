@@ -4,7 +4,8 @@ import Link from "next/link";
 import { ArrowDown, ArrowUpRight, BookOpen, Leaf } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { portrait } from "@/lib/content";
-import { formatAccess, formatPrice, isCatalogLive, listCatalog } from "@/lib/akademi/catalog";
+import { formatAccess, isCatalogLive, listCatalog } from "@/lib/akademi/catalog";
+import { CoursePrice } from "@/components/akademi/course-price";
 import { PromoVideo } from "@/components/akademi/promo-video";
 
 export const metadata: Metadata = {
@@ -12,8 +13,7 @@ export const metadata: Metadata = {
   description: "Nilgün Oygur Akademi eğitimlerini keşfedin. Kuantum, bioenerji, doğal taş ve regresyon programlarını inceleyin; öğrenme yolculuğunuza alan açın.",
   alternates: { canonical: "/akademi" },
 };
-// Published courses change only through the owner panel, which also revalidates this page.
-export const revalidate = 300;
+export const revalidate = 3600;
 
 export default async function Academy() {
   const courses = await listCatalog();
@@ -55,7 +55,7 @@ export default async function Academy() {
                 <p className="academy-kicker">{course.category ? `${course.category} · ` : ""}ONLINE EĞİTİM</p>
                 <h3><Link href={`/akademi/${course.slug}`}>{course.title}</Link></h3>
                 <p>{course.description}</p>
-                <div className="academy-course-meta">{course.details?.map(detail => <span key={detail}>{detail}</span>)}<span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>{live ? "Fiyat" : "Örnek fiyat"}</small><strong>{formatPrice(course.priceKurus)}</strong></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
+                <div className="academy-course-meta">{course.details?.map(detail => <span key={detail}>{detail}</span>)}<span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>{live ? "Fiyat" : "Örnek fiyat"}</small><CoursePrice priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
               </div>
             </article>
           ))}

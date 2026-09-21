@@ -1,8 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
-// Internal Shopier REST client. The server-only entry point in index.ts supplies the token.
-// This account can create products and read orders/webhooks; product reads/updates return 403.
+// Shopier REST client; the server-only index.ts supplies the token.
 const API = "https://api.shopier.com/v1";
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
@@ -36,14 +35,22 @@ export function buyerEmail(order: ShopierOrder): string | null {
   return null;
 }
 
-/** Shopier sends decimal strings such as "2750.00". */
-export function toKurus(amount: string): number {
-  if (!/^\d+(\.\d{1,2})?$/.test(amount.trim())) throw new Error("Invalid Shopier amount.");
-  const [lira, kurus = ""] = amount.trim().split(".");
+/** "950", "2490.50", "2.490,50 TL" → kuruş. */
+export function parsePriceKurus(value: string): number | null {
+  let normalized = value.replace(/\s|TL|₺/g, "");
+  if (normalized.includes(",")) normalized = normalized.replace(/\./g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+  const [lira, kurus = ""] = normalized.split(".");
   return Number(lira) * 100 + Number(kurus.padEnd(2, "0"));
 }
 
-/** Shopier-Signature is the hex HMAC-SHA256 of the raw request body, keyed with the webhook token. */
+export function toKurus(amount: string): number {
+  const kurus = parsePriceKurus(amount);
+  if (kurus === null) throw new Error("Invalid Shopier amount.");
+  return kurus;
+}
+
+/** Shopier-Signature = hex HMAC-SHA256(raw body, webhook token). */
 export function isValidWebhookSignature(rawBody: string, signature: string | null, token: string): boolean {
   if (!signature || !token) return false;
   const expected = createHmac("sha256", token).update(rawBody, "utf8").digest("hex");
@@ -51,7 +58,7 @@ export function isValidWebhookSignature(rawBody: string, signature: string | nul
   return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
 }
 
-export class ShopierError extends Error {
+class ShopierError extends Error {
   readonly status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
@@ -69,7 +76,6 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
     return response.json() as Promise<T>;
   }
   return {
-    /** Returns null when the order does not exist in this shop. */
     async getOrder(id: string) {
       if (!/^\d{1,20}$/.test(id)) return null;
       try {
@@ -79,7 +85,6 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
-    /** Paid orders created at or after `since`, newest first, across pages. */
     async listOrdersSince(since: Date, maxPages = 10) {
       const orders: ShopierOrder[] = [];
       const dateStart = encodeURIComponent(since.toISOString().replace(/\.\d{3}Z$/, "+0000"));
@@ -114,7 +119,6 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
     createWebhook: (event: string, url: string) => call<{ id: string; event: string; url: string; token: string }>("/webhooks", { method: "POST", body: JSON.stringify({ event, url }) }),
   };
 }
-export type ShopierClient = ReturnType<typeof createShopierClient>;
 
 /** Accepts a bare product id or a shopier.com product link. */
 export function parseShopierProduct(input: string): { id: string; url: string } | null {

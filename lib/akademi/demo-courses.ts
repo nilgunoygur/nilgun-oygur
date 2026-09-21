@@ -5,5 +5,4 @@ export const demoCourses = [
   { slug: "dogal-tas-egitimi", title: "Doğal Taş Eğitimi", category: "Keşif", image: "dogal-tas-v1.png", price: 1490, lessons: 8, duration: "4 saat", description: "Doğal taşların dünyasını keşfedin. Taşları tanıma, bakım ve kişisel ritüeller üzerine ilham dolu bir başlangıç.", modules: ["Taşların dünyasına giriş", "Taşları tanımak", "Bakım ve saklama", "Kişisel koleksiyonunuz"] },
   { slug: "regresyon-egitimi", title: "Regresyon Eğitimi", category: "İçsel yolculuk", image: "regresyon-v1.png", price: 3490, lessons: 18, duration: "9 saat", description: "Kişisel hikâyenize merakla yaklaşın. İç gözlem, duygular ve farkındalık üzerine farklı bakış açılarını inceleyin.", modules: ["Regresyon yaklaşımına giriş", "Kişisel hikâye ve iç gözlem", "Duyguları anlamak", "Farkındalık pratikleri"] },
 ];
-export const demoPrice = (price: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(price);
 export const demoCourseImage = (image: string) => "/images/akademi/" + image;

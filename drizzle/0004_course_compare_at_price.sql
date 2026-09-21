@@ -1,0 +1,2 @@
+ALTER TABLE "courses" ADD COLUMN "compare_at_price_kurus" integer;--> statement-breakpoint
+ALTER TABLE "courses" ADD CONSTRAINT "courses_compare_at_valid" CHECK ("courses"."compare_at_price_kurus" IS NULL OR "courses"."compare_at_price_kurus" > "courses"."price_kurus");
