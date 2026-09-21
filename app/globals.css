@@ -130,7 +130,7 @@
 }
 .site-header {
   position: fixed;
-  top: 16px;
+  top: calc(16px + var(--announcement-offset, 0px));
   left: 50%;
   transform: translateX(-50%);
   width: min(780px, calc(100% - 40px));
@@ -996,7 +996,7 @@
     font-size: 19px;
   }
   .site-header {
-    top: 12px;
+    top: calc(12px + var(--announcement-offset, 0px));
     height: 64px;
     padding-inline: 18px;
     width: calc(100% - 28px);
@@ -2135,4 +2135,22 @@ h1 {
  .academy-card-bottom strong { font-size: 27px; }
  .academy-offering-body { padding-inline: 10px; }
  .academy-film-caption { font-size: 21px; bottom: 20px; left: 20px; }
+}
+
+/* Announcement bar */
+body:has(.announcement-bar) { --announcement-offset: 38px; }
+body:has(.announcement-bar) main { padding-top: var(--announcement-offset); }
+.announcement-bar { position: fixed; inset: 0 0 auto; z-index: 41; height: 38px; overflow: hidden; background: #224c40; color: #f1f5e9; font-size: 13px; mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent); }
+.announcement-bar-track { display: flex; width: max-content; height: 100%; animation: announcement-slide 36s linear infinite; }
+.announcement-bar:hover .announcement-bar-track, .announcement-bar:focus-within .announcement-bar-track { animation-play-state: paused; }
+.announcement-bar-list { display: flex; align-items: center; list-style: none; margin: 0; padding: 0; }
+.announcement-bar-list li { display: flex; align-items: center; white-space: nowrap; }
+.announcement-bar-list li::after { content: "✦"; margin-inline: 28px; color: #d8ef9f; font-size: 10px; }
+.announcement-bar-list a { color: inherit; text-decoration: none; }
+.announcement-bar-list a:hover, .announcement-bar-list a:focus-visible { color: #d8ef9f; text-decoration: underline; text-underline-offset: 3px; }
+@keyframes announcement-slide { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .announcement-bar-track { animation: none; }
+  .announcement-bar-list[aria-hidden] { display: none; }
+  .announcement-bar-list { width: 100vw; justify-content: center; overflow-x: auto; }
 }

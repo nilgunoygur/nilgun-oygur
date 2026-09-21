@@ -98,22 +98,6 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       }
       return orders;
     },
-    async createProduct(input: { title: string; description: string; priceKurus: number; imageUrl: string; hidden: boolean }) {
-      const product = await call<{ id: string | number; url: string }>("/products", {
-        method: "POST",
-        body: JSON.stringify({
-          title: input.title,
-          description: input.description,
-          type: "digital",
-          media: [{ type: "image", url: input.imageUrl, placement: 1 }],
-          priceData: { currency: "TRY", price: (input.priceKurus / 100).toFixed(2), vatPercent: "20", shippingPrice: "0" },
-          stockQuantity: 100_000,
-          shippingPayer: "sellerPays",
-          customListing: input.hidden,
-        }),
-      });
-      return { id: String(product.id), url: product.url };
-    },
     listWebhooks: () => call<{ id: string; event: string; url: string }[]>("/webhooks"),
     /** The signing token is returned only in this response. */
     createWebhook: (event: string, url: string) => call<{ id: string; event: string; url: string; token: string }>("/webhooks", { method: "POST", body: JSON.stringify({ event, url }) }),

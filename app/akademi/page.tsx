@@ -4,7 +4,8 @@ import Link from "next/link";
 import { ArrowDown, ArrowUpRight, BookOpen, Leaf } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { portrait } from "@/lib/content";
-import { formatAccess, isCatalogLive, listCatalog } from "@/lib/akademi/catalog";
+import { formatAccess, listCatalog } from "@/lib/akademi/catalog";
+import { syncCatalogIfStale } from "@/lib/akademi/server";
 import { CoursePrice } from "@/components/akademi/course-price";
 import { PromoVideo } from "@/components/akademi/promo-video";
 
@@ -13,11 +14,12 @@ export const metadata: Metadata = {
   description: "Nilgün Oygur Akademi eğitimlerini keşfedin. Kuantum, bioenerji, doğal taş ve regresyon programlarını inceleyin; öğrenme yolculuğunuza alan açın.",
   alternates: { canonical: "/akademi" },
 };
-export const revalidate = 3600;
+// Regenerated in the background at most every 10 minutes, picking up Shopier changes.
+export const revalidate = 600;
 
 export default async function Academy() {
+  await syncCatalogIfStale();
   const courses = await listCatalog();
-  const live = isCatalogLive();
   return (
     <div className="academy-landing">
       <section className="academy-promotion page-width">
@@ -52,16 +54,15 @@ export default async function Academy() {
                 <span>{String(index + 1).padStart(2, "0")}</span>
               </Link>
               <div className="academy-offering-body">
-                <p className="academy-kicker">{course.category ? `${course.category} · ` : ""}ONLINE EĞİTİM</p>
+                <p className="academy-kicker">ONLINE EĞİTİM</p>
                 <h3><Link href={`/akademi/${course.slug}`}>{course.title}</Link></h3>
                 <p>{course.description}</p>
-                <div className="academy-course-meta">{course.details?.map(detail => <span key={detail}>{detail}</span>)}<span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>{live ? "Fiyat" : "Örnek fiyat"}</small><CoursePrice priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
+                <div className="academy-course-meta"><span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>Fiyat</small><CoursePrice priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
               </div>
             </article>
           ))}
         </div>
         {courses.length === 0 && <div className="academy-sales-note"><BookOpen aria-hidden="true" /><p>Yeni eğitimler çok yakında burada olacak.</p></div>}
-        {!live && <div className="academy-sales-note"><BookOpen aria-hidden="true" /><p>Demo vitrin: fiyatlar, ders sayıları ve süreler örnektir. Ödeme alınmaz ve eğitim erişimi oluşturulmaz.</p></div>}
       </section>
 
       <section className="academy-how page-width" aria-labelledby="academy-how-title">

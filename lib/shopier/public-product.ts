@@ -27,7 +27,7 @@ function meta(html: string, property: string): string | null {
   return null;
 }
 
-export const isShopierImageUrl = (url: string) => /^https:\/\/cdn\.shopier\.app\/[\w./-]+$/.test(url);
+const isShopierImageUrl = (url: string) => /^https:\/\/cdn\.shopier\.app\/[\w./-]+$/.test(url);
 
 export function parseShopierProductPage(html: string): ShopierProductDetails | null {
   const title = meta(html, "og:title");
@@ -47,14 +47,40 @@ export function parseShopierProductPage(html: string): ShopierProductDetails | n
   };
 }
 
-export async function fetchShopierProduct(productId: string, fetcher: typeof fetch = fetch): Promise<ShopierProductDetails | null> {
-  if (!/^\d{4,20}$/.test(productId)) return null;
-  const response = await fetcher(`https://www.shopier.com/${productId}`, {
-    headers: { accept: "text/html", "user-agent": "Mozilla/5.0 (compatible; NilgunOygurAkademi/1.0)" },
-    cache: "no-store",
-    redirect: "follow",
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) return null;
-  return parseShopierProductPage(await response.text());
+export type ProductLookup = { status: "found"; product: ShopierProductDetails } | { status: "gone" } | { status: "error" };
+
+const getPage = (url: string, fetcher: typeof fetch) => fetcher(url, {
+  headers: { accept: "text/html", "user-agent": "Mozilla/5.0 (compatible; NilgunOygurAkademi/1.0)" },
+  cache: "no-store",
+  signal: AbortSignal.timeout(10_000),
+});
+
+/** Deleted products redirect to the store or a not-found page; only that counts as "gone". */
+export async function fetchShopierProduct(productId: string, fetcher: typeof fetch = fetch): Promise<ProductLookup> {
+  if (!/^\d{4,20}$/.test(productId)) return { status: "gone" };
+  const response = await getPage(`https://www.shopier.com/${productId}`, fetcher).catch(() => null);
+  if (!response?.ok) return { status: "error" };
+  if (response.redirected && !new URL(response.url).pathname.endsWith(`/${productId}`)) return { status: "gone" };
+  const product = parseShopierProductPage(await response.text());
+  return product ? { status: "found", product } : { status: "error" };
+}
+
+export type StoreListing = { id: string; digital: boolean };
+
+export function parseShopierStorePage(html: string): StoreListing[] {
+  const listings: StoreListing[] = [];
+  for (const card of html.split(/<div class="product-card[ "]/).slice(1)) {
+    const id = /data-back-id="(\d{4,20})"/.exec(card)?.[1];
+    if (id && !listings.some(listing => listing.id === id)) listings.push({ id, digital: /<span class="badge">\s*Dijital ürün\s*<\/span>/.test(card) });
+  }
+  return listings;
+}
+
+/** Visible products on the public store page; throws when the page cannot be read. */
+export async function fetchShopierStoreProducts(store: string, fetcher: typeof fetch = fetch): Promise<StoreListing[]> {
+  if (!/^[\w-]{2,60}$/.test(store)) throw new Error("Invalid Shopier store name.");
+  const response = await getPage(`https://www.shopier.com/${store}`, fetcher);
+  const html = response.ok ? await response.text() : "";
+  if (!html.includes("shopier--product-list-section")) throw new Error("Shopier store page could not be read.");
+  return parseShopierStorePage(html);
 }

@@ -9,7 +9,8 @@ export async function POST(request: Request) {
   if (!isCronRequest(request)) return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
   try {
     const result = await syncRecentShopierOrders();
-    if (result.courses.updated > 0) revalidatePath("/akademi", "layout");
+    const { added, updated, archived } = result.courses;
+    if (added + updated + archived > 0) revalidatePath("/akademi", "layout");
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Shopier sync is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });

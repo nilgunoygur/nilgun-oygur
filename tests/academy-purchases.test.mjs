@@ -152,7 +152,8 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
 test("course details are read from the public Shopier product page", async () => {
   const { parseShopierProductPage } = await import("../lib/shopier/public-product.ts");
   const { parsePriceKurus } = await import("../lib/shopier/api.ts");
-  const { syncCourseFromShopier, syncAllCoursesFromShopier } = await import("../lib/akademi/course-sync.ts");
+  const { syncCourseFromShopier, syncCatalogFromShopier } = await import("../lib/akademi/course-sync.ts");
+  const { parseShopierStorePage } = await import("../lib/shopier/public-product.ts");
   assert.equal(parsePriceKurus("950"), 95000);
   assert.equal(parsePriceKurus("2.490,50"), 249050);
   assert.equal(parsePriceKurus("2490.5"), 249050);
@@ -168,14 +169,34 @@ test("course details are read from the public Shopier product page", async () =>
   assert.equal(parseShopierProductPage(page("X", "950", "https://evil.example/x.jpg")).imageUrl, null);
   assert.equal(parseShopierProductPage("<html>Not found</html>"), null);
 
-  const pages = { "51075042": page("Yeni Başlık", "2490"), "51075057": page("Dolar", "5", undefined, "USD") };
-  const fake = async (url) => { const id = url.split("/").pop(); return pages[id] ? new Response(pages[id]) : new Response("<html></html>"); };
+  const card = (id, digital) => `<div class="product-card shopier--product-card"><a data-back-id="${id}"><div class="product-card-header"></div><div class="product-card-body">${digital ? '<span class="badge">Dijital ürün</span>' : ""}</div></a></div>`;
+  assert.deepEqual(parseShopierStorePage(card("111111", true) + card("222222", false) + card("111111", true)), [{ id: "111111", digital: true }, { id: "222222", digital: false }]);
+
+  // Store lists one new digital product and one physical one; 51075057 has been deleted in Shopier.
+  const pages = {
+    "store": `<div id="shopier--product-list-section">${card("51075042", true)}${card("60000001", true)}${card("60000002", false)}</div>`,
+    "51075042": page("Yeni Başlık", "2490"), "60000001": page("Yeni Kurs", "300"), "60000002": page("Kitap", "100"),
+  };
+  const fake = async (url) => {
+    const key = url.endsWith("/TestStore") ? "store" : url.split("/").pop();
+    if (key === "51075057") return redirectTo("https://www.shopier.com/s/notfound/1");
+    return pages[key] ? new Response(pages[key]) : new Response("", { status: 503 });
+  };
+  const redirectTo = (target) => { const response = new Response("<html></html>"); Object.defineProperty(response, "redirected", { value: true }); Object.defineProperty(response, "url", { value: target }); return response; };
   assert.equal(await syncCourseFromShopier(db, course.id, fake), "updated");
   assert.equal(await syncCourseFromShopier(db, course.id, fake), "unchanged");
   const [synced] = await db.select().from(schema.courses).where(eq(schema.courses.id, course.id));
   assert.equal(synced.title, "Yeni Başlık");
   assert.equal(synced.priceKurus, 249000);
   assert.equal(synced.cover, "https://cdn.shopier.app/pictures_large/a.jpg");
-  assert.equal(await syncCourseFromShopier(db, other.id, fake), "unsupported_currency");
-  assert.deepEqual(await syncAllCoursesFromShopier(db, fake), { updated: 0, unchanged: 1, unavailable: 0, unsupported_currency: 1, failed: 0 });
+  const result = await syncCatalogFromShopier(db, "TestStore", fake);
+  assert.deepEqual({ added: result.added, archived: result.archived, unchanged: result.unchanged, failed: result.failed }, { added: 1, archived: 1, unchanged: 2, failed: 0 });
+  const bySlug = Object.fromEntries((await db.select().from(schema.courses)).map(c => [c.slug, c]));
+  assert.equal(bySlug["yeni-kurs"].status, "published");
+  assert.equal(bySlug["yeni-kurs"].priceKurus, 30000);
+  assert.equal(bySlug["kitap"], undefined);
+  assert.equal(bySlug["diger"].status, "archived");
+  // A store outage never archives anything.
+  await assert.rejects(() => syncCatalogFromShopier(db, "TestStore", async () => new Response("", { status: 503 })));
+  assert.equal((await syncCourseFromShopier(db, course.id, async () => { throw new Error("timeout"); })), "unavailable");
 });

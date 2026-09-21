@@ -1,12 +1,11 @@
 import "server-only";
 import { cache } from "react";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { getDatabase } from "@/lib/db";
 import { courses } from "@/lib/db/schema";
 import { normalizeSlug } from "@/lib/route-slug";
-import { demoCourseImage, demoCourses } from "./demo-courses";
 
-export const defaultCourseCover = demoCourseImage("academy-art-v1.png");
+export const defaultCourseCover = "/images/akademi/academy-art-v1.png";
 
 export type CatalogCourse = {
   slug: string;
@@ -16,40 +15,26 @@ export type CatalogCourse = {
   priceKurus: number;
   compareAtPriceKurus: number | null;
   accessDurationDays: number;
-  /** Null for demo showcase courses, which cannot be bought. */
-  shopierUrl: string | null;
-  category?: string;
-  details?: string[];
-  modules?: string[];
+  shopierUrl: string;
 };
 
-const fromDemo = (course: (typeof demoCourses)[number]): CatalogCourse => ({
-  slug: course.slug, title: course.title, description: course.description, image: demoCourseImage(course.image),
-  priceKurus: course.price * 100, compareAtPriceKurus: null, accessDurationDays: 365, shopierUrl: null,
-  category: course.category, details: [`${course.lessons} ders`, course.duration], modules: course.modules,
-});
+const published = and(eq(courses.status, "published"), isNotNull(courses.shopierUrl));
 const fromRow = (row: typeof courses.$inferSelect): CatalogCourse => ({
   slug: row.slug, title: row.title, description: row.description, image: row.cover ?? defaultCourseCover,
-  priceKurus: row.priceKurus, compareAtPriceKurus: row.compareAtPriceKurus, accessDurationDays: row.accessDurationDays, shopierUrl: row.shopierUrl,
+  priceKurus: row.priceKurus, compareAtPriceKurus: row.compareAtPriceKurus, accessDurationDays: row.accessDurationDays,
+  shopierUrl: row.shopierUrl ?? "",
 });
 
-export const isCatalogLive = () => !!process.env.DATABASE_URL;
-
 export async function listCatalog(): Promise<CatalogCourse[]> {
-  if (!isCatalogLive()) return demoCourses.map(fromDemo);
-  const rows = await getDatabase().select().from(courses).where(eq(courses.status, "published")).orderBy(asc(courses.createdAt));
-  return rows.map(fromRow);
+  if (!process.env.DATABASE_URL) return [];
+  return (await getDatabase().select().from(courses).where(published).orderBy(asc(courses.createdAt))).map(fromRow);
 }
 
 /** Accepts a raw route param; cached so metadata and page share one query. */
 export const getCatalogCourse = cache(async (rawSlug: string): Promise<CatalogCourse | null> => {
   const slug = normalizeSlug(rawSlug);
-  if (!slug) return null;
-  if (!isCatalogLive()) {
-    const demo = demoCourses.find(course => course.slug === slug);
-    return demo ? fromDemo(demo) : null;
-  }
-  const [row] = await getDatabase().select().from(courses).where(and(eq(courses.slug, slug), eq(courses.status, "published"))).limit(1);
+  if (!slug || !process.env.DATABASE_URL) return null;
+  const [row] = await getDatabase().select().from(courses).where(and(published, eq(courses.slug, slug))).limit(1);
   return row ? fromRow(row) : null;
 });
 

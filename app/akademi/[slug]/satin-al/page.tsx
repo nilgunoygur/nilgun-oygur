@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Checkout({ params }: { params: Promise<{ slug: string }> }) {
   const course = await getCatalogCourse((await params).slug);
-  if (!course?.shopierUrl) notFound();
+  if (!course) notFound();
   const session = isAuthConfigured() ? await getAuth().api.getSession({ headers: await headers() }) : null;
   const email = session?.user.emailVerified ? session.user.email : null;
   const back = encodeURIComponent(`/akademi/${course.slug}/satin-al`);

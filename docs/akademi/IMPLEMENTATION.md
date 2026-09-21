@@ -60,9 +60,19 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 - **Owner panel** `/yonetim/egitimler`: add a course by pasting a Shopier product link, or let the site create a digital product (optionally hidden from the Shopier store); publish, unpublish and archive; see sales and whether each is attached to an account. Price changes must be made in both Shopier and the panel.
 - **Refunds** are deliberately not implemented yet (owner decision pending).
 
-### Course details come from Shopier
+### Shopier is the course catalog
 
-Every Shopier product page, hidden ones included, publishes `og:title`, `og:description`, `og:image` and `product:price:amount/currency`. The site copies these onto the course when it is added by link, from the owner panel's "Shopier’den güncelle" button, and in the daily sync, so title, description, image and price are edited only in Shopier. Covers load from `cdn.shopier.app`. A Shopier discount is read from the page's old-price block into `compare_at_price_kurus` and shown as the struck-through price with a percentage badge. Only TRY products are accepted. Access duration stays a site setting.
+- **Discovery:** every visible *digital* product on the public store page (`shopier.com/$SHOPIER_STORE`) becomes a published course with 365 days of access, which can be changed in the owner panel. Physical products are ignored.
+- **Details:** title, description, image, price and discount are copied from each product page's Open Graph tags and old-price block.
+- **Removal:** a product deleted in Shopier redirects to the store or a not-found page, and its course is archived. Network errors, timeouts or an unreadable store page never archive anything.
+- **Owner decisions stick:** the sync never re-publishes a course the owner archived or unpublished.
+- **When it runs:** `/akademi` regenerates at most every 10 minutes and runs the sync first, claimed through the `rate_limit` row `shopier-catalog-sync` so only one instance syncs. The daily cron and the owner panel's "Shopier ile eşitle" button run it too.
+- **Hidden products:** products hidden in Shopier can't be seen on the store page, so the owner links them by URL as drafts.
+- **Where sync is enabled:** `SHOPIER_STORE` is set only in Production for now, because Development and Preview share the production database.
+
+### Announcement bar
+
+`components/announcement-bar.tsx` shows a sliding strip above the header on every page. The messages are in `lib/announcements.ts`; an empty list hides the bar. It is a CSS-only marquee: it pauses on hover or focus, and stays still for visitors who have reduced motion on. The duplicate copy is hidden from screen readers and keyboard focus. When the bar is present, the header and page content move down through `--announcement-offset`.
 
 ### Test products
 

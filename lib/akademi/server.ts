@@ -1,10 +1,10 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { getDatabase } from "@/lib/db";
 import { rateLimit } from "@/lib/db/schema";
 import { getShopier } from "@/lib/shopier";
 import { claimPurchasesByEmail, claimShopierOrder, recordShopierOrder } from "./purchases";
-import { syncAllCoursesFromShopier, syncCourseFromShopier } from "./course-sync";
+import { syncCatalogFromShopier } from "./course-sync";
 
 const HOUR = 3_600_000;
 
@@ -27,11 +27,26 @@ export async function syncRecentShopierOrders(days = 7) {
     purchases += result.purchaseIds.length;
     granted += result.granted;
   }
-  return { orders: orders.length, purchases, granted, courses: await syncAllCoursesFromShopier(db) };
+  return { orders: orders.length, purchases, granted, courses: await syncCatalog() };
 }
 
-export function refreshCourseFromShopier(courseId: string) {
-  return syncCourseFromShopier(getDatabase(), courseId);
+export function syncCatalog() {
+  const store = process.env.SHOPIER_STORE;
+  if (!store) throw new Error("SHOPIER_STORE is not configured.");
+  return syncCatalogFromShopier(getDatabase(), store);
+}
+
+/** Syncs the catalog at most every 10 minutes across instances; never fails the page. */
+export async function syncCatalogIfStale() {
+  if (!process.env.DATABASE_URL || !process.env.SHOPIER_STORE) return;
+  const key = "shopier-catalog-sync";
+  const now = Date.now();
+  const db = getDatabase();
+  await db.insert(rateLimit).values({ id: key, key, count: 0, lastRequest: 0 }).onConflictDoNothing();
+  const [claimed] = await db.update(rateLimit).set({ lastRequest: now })
+    .where(and(eq(rateLimit.key, key), lt(rateLimit.lastRequest, now - 10 * 60_000))).returning({ key: rateLimit.key });
+  if (!claimed) return;
+  try { await syncCatalog(); } catch (error) { console.error("Shopier catalog sync failed:", error instanceof Error ? error.message : error); }
 }
 
 /** Five order-claim attempts per student per hour. */

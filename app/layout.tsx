@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Header } from "@/components/header";
+import { AnnouncementBar } from "@/components/announcement-bar";
+import { announcements } from "@/lib/announcements";
 import { Footer } from "@/components/site";
 import "./globals.css";
 const general = localFont({
@@ -50,6 +52,7 @@ export default function RootLayout({
         <a className="skip-link" href="#main">
           İçeriğe geç
         </a>
+        <AnnouncementBar items={announcements} />
         <Header />
         <main id="main">{children}</main>
         <Footer />
