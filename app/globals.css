@@ -2141,7 +2141,7 @@ h1 {
 body:has(.announcement-bar) { --announcement-offset: 38px; }
 body:has(.announcement-bar) main { padding-top: var(--announcement-offset); }
 .announcement-bar { position: fixed; inset: 0 0 auto; z-index: 41; height: 38px; overflow: hidden; background: #224c40; color: #f1f5e9; font-size: 13px; mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent); }
-.announcement-bar-track { display: flex; width: max-content; height: 100%; animation: announcement-slide 36s linear infinite; }
+.announcement-bar-track { display: flex; width: max-content; height: 100%; animation: announcement-slide var(--announcement-duration, 80s) linear infinite; will-change: transform; }
 .announcement-bar:hover .announcement-bar-track, .announcement-bar:focus-within .announcement-bar-track { animation-play-state: paused; }
 .announcement-bar-list { display: flex; align-items: center; list-style: none; margin: 0; padding: 0; }
 .announcement-bar-list li { display: flex; align-items: center; white-space: nowrap; }
@@ -2151,6 +2151,6 @@ body:has(.announcement-bar) main { padding-top: var(--announcement-offset); }
 @keyframes announcement-slide { to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) {
   .announcement-bar-track { animation: none; }
-  .announcement-bar-list[aria-hidden] { display: none; }
+  .announcement-bar-list[aria-hidden], .announcement-bar-list li[aria-hidden] { display: none; }
   .announcement-bar-list { width: 100vw; justify-content: center; overflow-x: auto; }
 }
