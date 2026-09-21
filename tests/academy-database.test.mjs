@@ -8,7 +8,6 @@ import * as schema from "../lib/db/schema.ts";
 const client = new PGlite();
 const db = drizzle(client);
 let courseA, courseB, moduleA, orderA, orderB;
-const consent = { distanceSales: "v1", preliminaryInformation: "v1", immediateDigitalDelivery: "v1" };
 const paidAt = new Date("2026-09-15T12:00:00Z");
 const expiresAt = new Date("2027-09-15T12:00:00Z");
 const rejectsConstraint = (operation, code) => assert.rejects(operation, (error) => (error.cause?.code ?? error.code) === code);
@@ -28,23 +27,21 @@ before(async () => {
     { slug: "course-b", title: "B", priceKurus: 20000 },
   ]).returning();
   [moduleA] = await db.insert(schema.modules).values({ courseId: courseA.id, title: "Module A" }).returning();
-  [orderA, orderB] = await db.insert(schema.orders).values([
-    { userId: "student-a", amountKurus: 10000, legalVersions: consent, consentAcceptedAt: paidAt },
-    { userId: "student-a", amountKurus: 10000, legalVersions: consent, consentAcceptedAt: paidAt },
-  ]).returning();
-  await db.insert(schema.orderItems).values([orderA, orderB].map(order => ({
-    orderId: order.id, courseId: courseA.id, courseTitle: "A", priceKurus: 10000, accessDurationDays: 365,
-  })));
+  // Two claimed Shopier purchases of course A by student A (an original and a renewal).
+  [orderA, orderB] = await db.insert(schema.shopierPurchases).values(["1001", "1002"].map(shopierOrderId => ({
+    shopierOrderId, courseId: courseA.id, buyerEmail: "a@example.com", amountKurus: 10000, currency: "TRY",
+    accessDurationDays: 365, purchasedAt: paidAt, userId: "student-a", claimedAt: paidAt,
+  }))).returning();
 });
 after(async () => { await client.close(); });
 
-test("migration enforces prices, TRY, duration, and consent snapshots", async () => {
+test("migration enforces prices, TRY, duration, and a Shopier product before publishing", async () => {
   for (const fields of [{ priceKurus: -1 }, { currency: "USD" }, { accessDurationDays: 0 }]) {
     await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "bad", title: "Bad", priceKurus: 100, ...fields }), "23514");
   }
-  for (const legalVersions of [{}, { ...consent, distanceSales: " " }, { ...consent, distanceSales: null }, { ...consent, distanceSales: 1 }]) {
-    await rejectsConstraint(() => db.insert(schema.orders).values({ userId: "student-a", amountKurus: 100, legalVersions, consentAcceptedAt: paidAt }), "23514");
-  }
+  await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "unsold", title: "Unsold", priceKurus: 100, status: "published" }), "23514");
+  await rejectsConstraint(() => db.insert(schema.shopierPurchases).values({ shopierOrderId: "1001", courseId: courseA.id, buyerEmail: "x@example.com", amountKurus: 1, currency: "TRY", accessDurationDays: 1, purchasedAt: paidAt }), "23505");
+  await rejectsConstraint(() => db.insert(schema.shopierPurchases).values({ shopierOrderId: "1003", courseId: courseA.id, buyerEmail: "x@example.com", amountKurus: 1, currency: "TRY", accessDurationDays: 1, purchasedAt: paidAt, userId: "student-a" }), "23514");
 });
 
 test("a lesson cannot borrow another course's module or duplicate a course slug", async () => {
@@ -60,17 +57,17 @@ test("live sessions cannot attach to recorded-video lessons", async () => {
   await rejectsConstraint(() => db.insert(schema.liveSessions).values({ lessonId: video.id, startsAt: paidAt, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/example", zoomPasscode: "test" }), "23503");
 });
 
-test("purchase grants must match both the order's buyer and purchased course", async () => {
-  const grant = { sourceOrderId: orderA.id, userId: "student-a", courseId: courseA.id, startsAt: paidAt, expiresAt };
+test("purchase grants must match both the purchase's student and course", async () => {
+  const grant = { sourcePurchaseId: orderA.id, userId: "student-a", courseId: courseA.id, startsAt: paidAt, expiresAt };
   await rejectsConstraint(() => db.insert(schema.courseAccess).values({ ...grant, userId: "student-b" }), "23503");
   await rejectsConstraint(() => db.insert(schema.courseAccess).values({ ...grant, courseId: courseB.id }), "23503");
-  await rejectsConstraint(() => db.insert(schema.courseAccess).values({ ...grant, sourceOrderId: null }), "23514");
+  await rejectsConstraint(() => db.insert(schema.courseAccess).values({ ...grant, sourcePurchaseId: null }), "23514");
 });
 
-test("renewal retires the previous grant and replay cannot grant the same order twice", async () => {
-  const grant = { sourceOrderId: orderA.id, userId: "student-a", courseId: courseA.id, startsAt: paidAt, expiresAt };
+test("renewal retires the previous grant and replay cannot grant the same purchase twice", async () => {
+  const grant = { sourcePurchaseId: orderA.id, userId: "student-a", courseId: courseA.id, startsAt: paidAt, expiresAt };
   await db.insert(schema.courseAccess).values(grant);
-  const renewal = { ...grant, sourceOrderId: orderB.id, startsAt: expiresAt, expiresAt: new Date("2028-09-15T12:00:00Z") };
+  const renewal = { ...grant, sourcePurchaseId: orderB.id, startsAt: expiresAt, expiresAt: new Date("2028-09-15T12:00:00Z") };
   // Even an expired row occupies the unrevoked index, so fulfillment must retire it.
   await rejectsConstraint(() => db.insert(schema.courseAccess).values(renewal), "23505");
   await db.transaction(async tx => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUpRight, BookOpen, Leaf } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { portrait } from "@/lib/content";
-import { demoCourses as courses, demoPrice, demoCourseImage } from "@/lib/akademi/demo-courses";
+import { formatAccess, formatPrice, isCatalogLive, listCatalog } from "@/lib/akademi/catalog";
 import { PromoVideo } from "@/components/akademi/promo-video";
 
 export const metadata: Metadata = {
@@ -12,8 +12,12 @@ export const metadata: Metadata = {
   description: "Nilgün Oygur Akademi eğitimlerini keşfedin. Kuantum, bioenerji, doğal taş ve regresyon programlarını inceleyin; öğrenme yolculuğunuza alan açın.",
   alternates: { canonical: "/akademi" },
 };
+// Published courses change only through the owner panel, which also revalidates this page.
+export const revalidate = 300;
 
-export default function Academy() {
+export default async function Academy() {
+  const courses = await listCatalog();
+  const live = isCatalogLive();
   return (
     <div className="academy-landing">
       <section className="academy-promotion page-width">
@@ -44,19 +48,20 @@ export default function Academy() {
           {courses.map((course, index) => (
             <article className="academy-offering" key={course.slug}>
               <Link href={`/akademi/${course.slug}`} className="academy-offering-image" aria-label={course.title + " programını incele"}>
-                <Image src={demoCourseImage(course.image)} alt="" fill sizes="(max-width: 760px) 90vw, 580px" />
-                <span>0{index + 1}</span>
+                <Image src={course.image} alt="" fill sizes="(max-width: 760px) 90vw, 580px" />
+                <span>{String(index + 1).padStart(2, "0")}</span>
               </Link>
               <div className="academy-offering-body">
-                <p className="academy-kicker">{course.category} · ONLINE EĞİTİM</p>
+                <p className="academy-kicker">{course.category ? `${course.category} · ` : ""}ONLINE EĞİTİM</p>
                 <h3><Link href={`/akademi/${course.slug}`}>{course.title}</Link></h3>
                 <p>{course.description}</p>
-                <div className="academy-course-meta"><span>{course.lessons} ders</span><span>{course.duration}</span><span>12 ay erişim</span></div><div className="academy-card-bottom"><div><small>Örnek fiyat</small><strong>{demoPrice(course.price)}</strong></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
+                <div className="academy-course-meta">{course.details?.map(detail => <span key={detail}>{detail}</span>)}<span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>{live ? "Fiyat" : "Örnek fiyat"}</small><strong>{formatPrice(course.priceKurus)}</strong></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
               </div>
             </article>
           ))}
         </div>
-        <div className="academy-sales-note"><BookOpen aria-hidden="true" /><p>Demo vitrin: fiyatlar, ders sayıları ve süreler örnektir. Satın alma akışı denenebilir; ödeme alınmaz ve eğitim erişimi oluşturulmaz.</p></div>
+        {courses.length === 0 && <div className="academy-sales-note"><BookOpen aria-hidden="true" /><p>Yeni eğitimler çok yakında burada olacak.</p></div>}
+        {!live && <div className="academy-sales-note"><BookOpen aria-hidden="true" /><p>Demo vitrin: fiyatlar, ders sayıları ve süreler örnektir. Ödeme alınmaz ve eğitim erişimi oluşturulmaz.</p></div>}
       </section>
 
       <section className="academy-how page-width" aria-labelledby="academy-how-title">
@@ -64,8 +69,8 @@ export default function Academy() {
         <h2 id="academy-how-title">Meraktan öğrenmeye.</h2>
         <div className="academy-how-grid">
           <div><span>01</span><h3>Eğitiminizi keşfedin</h3><p>Programları inceleyin. İçeriği, yaklaşımı ve ilgi alanlarınıza uygunluğunu değerlendirin.</p></div>
-          <div><span>02</span><h3>Katılımınızı planlayın</h3><p>Eğitiminizin sayfasından örnek satın alma akışını deneyin. Demo sırasında ödeme bilgisi istenmez.</p></div>
-          <div><span>03</span><h3>Hesabınızdan devam edin</h3><p>Akademi açıldığında, satın aldığınız eğitimlere öğrenci girişi üzerinden kendi hesabınızdan ulaşabileceksiniz.</p></div>
+          <div><span>02</span><h3>Shopier ile güvenle ödeyin</h3><p>Ödemenizi Shopier üzerinden yapın. Akademi hesabınızdaki e-posta adresini kullanmanız yeterli.</p></div>
+          <div><span>03</span><h3>Hesabınızdan devam edin</h3><p>Ödemeniz onaylandığında eğitiminiz, erişim süresi boyunca hesabınızda sizi bekler.</p></div>
         </div>
       </section>
 

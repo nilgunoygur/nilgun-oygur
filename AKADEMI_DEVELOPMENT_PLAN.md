@@ -14,7 +14,8 @@ Week 1 now includes the database foundation, a migrated development Neon databas
 - [x] Better Auth backend, owner MFA authorization, encrypted Resend delivery queue, and local integration tests.
 - [x] Turkish authentication/MFA forms and protected account/owner entry pages.
 - [ ] Scheduled email retries and real provider/email verification. Resend/DNS connection deferred by the owner; registration remains disabled. Frequent retry scheduling needs a suitable scheduler; the current Vercel Hobby project has no schedule configured.
-- [ ] Shopier test payment and capability proof; Mux signed playback proof.
+- [x] Shopier capability check (21 September): REST API and webhook flow implemented and tested locally with signed webhooks; the legacy payment form is not used.
+- [ ] Real ₺1 Shopier test purchase on a deployed environment; Mux signed playback proof.
 - [x] Public Akademi promotion page, course previews, header/footer navigation, and student-login routing.
 - [ ] Database-backed sales catalog, full student and owner UI, payment fulfillment, and remaining launch scope.
 
@@ -43,7 +44,7 @@ In scope for launch:
 
 - Public course catalog and course pages under `/akademi`, including upcoming live session dates.
 - Student registration, login, email verification, and password reset.
-- Shopier checkout, verified fulfillment, expiring access, and refunds that revoke access.
+- Shopier checkout on Shopier product pages, signed-webhook fulfillment, and expiring access. Refund handling awaits the owner's policy decision.
 - Recorded video lessons with signed playback and progress.
 - Live Zoom lessons with a calendar, protected join link, reminder email, and recording publication.
 - Owner panel for courses, lessons, uploads, live sessions, students, orders, and access.
@@ -71,7 +72,7 @@ Deferred to a later version:
 | Resend | Transactional email | $0 within Free limits (3,000/month, 100/day) |
 | Mux | Upload processing, adaptive playback, signed delivery for videos and live recordings | Usage based; approximately $4/month at launch estimate |
 | Zoom | Live sessions, using Nilgün's own Zoom account | Nilgün's existing subscription |
-| Shopier | Hosted payment form and payment records | 2.99–5.99% + ₺0.49 per transaction, plus VAT |
+| Shopier | Product pages, payment, order API and webhooks | 2.99–5.99% + ₺0.49 per transaction, plus VAT |
 | Google Analytics, Search Console, Merchant Center | Measurement, search visibility, shopping listings | Free |
 
 Expected starting infrastructure cost is approximately **$24/month**, excluding taxes, domain renewal, Shopier fees, Zoom, and usage beyond free allowances. Vercel Pro is required because Hobby is limited to non-commercial use.
@@ -104,7 +105,7 @@ Target ownership at launch:
 - Neon project.
 - Mux environment.
 - Resend team and verified sending domain.
-- Shopier merchant account and API application credentials.
+- Shopier merchant account, personal access token, and webhook subscription.
 - Zoom account.
 - Google Analytics property, Search Console property, Merchant Center account, and Google Ads account.
 
@@ -156,24 +157,23 @@ Neon Free currently includes 0.5 GB storage, 100 compute-unit hours per project/
 Entities:
 
 - Better Auth users, accounts, sessions, verification tokens, and two-factor records.
-- `courses`: slug, title, description, cover, price in kuruş (integer), currency fixed to `TRY`, access duration in days, optional sales end date, optional related `/egitimlerim` slug, status, and timestamps.
+- `courses`: slug, title, description, cover, price in kuruş (integer), currency fixed to `TRY`, access duration in days, optional sales end date, optional related `/egitimlerim` slug, Shopier product ID and link (required to publish), status, and timestamps.
 - `modules`: course, title, position, and publication status.
 - `lessons`: module, slug (unique within course), title, description, position, kind (`video` or `live`), preview flag, publication status, and optional video asset.
 - `live_sessions`: lesson, start time (UTC), planned duration, Zoom join URL, Zoom passcode, status (`scheduled`, `rescheduled`, `cancelled`, `completed`), reminder sent time, and recording published time.
 - `video_assets`: Mux asset and signed playback identifiers, upload state, duration, aspect ratio, and failure details.
-- `orders`: student, internal `platform_order_id`, Shopier payment identifier, amount and currency snapshot, status (`pending`, `paid`, `failed`, `needs_review`, `refunded`), accepted legal text versions with timestamp, and timestamps.
-- `order_items`: order-to-course snapshot, price, currency, and access duration.
-- `course_access`: student, course, source order or owner grant, start, expiry, revocation time, and reason.
+- `shopier_purchases`: Shopier order ID and course (unique together), normalized buyer email, amount, currency, payment time, access duration snapshot, and the claiming student and time.
+- `course_access`: student, course, source purchase or owner grant, start, expiry, revocation time, and reason.
 - `lesson_progress`: student, lesson, last position, completion, and last activity.
 - `provider_events`: provider, event identity, verified payload hash, processing status, attempt count, and error details.
 - `admin_audit_log`: actor, action, affected resource, reason, and timestamp.
 
 Constraints:
 
-- Unique `platform_order_id` and unique Shopier payment identifier.
+- Unique `(shopier_order_id, course_id)`; a purchase is claimed by at most one student, and its grant must match that student and course.
 - One unrevoked grant per student and course, enforced with a partial unique index on `course_access (user_id, course_id) WHERE revoked_at IS NULL`. The fulfillment transaction serializes grants per student, checks expiry, and retires an expired prior grant with reason `expired_replaced` before renewal. An active grant is never replaced.
 - Unique `(course_id, lesson slug)`.
-- Mark an order paid and create its access grant in one transaction, exactly once.
+- Claim a purchase and create its access grant in one transaction, exactly once.
 
 Do not expose database credentials or generic CRUD endpoints to browser code. Every server operation validates the session, resource ownership, and owner role.
 
@@ -246,37 +246,23 @@ Keep Server Components as the default; isolate forms, the player, and consent co
 
 ## 9. Shopier payment flow
 
-Shopier integrates through a signed payment form and a signed callback. Courses do not need matching Shopier products; the internal order reference travels with the payment.
+Revised 21 September 2026 after checking the Shopier Developer Portal against Nilgün's account. The legacy signed payment form ("API V1") is no longer offered; Shopier's supported integration is its REST API plus signed webhooks. Payment therefore happens entirely on Shopier product pages, and the site learns about purchases from Shopier.
 
-Week 1 proof must confirm against the current Shopier Developer Portal and the live merchant account:
+Observed on this account with a personal access token (all scopes): creating products, reading orders, and managing webhooks work. Reading, listing, and updating products return 403. The course list therefore lives in our database; each course stores its Shopier product ID and link.
 
-1. Exact form fields, signature algorithm, and callback fields.
-2. Whether the callback signature covers the amount or only the order reference and random value.
-3. Whether the REST API (application credentials or personal access token) can list orders, read payment status, and report refunds, and whether it offers server-to-server webhooks. Creating a personal access token requires two-factor authentication on the Shopier account.
+Purchase sequence:
 
-Payment sequence:
+1. `/akademi` lists published courses from the database. "Satın al" opens `/akademi/[slug]/satin-al`, which asks the student to sign in and to use their account email at Shopier, then links to the Shopier product page. Buying without an account is allowed.
+2. Shopier sends `order.created` to `/api/shopier/webhook`. The `Shopier-Signature` header (hex HMAC-SHA256 of the raw body with the webhook token) is verified in constant time; unsigned requests get 401.
+3. Each line of a paid order whose product belongs to a course is stored once in `shopier_purchases` with the buyer email, amount, payment time, and the course's access duration at that moment. Webhook IDs are deduplicated in `provider_events`, which keeps only the payload hash.
+4. If a verified account has the buyer email, access is granted in the same step. Otherwise the purchase waits and is granted when a student with that verified email opens `/akademi/hesabim`.
+5. A student who paid with a different email enters the Shopier order number and the email used at Shopier in "Siparişimi ekle". The server fetches the order from Shopier, checks the email and payment, and grants it once. Five attempts per student per hour.
+6. Access starts at the payment time and lasts the stored duration. Buying again while access is active extends it.
+7. A daily Vercel Cron call to `/api/internal/shopier-sync` re-reads the last seven days of orders, in case a webhook was missed.
 
-1. Require a verified, logged-in student without active access to the course, and required consent checkboxes (distance sales contract, preliminary information, immediate delivery of digital content and its effect on the right of withdrawal).
-2. The server creates a pending order with a random, non-guessable `platform_order_id`, the price snapshot, and accepted legal text versions.
-3. The server builds the signed form (digital product type, TRY, buyer name, email, phone, and required billing fields) with the API key and secret kept server-only, and auto-submits it to Shopier.
-4. Shopier returns to `/api/shopier/callback` with the order reference, status, payment identifier, random value, and signature.
-5. Persist the raw event, verify the signature with a constant-time comparison, confirm the order exists and is pending, and confirm the amount against the order snapshot.
-6. In one transaction, mark the order paid, record the payment identifier, create the access grant, and mark the event processed. Repeated callbacks are no-ops.
-7. Send the confirmation email after the transaction commits.
-8. Redirect to `/akademi/odeme/[orderId]`, which reads only the internal order status.
+Refunds: not automated until the owner decides the policy. Shopier's `refund.updated` webhook and refund API are available when needed.
 
-Buyer closes the browser before the callback:
-
-- If the REST API or webhooks are available, a daily Vercel Cron job and an on-demand "check now" action reconcile pending orders by order reference or payment identifier.
-- If they are not available, pending orders older than 30 minutes appear in the owner's "needs attention" list. Nilgün checks the Shopier panel and approves with one click; approval is audited. The result page tells the student their payment is being verified and how to contact support.
-
-Refunds:
-
-- If the API reports refunds, reconciliation revokes access automatically for full refunds.
-- Otherwise the owner marks the order refunded in the panel, which revokes access with an audit entry.
-- Partial refunds never revoke automatically.
-
-Never grant access from an unsigned request, a client-supplied status, a screenshot, or an unverified payload.
+Never grant access from an unsigned request, a client-supplied status or amount, a screenshot, or an unverified payload.
 
 ## 10. Private Mux playback
 

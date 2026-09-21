@@ -11,7 +11,9 @@
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "drizzle-kit migrate",
-    "test:routes": "node tests/check-routes.mjs"
+    "test:routes": "node tests/check-routes.mjs",
+    "db:seed-demo": "node --experimental-strip-types scripts/seed-demo-courses.mjs",
+    "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

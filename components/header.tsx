@@ -15,6 +15,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { nav as links } from "@/lib/content";
+import { AccountLink } from "@/components/account-link";
 export function Header() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
@@ -50,6 +51,7 @@ export function Header() {
             {link.label}
           </Link>
         ))}
+        <AccountLink />
       </nav>
       <div className="mobile-nav">
         <Sheet open={open} onOpenChange={setOpen}>
@@ -83,6 +85,7 @@ export function Header() {
                   {link.label}
                 </Link>
               ))}
+              <AccountLink onNavigate={() => setOpen(false)} />
             </nav>
           </SheetContent>
         </Sheet>

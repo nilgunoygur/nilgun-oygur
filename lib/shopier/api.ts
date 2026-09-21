@@ -1,0 +1,124 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
+
+// Internal Shopier REST client. The server-only entry point in index.ts supplies the token.
+// This account can create products and read orders/webhooks; product reads/updates return 403.
+const API = "https://api.shopier.com/v1";
+
+const email = z.string().trim().toLowerCase().pipe(z.email());
+const party = z.object({ email: z.string().optional().nullable() }).partial().nullable().optional();
+export const shopierOrderSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  paymentStatus: z.string(),
+  dateCreated: z.string().transform((value, ctx) => {
+    const date = new Date(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+    if (Number.isNaN(date.getTime())) { ctx.addIssue({ code: "custom", message: "Invalid order date" }); return z.NEVER; }
+    return date;
+  }),
+  currency: z.string(),
+  shippingInfo: party,
+  billingInfo: party,
+  lineItems: z.array(z.object({
+    productId: z.union([z.string(), z.number()]).transform(String),
+    title: z.string().optional(),
+    quantity: z.number().int().positive().optional(),
+    total: z.string(),
+  })).min(1),
+});
+export type ShopierOrder = z.output<typeof shopierOrderSchema>;
+
+/** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
+export function buyerEmail(order: ShopierOrder): string | null {
+  for (const candidate of [order.billingInfo?.email, order.shippingInfo?.email]) {
+    const parsed = email.safeParse(candidate ?? "");
+    if (parsed.success) return parsed.data;
+  }
+  return null;
+}
+
+/** Shopier sends decimal strings such as "2750.00". */
+export function toKurus(amount: string): number {
+  if (!/^\d+(\.\d{1,2})?$/.test(amount.trim())) throw new Error("Invalid Shopier amount.");
+  const [lira, kurus = ""] = amount.trim().split(".");
+  return Number(lira) * 100 + Number(kurus.padEnd(2, "0"));
+}
+
+/** Shopier-Signature is the hex HMAC-SHA256 of the raw request body, keyed with the webhook token. */
+export function isValidWebhookSignature(rawBody: string, signature: string | null, token: string): boolean {
+  if (!signature || !token) return false;
+  const expected = createHmac("sha256", token).update(rawBody, "utf8").digest("hex");
+  const given = signature.trim().toLowerCase();
+  return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}
+
+export class ShopierError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) { super(message); this.status = status; }
+}
+
+export function createShopierClient(token: string, fetcher: typeof fetch = fetch) {
+  if (!token) throw new Error("Shopier API token is not configured.");
+  async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await fetcher(API + path, {
+      ...init,
+      headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${token}`, ...init.headers },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new ShopierError(response.status, `Shopier ${init.method ?? "GET"} ${path.split("?")[0]} failed with ${response.status}.`);
+    return response.json() as Promise<T>;
+  }
+  return {
+    /** Returns null when the order does not exist in this shop. */
+    async getOrder(id: string) {
+      if (!/^\d{1,20}$/.test(id)) return null;
+      try {
+        return shopierOrderSchema.parse(await call(`/orders/${id}`));
+      } catch (error) {
+        if (error instanceof ShopierError && (error.status === 404 || error.status === 400)) return null;
+        throw error;
+      }
+    },
+    /** Paid orders created at or after `since`, newest first, across pages. */
+    async listOrdersSince(since: Date, maxPages = 10) {
+      const orders: ShopierOrder[] = [];
+      const dateStart = encodeURIComponent(since.toISOString().replace(/\.\d{3}Z$/, "+0000"));
+      for (let page = 1; page <= maxPages; page++) {
+        const batch = z.array(z.unknown()).parse(await call(`/orders?dateStart=${dateStart}&limit=50&page=${page}`));
+        for (const raw of batch) {
+          const parsed = shopierOrderSchema.safeParse(raw);
+          if (parsed.success) orders.push(parsed.data);
+        }
+        if (batch.length < 50) break;
+      }
+      return orders;
+    },
+    async createProduct(input: { title: string; description: string; priceKurus: number; imageUrl: string; hidden: boolean }) {
+      const product = await call<{ id: string | number; url: string }>("/products", {
+        method: "POST",
+        body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          type: "digital",
+          media: [{ type: "image", url: input.imageUrl, placement: 1 }],
+          priceData: { currency: "TRY", price: (input.priceKurus / 100).toFixed(2), vatPercent: "20", shippingPrice: "0" },
+          stockQuantity: 100_000,
+          shippingPayer: "sellerPays",
+          customListing: input.hidden,
+        }),
+      });
+      return { id: String(product.id), url: product.url };
+    },
+    listWebhooks: () => call<{ id: string; event: string; url: string }[]>("/webhooks"),
+    /** The signing token is returned only in this response. */
+    createWebhook: (event: string, url: string) => call<{ id: string; event: string; url: string; token: string }>("/webhooks", { method: "POST", body: JSON.stringify({ event, url }) }),
+  };
+}
+export type ShopierClient = ReturnType<typeof createShopierClient>;
+
+/** Accepts a bare product id or a shopier.com product link. */
+export function parseShopierProduct(input: string): { id: string; url: string } | null {
+  const value = input.trim();
+  const match = /^(\d{4,20})$/.exec(value) ?? /^https:\/\/(?:www\.)?shopier\.com\/(?:ShowProductNew\/products\.php\?id=)?(\d{4,20})\/?(?:[?#].*)?$/.exec(value);
+  return match ? { id: match[1], url: `https://www.shopier.com/${match[1]}` } : null;
+}

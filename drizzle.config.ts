@@ -8,7 +8,8 @@ export default defineConfig({
   schema: "./lib/db/schema.ts",
   out: "./drizzle",
   // Generation is offline. Migration commands require a real connection string.
-  dbCredentials: { url: process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL ?? "" },
+  // Migrations use a direct connection: an explicit override, else the Neon integration's unpooled URL.
+  dbCredentials: { url: process.env.DATABASE_MIGRATION_URL || process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || "" },
   strict: true,
   verbose: true,
 });

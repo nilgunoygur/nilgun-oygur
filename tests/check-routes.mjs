@@ -26,7 +26,7 @@ for (const route of authRoutes) {
   assert.match(html, /<h1[ >]/, `${route} should have a heading`);
   assert.match(html, /name="robots" content="noindex, nofollow"/, `${route} must not be indexed`);
 }
-for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik"]) {
+for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
   assert.match(response.headers.get("location"), /^\/akademi\/giris\?next=/);
@@ -34,5 +34,9 @@ for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik"]) {
 for (const method of ["GET", "POST"]) {
   const response = await fetch(new URL("/api/internal/email-delivery", origin), { method });
   assert.equal(response.status, 401, `${method} email worker requires authorization`);
+  const sync = await fetch(new URL("/api/internal/shopier-sync", origin), { method });
+  assert.equal(sync.status, 401, `${method} Shopier sync requires authorization`);
 }
-console.log("Five auth screens are noindex; account/owner routes redirect anonymous users; both email worker methods require authorization.");
+const unsigned = await fetch(new URL("/api/shopier/webhook", origin), { method: "POST", headers: { "shopier-event": "order.created" }, body: "{}" });
+assert.ok([401, 503].includes(unsigned.status), "unsigned Shopier webhooks are rejected");
+console.log("Five auth screens are noindex; account/owner routes redirect anonymous users; email and Shopier workers require authorization; unsigned webhooks are rejected.");
