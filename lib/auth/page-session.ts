@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getAuth, isAuthConfigured } from "@/lib/auth";
 import { getDatabase } from "@/lib/db";
-import { owners } from "@/lib/db/schema";
+import { ownerMfaSessions, owners } from "@/lib/db/schema";
+import { hasOwnerAuthorization } from "./owner-policy";
 import { authDestination } from "./navigation";
 
 export async function studentPageSession(destination = "/akademi/hesabim") {
@@ -20,5 +21,13 @@ export async function ownerEnrollmentSession() {
   const session = await studentPageSession("/yonetim/guvenlik");
   const [owner] = await getDatabase().select({ userId: owners.userId }).from(owners).where(eq(owners.userId, session.user.id)).limit(1);
   if (!owner) notFound();
+  return session;
+}
+
+/** Full owner guard for pages: owner row, enabled MFA and this session's MFA proof. */
+export async function ownerPageSession() {
+  const session = await ownerEnrollmentSession();
+  const [proof] = await getDatabase().select().from(ownerMfaSessions).where(eq(ownerMfaSessions.sessionId, session.session.id)).limit(1);
+  if (!hasOwnerAuthorization({ hasSession: true, emailVerified: session.user.emailVerified, isOwner: true, twoFactorEnabled: session.user.twoFactorEnabled === true, sessionMfaVerified: !!proof })) redirect("/yonetim/guvenlik");
   return session;
 }

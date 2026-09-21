@@ -15,6 +15,20 @@
       "when": 1789469755535,
       "tag": "0001_fair_roland_deschain",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789997988429,
+      "tag": "0002_shopier_purchases",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789998001459,
+      "tag": "0003_retire_platform_orders",
+      "breakpoints": true
     }
   ]
 }

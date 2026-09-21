@@ -24,3 +24,11 @@ test("contact validation rejects incomplete submissions and trims valid input", 
   });
   assert.equal(result.name, "Ayşe Yılmaz");
 });
+
+test("course addresses are ASCII slugs derived from Turkish titles", async () => {
+  const { courseSlug } = await import("../lib/akademi/slug.ts");
+  assert.equal(courseSlug("Doğal Taş Eğitimi"), "dogal-tas-egitimi");
+  assert.equal(courseSlug("  İLİŞKİ Atölyesi: 7 Gün! "), "iliski-atolyesi-7-gun");
+  assert.equal(courseSlug("Çiçek & Güneş — Öz"), "cicek-gunes-oz");
+  assert.equal(courseSlug("???"), "");
+});

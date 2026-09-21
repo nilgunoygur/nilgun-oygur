@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable,
+  bigint, boolean, check, foreignKey, index, integer, pgEnum, pgTable,
   primaryKey, text, timestamp, unique, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 
@@ -71,7 +71,6 @@ export const publicationStatus = pgEnum("publication_status", ["draft", "publish
 export const lessonKind = pgEnum("lesson_kind", ["video", "live"]);
 export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "cancelled", "completed"]);
 export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
-export const orderStatus = pgEnum("order_status", ["pending", "paid", "failed", "needs_review", "refunded"]);
 export const eventStatus = pgEnum("event_status", ["pending", "processed", "failed"]);
 
 export const courses = pgTable("courses", {
@@ -85,9 +84,13 @@ export const courses = pgTable("courses", {
   accessDurationDays: integer("access_duration_days").notNull().default(365),
   salesEndAt: time("sales_end_at"),
   relatedTrainingSlug: text("related_training_slug"),
+  // Payment happens on this Shopier product; its order webhooks identify the course.
+  shopierProductId: text("shopier_product_id").unique(),
+  shopierUrl: text("shopier_url"),
   status: courseStatus("status").notNull().default("draft"),
   ...timestamps(),
 }, (t) => [
+  check("courses_published_sellable", sql`${t.status} <> 'published' OR (${t.shopierProductId} IS NOT NULL AND ${t.shopierUrl} IS NOT NULL)`),
   check("courses_price_valid", sql`${t.priceKurus} > 0`),
   check("courses_currency_try", sql`${t.currency} = 'TRY'`),
   check("courses_duration_valid", sql`${t.accessDurationDays} > 0`),
@@ -155,51 +158,35 @@ export const liveSessions = pgTable("live_sessions", {
   check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
   index("live_sessions_schedule_idx").on(t.status, t.startsAt),
 ]);
-export type LegalConsent = {
-  distanceSales: string;
-  preliminaryInformation: string;
-  immediateDigitalDelivery: string;
-};
-export const orders = pgTable("orders", {
+// One row per paid Shopier order line for an academy course. Matched to a student by
+// verified email, or claimed with order number + buyer email. Snapshots never change.
+export const shopierPurchases = pgTable("shopier_purchases", {
   id: id(),
-  userId: text("user_id").notNull().references(() => user.id),
-  platformOrderId: uuid("platform_order_id").notNull().defaultRandom().unique(),
-  shopierPaymentId: text("shopier_payment_id").unique(),
+  shopierOrderId: text("shopier_order_id").notNull(),
+  courseId: uuid("course_id").notNull().references(() => courses.id),
+  buyerEmail: text("buyer_email").notNull(),
   amountKurus: integer("amount_kurus").notNull(),
-  currency: text("currency").notNull().default("TRY"),
-  status: orderStatus("status").notNull().default("pending"),
-  legalVersions: jsonb("legal_versions").$type<LegalConsent>().notNull(),
-  consentAcceptedAt: time("consent_accepted_at").notNull(),
-  paidAt: time("paid_at"),
+  currency: text("currency").notNull(),
+  accessDurationDays: integer("access_duration_days").notNull(),
+  purchasedAt: time("purchased_at").notNull(),
+  userId: text("user_id").references(() => user.id),
+  claimedAt: time("claimed_at"),
   ...timestamps(),
 }, (t) => [
-  unique("orders_id_user").on(t.id, t.userId),
-  index("orders_user_idx").on(t.userId),
-  index("orders_attention_idx").on(t.status, t.createdAt),
-  check("orders_amount_valid", sql`${t.amountKurus} > 0`),
-  check("orders_currency_try", sql`${t.currency} = 'TRY'`),
-  check("orders_paid_at_required", sql`${t.status} NOT IN ('paid', 'refunded') OR ${t.paidAt} IS NOT NULL`),
-  check("orders_legal_versions_required", sql`jsonb_typeof(${t.legalVersions}) = 'object' AND ${t.legalVersions} ?& ARRAY['distanceSales', 'preliminaryInformation', 'immediateDigitalDelivery'] AND length(trim(${t.legalVersions}->>'distanceSales')) > 0 AND length(trim(${t.legalVersions}->>'preliminaryInformation')) > 0 AND length(trim(${t.legalVersions}->>'immediateDigitalDelivery')) > 0 AND jsonb_typeof(${t.legalVersions}->'distanceSales') = 'string' AND jsonb_typeof(${t.legalVersions}->'preliminaryInformation') = 'string' AND jsonb_typeof(${t.legalVersions}->'immediateDigitalDelivery') = 'string'`),
-]);
-export const orderItems = pgTable("order_items", {
-  id: id(),
-  orderId: uuid("order_id").notNull().references(() => orders.id),
-  courseId: uuid("course_id").notNull().references(() => courses.id),
-  courseTitle: text("course_title").notNull(),
-  priceKurus: integer("price_kurus").notNull(),
-  currency: text("currency").notNull().default("TRY"),
-  accessDurationDays: integer("access_duration_days").notNull(),
-}, (t) => [
-  unique("order_items_order_course").on(t.orderId, t.courseId),
-  check("order_items_price_valid", sql`${t.priceKurus} > 0`),
-  check("order_items_currency_try", sql`${t.currency} = 'TRY'`),
-  check("order_items_duration_valid", sql`${t.accessDurationDays} > 0`),
+  unique("shopier_purchases_order_course").on(t.shopierOrderId, t.courseId),
+  unique("shopier_purchases_id_user").on(t.id, t.userId),
+  unique("shopier_purchases_id_course").on(t.id, t.courseId),
+  index("shopier_purchases_unclaimed_email_idx").on(t.buyerEmail).where(sql`${t.userId} IS NULL`),
+  check("shopier_purchases_email_normalized", sql`${t.buyerEmail} = lower(trim(${t.buyerEmail})) AND length(${t.buyerEmail}) > 0`),
+  check("shopier_purchases_amount_valid", sql`${t.amountKurus} >= 0`),
+  check("shopier_purchases_duration_valid", sql`${t.accessDurationDays} > 0`),
+  check("shopier_purchases_claim_consistent", sql`(${t.userId} IS NULL) = (${t.claimedAt} IS NULL)`),
 ]);
 export const courseAccess = pgTable("course_access", {
   id: id(),
   userId: text("user_id").notNull().references(() => user.id),
   courseId: uuid("course_id").notNull().references(() => courses.id),
-  sourceOrderId: uuid("source_order_id"),
+  sourcePurchaseId: uuid("source_purchase_id").unique(),
   grantedBy: text("granted_by").references(() => owners.userId),
   grantReason: text("grant_reason"),
   startsAt: time("starts_at").notNull(),
@@ -209,11 +196,10 @@ export const courseAccess = pgTable("course_access", {
   ...timestamps(),
 }, (t) => [
   uniqueIndex("course_access_unrevoked_unique").on(t.userId, t.courseId).where(sql`${t.revokedAt} IS NULL`),
-  unique("course_access_source_once").on(t.sourceOrderId, t.courseId),
-  foreignKey({ columns: [t.sourceOrderId, t.userId], foreignColumns: [orders.id, orders.userId] }),
-  foreignKey({ columns: [t.sourceOrderId, t.courseId], foreignColumns: [orderItems.orderId, orderItems.courseId] }),
+  foreignKey({ name: "course_access_purchase_user_fk", columns: [t.sourcePurchaseId, t.userId], foreignColumns: [shopierPurchases.id, shopierPurchases.userId] }),
+  foreignKey({ name: "course_access_purchase_course_fk", columns: [t.sourcePurchaseId, t.courseId], foreignColumns: [shopierPurchases.id, shopierPurchases.courseId] }),
   check("course_access_dates_valid", sql`${t.expiresAt} > ${t.startsAt}`),
-  check("course_access_source_valid", sql`(${t.sourceOrderId} IS NOT NULL AND ${t.grantedBy} IS NULL) OR (${t.sourceOrderId} IS NULL AND ${t.grantedBy} IS NOT NULL AND ${t.grantReason} IS NOT NULL AND length(trim(${t.grantReason})) > 0)`),
+  check("course_access_source_valid", sql`(${t.sourcePurchaseId} IS NOT NULL AND ${t.grantedBy} IS NULL) OR (${t.sourcePurchaseId} IS NULL AND ${t.grantedBy} IS NOT NULL AND ${t.grantReason} IS NOT NULL AND length(trim(${t.grantReason})) > 0)`),
   check("course_access_revocation_reason", sql`${t.revokedAt} IS NULL OR (${t.revocationReason} IS NOT NULL AND length(trim(${t.revocationReason})) > 0)`),
   index("course_access_course_idx").on(t.courseId, t.expiresAt),
 ]);

@@ -1,8 +1,9 @@
 // Only known post-login destinations are accepted; never redirect to user-supplied URLs.
 export function authDestination(value: unknown): string {
-  return value === "/yonetim" || value === "/yonetim/guvenlik"
-    ? value
-    : "/akademi/hesabim";
+  if (value === "/yonetim" || value === "/yonetim/guvenlik") return value;
+  // Return to a course's checkout step after signing in or registering.
+  if (typeof value === "string" && /^\/akademi\/[a-z0-9-]{1,80}\/satin-al$/.test(value)) return value;
+  return "/akademi/hesabim";
 }
 
 export function authErrorMessage(error: { code?: string; status?: number }): string {

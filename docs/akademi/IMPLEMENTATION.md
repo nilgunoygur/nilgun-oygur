@@ -28,7 +28,7 @@
 - `/akademi/hesabim` requires a verified session and lists actual active access grants. Lesson navigation and the full learning experience remain pending.
 - `/yonetim/guvenlik` provides owner-only TOTP enrollment and backup codes; `/yonetim` requires MFA proof for the current session. The content/order management panel remains pending.
 - Auth destinations are allowlisted, sensitive pages are noindex, and reset pages use a no-referrer policy.
-- Vercel-managed Neon resource `nilgun-akademi-development` uses the Free plan in Frankfurt, connected only to development and preview. Both migrations were applied: 20 public tables and two migration records verified. A disposable real-Neon registration/verification smoke test passed and its user was removed; no email was sent.
+- (Superseded 21 September 2026: the first Neon resource lived in the previous Vercel account; see "Infrastructure" below.)
 - `vercel.json` selects pnpm builds and Frankfurt functions. Production database setup remains pending.
 - Resend access and DNS verification were explicitly deferred by the owner. Registration remains disabled until email/auth configuration and retry scheduling are ready. The full browser/email journey has not been verified.
 
@@ -46,6 +46,45 @@ Email verification replay is an idempotent success in Better Auth once the addre
 8. **Calendar:** increment `calendar_sequence` on rescheduling/cancellation and retain a stable event UID derived from session ID. Calendar files and emails must contain the lesson URL, never Zoom credentials.
 9. **Authentication:** the adapter and two-factor storage now match the installed Better Auth 1.7.5 plugin fields, with real registration, verification, reset, rate-limit, and MFA integration tests. Recheck schema compatibility when updating the pinned version. Production/provider behavior still needs verification.
 10. **Scope and estimates:** provider pricing/free limits, Google course listing eligibility, and Turkish legal wording are planning assumptions requiring confirmation before launch. No provider accounts, prices, legal texts, or production behavior were approved by this implementation.
+
+## Shopier purchases — 21 September 2026
+
+Payment happens on Shopier product pages. The site records purchases from Shopier and grants course access; it has no checkout or payment form of its own.
+
+- **Account capabilities** (personal access token with every scope): `POST /products`, `GET /orders`, `GET /orders/{id}` and webhooks work. `GET /products`, `GET /products/{id}` and `PUT /products/{id}` return 403, so courses are stored in our database with their Shopier product ID and link. Products created through the API cannot be edited or deleted through it; use the Shopier panel.
+- **Schema** (migrations `0002`, `0003`): `courses.shopier_product_id/shopier_url` (required to publish), `shopier_purchases`, and `course_access.source_purchase_id` with composite foreign keys to the purchase's student and course. The unused own-checkout tables `orders` and `order_items` were removed.
+- **Webhook** `POST /api/shopier/webhook`: verifies `Shopier-Signature` (hex HMAC-SHA256 of the raw body, `SHOPIER_WEBHOOK_TOKEN`), deduplicates by `Shopier-Webhook-Id`, and stores only a payload hash in `provider_events`. Returns 500 on processing errors so Shopier retries.
+- **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise `/akademi/hesabim` grants it after the student verifies that email. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
+- **Access** runs from the payment time for the course's duration. A repeat purchase while access is active extends it (the previous grant is retired as `extended_by_purchase`).
+- **Daily sync** `GET/POST /api/internal/shopier-sync` (Bearer `CRON_SECRET`, Vercel Cron 04:00 UTC) replays the last seven days of orders. All steps are idempotent.
+- **Owner panel** `/yonetim/egitimler`: add a course by pasting a Shopier product link, or let the site create a digital product (optionally hidden from the Shopier store); publish, unpublish and archive; see sales and whether each is attached to an account. Price changes must be made in both Shopier and the panel.
+- **Refunds** are deliberately not implemented yet (owner decision pending).
+
+### Test products
+
+Three hidden `[TEST]` digital products exist in Nilgün's Shopier account (`51075042` ₺1, `51075057` ₺2, `51075059` ₺3). `pnpm run db:seed-demo` adds them as published courses to the configured database. Remove them in the Shopier panel and archive the courses before launch.
+
+### Infrastructure (21 September 2026)
+
+- Vercel team `nilgun-oygurs-projects`, project `nilgun-oygur` (Hobby). Use a separate CLI login: `vercel … --global-config ~/.vercel-nilgun`.
+- Neon resource `neon-orange-marble` (Free, Frankfurt `eu-central-1`, PostgreSQL 18) is connected to Production, Preview and Development. All three currently use the same branch, so the `[TEST]` courses are visible on every environment until archived. The integration sets `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct, used by migrations). It also adds unused Neon Auth variables; authentication stays on Better Auth.
+- All four migrations are applied and the demo courses are seeded. The earlier development database in the previous Vercel account is obsolete.
+- `SHOPIER_API_TOKEN` is set for all environments. Development-only values exist for `NEXT_PUBLIC_SITE_URL`/`BETTER_AUTH_URL` (`http://localhost:3000`), `BETTER_AUTH_SECRET`, `EMAIL_ENCRYPTION_KEY` and `CRON_SECRET`; `vercel env pull .env.local --environment=development --global-config ~/.vercel-nilgun` recreates the local file. Authentication stays disabled (503) until the `RESEND_*` values are configured.
+
+### Going live
+
+1. Run `pnpm run db:migrate` **before** each deploy that adds migrations: `/akademi` is prerendered from the database at build time.
+2. Revoke the first Shopier token (it was shared in chat); only the token stored in Vercel should remain.
+3. Deploy, then subscribe the webhook and store its one-time token without printing it:
+   `pnpm run --silent shopier:webhook https://<domain> | vercel env add SHOPIER_WEBHOOK_TOKEN production --global-config ~/.vercel-nilgun`
+   and redeploy.
+4. Make a ₺1 purchase of a test product with a registered account email and confirm the course appears in `/akademi/hesabim`.
+
+### Verification
+
+- `pnpm test`: 36 tests pass, including 10 for purchases/webhooks (idempotency, email matching, claim-by-order, extension, concurrent claims, database constraints, signature checks).
+- Against a local PostgreSQL 16 production build: all four migrations applied; signed webhooks recorded purchases, duplicates and bad signatures were rejected; a purchase made before registration was granted once on the first account visit; a repeat purchase extended access by the course duration; the sync endpoint required its secret and read the real Shopier API. `pnpm run test:routes` passed, including the new owner route and worker checks.
+- Not yet verified: a real Shopier payment and webhook delivery (needs a public deployment), and the account/owner screens in a signed-in browser session.
 
 ## Local database workflow
 
