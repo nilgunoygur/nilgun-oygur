@@ -7,12 +7,13 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { createAcademyAuth } from "../lib/auth/create-auth.ts";
-import { hasOwnerAuthorization } from "../lib/auth/owner-policy.ts";
+import { markMfaSession, ownerStatus, revokeUserSessions } from "../lib/auth/owner-access.ts";
 import * as schema from "../lib/db/schema.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
 const messages = [];
+const claims = [];
 const origin = "http://localhost:3000";
 let ip = 0;
 const dependencies = {
@@ -20,8 +21,9 @@ const dependencies = {
   baseURL: origin,
   secret: "integration-test-only-secret-abcdef0123456789",
   enqueueEmail: async message => { messages.push(message); },
-  markMfaSession: async sessionId => { await db.insert(schema.ownerMfaSessions).values({ sessionId }).onConflictDoNothing(); },
-  revokeUserSessions: async userId => { await db.delete(schema.session).where(eq(schema.session.userId, userId)); },
+  markMfaSession: sessionId => markMfaSession(db, sessionId),
+  revokeUserSessions: userId => revokeUserSessions(db, userId),
+  claimPurchases: async (userId, email) => { claims.push([userId, email]); },
 };
 const auth = createAcademyAuth(dependencies);
 async function request(path, body, cookie = "", address = `192.0.2.${++ip}`) {
@@ -55,11 +57,14 @@ test("registration is neutral and cannot set ownership or MFA fields", async () 
 test("verification enables login; replay never creates a session", async () => {
   const response = await auth.handler(new Request(messageUrl(messages[0])));
   assert.equal(response.status, 302);
+  const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
+  assert.deepEqual(claims, [[user.id, account.email]], "waiting Shopier purchases are claimed once the email is verified");
   const replay = await auth.handler(new Request(messageUrl(messages[0])));
   assert.equal(replay.headers.get("set-cookie"), null);
   const login = await request("/sign-in/email", account);
   assert.equal(login.status, 200);
   assert.ok(cookies(login).includes("session_token="));
+  assert.equal(claims.length, 2, "and again on each verified sign-in");
   const session = await request("/get-session", undefined, cookies(login));
   assert.equal((await session.json()).user.emailVerified, true);
 });
@@ -123,9 +128,11 @@ test("MFA requires a valid code and a session-specific proof; old sessions are r
   const session = await (await request("/get-session", undefined, cookies(complete))).json();
   assert.ok(session.session.id);
   assert.equal((await db.select().from(schema.ownerMfaSessions).where(eq(schema.ownerMfaSessions.sessionId, session.session.id))).length, 1);
-  const good = { hasSession: true, emailVerified: true, isOwner: true, twoFactorEnabled: true, sessionMfaVerified: true };
-  assert.equal(hasOwnerAuthorization(good), true);
-  for (const flag of Object.keys(good)) assert.equal(hasOwnerAuthorization({ ...good, [flag]: false }), false, flag);
+  const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
+  assert.deepEqual(await ownerStatus(db, user.id, session.session.id), { isOwner: false, sessionMfaVerified: true }, "an MFA proof alone is not ownership");
+  await db.insert(schema.owners).values({ userId: user.id });
+  assert.deepEqual(await ownerStatus(db, user.id, session.session.id), { isOwner: true, sessionMfaVerified: true });
+  assert.equal((await ownerStatus(db, user.id, "another-session")).sessionMfaVerified, false, "the proof belongs to one session");
 });
 
 test("untrusted redirect origins and short passwords are rejected", async () => {

@@ -1,14 +1,17 @@
 import "server-only";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { attachDatabasePool } from "@vercel/functions";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { config } from "@/lib/config";
 import * as schema from "./schema";
 
 const createDatabase = () => {
-  const url = process.env.DATABASE_URL;
+  const url = config().databaseUrl;
   if (!url) throw new Error("DATABASE_URL is required for Akademi database operations.");
-  // Neon pooled URL in deployment; small per-instance pool and no prepared statements.
-  const client = postgres(url, { max: 5, idle_timeout: 20, connect_timeout: 10, prepare: false });
-  return drizzle(client, { schema });
+  // Neon pooled URL. One pool per Fluid compute instance; Vercel closes idle clients before the instance suspends.
+  const pool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 5_000, connectionTimeoutMillis: 10_000 });
+  attachDatabasePool(pool);
+  return drizzle({ client: pool, schema });
 };
 const globalDatabase = globalThis as typeof globalThis & {
   academyDatabase?: ReturnType<typeof createDatabase>;

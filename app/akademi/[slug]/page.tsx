@@ -3,14 +3,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, Check } from "lucide-react";
-import { formatAccess, getCatalogCourse } from "@/lib/akademi/catalog";
+import { formatAccess } from "@/lib/akademi/format";
+import { catalogStaticParams, getCatalogCourse } from "@/lib/akademi/server";
 import { CoursePrice } from "@/components/akademi/course-price";
 import { buttonVariants } from "@/components/ui/button";
 import { kicker, pageWidth, textLink } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
-export const revalidate = 600;
-export async function generateStaticParams() { return []; }
+export const generateStaticParams = catalogStaticParams;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const course = await getCatalogCourse((await params).slug);

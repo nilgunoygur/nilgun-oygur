@@ -1,6 +1,7 @@
 import "server-only";
+import { config } from "@/lib/config";
 import { createShopierClient } from "./api";
 
 export function getShopier() {
-  return createShopierClient(process.env.SHOPIER_API_TOKEN ?? "");
+  return createShopierClient(config().shopier.token ?? "");
 }

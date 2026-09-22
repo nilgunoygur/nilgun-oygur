@@ -4,8 +4,8 @@ import Link from "next/link";
 import { ArrowDown, ArrowUpRight, BookOpen, Clock3, Leaf } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { portrait } from "@/lib/content";
-import { formatAccess, listCatalog } from "@/lib/akademi/catalog";
-import { syncCatalogIfStale } from "@/lib/akademi/server";
+import { formatAccess } from "@/lib/akademi/format";
+import { listCatalog } from "@/lib/akademi/server";
 import { CoursePrice } from "@/components/akademi/course-price";
 import { PromoVideo } from "@/components/akademi/promo-video";
 import { kicker, pageWidth } from "@/lib/styles";
@@ -18,11 +18,7 @@ export const metadata: Metadata = {
   description: "Nilgün Oygur Akademi eğitimlerini keşfedin. Kuantum, bioenerji, doğal taş ve regresyon programlarını inceleyin; öğrenme yolculuğunuza alan açın.",
   alternates: { canonical: "/akademi" },
 };
-// Regenerated in the background at most every 10 minutes, picking up Shopier changes.
-export const revalidate = 600;
-
 export default async function Academy() {
-  await syncCatalogIfStale();
   const courses = await listCatalog();
   return (
     <div className="bg-[linear-gradient(to_bottom,transparent_70%,var(--background)),linear-gradient(155deg,#f1f5e9_0%,#fff_29%,#fff_70%,#f4f7ef_100%)]">

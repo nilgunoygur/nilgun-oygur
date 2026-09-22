@@ -1,8 +1,8 @@
 "use server";
-import { revalidatePath } from "next/cache";
+import { refresh } from "next/cache";
 import { z } from "zod";
-import { requireStudent } from "@/lib/auth/authorization";
-import { claimOrderForStudent, consumeClaimAttempt } from "@/lib/akademi/server";
+import { requireStudent } from "@/lib/auth/viewer";
+import { akademi } from "@/lib/akademi/server";
 import type { FormState } from "@/components/akademi/form-status";
 
 const claimSchema = z.object({
@@ -16,17 +16,17 @@ const messages = {
   claimed_by_other: "Bu sipariş başka bir hesaba eklenmiş. Yardım için bizimle iletişime geçin.",
   not_found: "Sipariş bulunamadı. Numarayı ve Shopier’de kullandığınız e-posta adresini kontrol edin.",
   not_academy: "Bu sipariş bir Akademi eğitimi içermiyor.",
+  rate_limited: "Çok fazla deneme yaptınız. Lütfen bir saat sonra yeniden deneyin.",
 } as const;
 
 export async function claimOrder(_: FormState, formData: FormData): Promise<FormState> {
-  let session;
-  try { session = await requireStudent(); } catch { return { status: "error", message: "Lütfen yeniden giriş yapın." }; }
+  let viewer;
+  try { viewer = await requireStudent(); } catch { return { status: "error", message: "Lütfen yeniden giriş yapın." }; }
   const input = claimSchema.safeParse({ orderNumber: formData.get("orderNumber"), email: formData.get("email") });
   if (!input.success) return { status: "error", message: input.error.issues[0].message };
-  if (!await consumeClaimAttempt(session.user.id)) return { status: "error", message: "Çok fazla deneme yaptınız. Lütfen bir saat sonra yeniden deneyin." };
   try {
-    const outcome = await claimOrderForStudent(input.data.orderNumber, input.data.email, session.user.id);
-    if (outcome === "granted") revalidatePath("/akademi/hesabim");
+    const outcome = await akademi().access.claimOrder(viewer.user.id, input.data.orderNumber, input.data.email);
+    if (outcome === "granted") refresh();
     return { status: outcome === "granted" || outcome === "already_yours" ? "success" : "error", message: messages[outcome] };
   } catch {
     return { status: "error", message: "Sipariş şu anda doğrulanamıyor. Lütfen biraz sonra yeniden deneyin." };

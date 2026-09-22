@@ -1,4 +1,4 @@
-import { formatPrice } from "@/lib/akademi/catalog";
+import { formatPrice } from "@/lib/akademi/format";
 import { cn } from "@/lib/utils";
 
 export function CoursePrice({ priceKurus, compareAtPriceKurus, className, priceClassName, large = false }: {

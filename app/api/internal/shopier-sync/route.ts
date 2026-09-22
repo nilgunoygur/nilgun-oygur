@@ -1,21 +1,18 @@
-import { revalidatePath, revalidateTag } from "next/cache";
-import { PRODUCTS_TAG } from "@/lib/shopier/api";
-import { syncRecentShopierOrders } from "@/lib/akademi/server";
+import { akademi, catalogChangedByProvider } from "@/lib/akademi/server";
 import { isCronRequest } from "@/lib/cron-auth";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+const noStore = { "Cache-Control": "no-store" };
 
 export async function POST(request: Request) {
-  if (!isCronRequest(request)) return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
+  if (!isCronRequest(request)) return new Response(null, { status: 401, headers: noStore });
   try {
-    const result = await syncRecentShopierOrders();
-    revalidateTag(PRODUCTS_TAG, "max");
-    revalidatePath("/akademi", "layout");
-    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+    const result = await akademi().access.replayRecentOrders();
+    catalogChangedByProvider();
+    return Response.json(result, { headers: noStore });
   } catch {
-    return Response.json({ error: "Shopier sync is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ error: "Shopier sync is unavailable." }, { status: 503, headers: noStore });
   }
 }
 
+// Vercel Cron invokes GET with the same bearer secret.
 export const GET = POST;

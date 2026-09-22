@@ -5,7 +5,7 @@
 ## Implemented
 
 - Drizzle PostgreSQL schema and versioned SQL migration for the 17 initial tables, including Better Auth core/two-factor storage and a separate owner table.
-- Lazy server-only database connection using Postgres.js. Existing public builds do not require a database connection.
+- Lazy server-only database connection using node-postgres (`pg`) with Vercel `attachDatabasePool`, so Fluid compute closes idle clients before an instance suspends. Existing public builds do not require a database connection.
 - Database constraints for course/module ownership, course-scoped lesson slugs, purchase buyer/course matching, grant source/reasons, unique payment identifiers, event deduplication, TRY prices, durations, and required legal versions.
 - Pure access predicates covering student/course identity, expiry, revocation, ten-minute playback expiry, and the live join window. These are internal rules, not authenticated endpoints. Future callers must load the session and records on the server, enforce publication status, and never accept a grant supplied by the browser.
 - Migration integration tests using PGlite (embedded PostgreSQL), plus time-boundary tests. These do not require provider credentials or modify a remote database.
@@ -54,7 +54,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 - **Account capabilities** (personal access token with every scope): products, orders and webhooks all work. Until 22 September 2026, `GET /products` returned 403. Shopier enabled product reads for this account on request (their docs define 403 as a permission they grant).
 - **Schema** (migrations `0002`, `0003`): `courses.shopier_product_id/shopier_url` (required to publish), `shopier_purchases`, and `course_access.source_purchase_id` with composite foreign keys to the purchase's student and course. The unused own-checkout tables `orders` and `order_items` were removed.
 - **Webhook** `POST /api/shopier/webhook`: verifies `Shopier-Signature` (hex HMAC-SHA256 of the raw body, `SHOPIER_WEBHOOK_TOKEN`), deduplicates by `Shopier-Webhook-Id`, and stores only a payload hash in `provider_events`. Returns 500 on processing errors so Shopier retries.
-- **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise `/akademi/hesabim` grants it after the student verifies that email. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
+- **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise it is granted when the student verifies that email (Better Auth `afterEmailVerification`) or on their next verified sign-in. Page renders never grant access. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
 - **Access** runs from the payment time for the course's duration. A repeat purchase while access is active extends it (the previous grant is retired as `extended_by_purchase`).
 - **Daily sync** `GET/POST /api/internal/shopier-sync` (Bearer `CRON_SECRET`, Vercel Cron 04:00 UTC) replays the last seven days of orders. All steps are idempotent.
 - **Owner panel** `/yonetim/egitimler`: lists courses with their live Shopier title and price, sets access duration, publishes, unpublishes and archives, runs "Shopier ile eşitle", and shows recent sales and whether each is attached to an account.
@@ -63,12 +63,12 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 ### Shopier is the course catalog
 
 - **Source of truth:** the Shopier products API. `courses` only links a product to the site: slug, product ID, access duration and owner status (migration `0005` dropped the copied title, description, image, price and discount columns).
-- **Reading:** pages read title, description, image, price and discount live, with `GET /products` and `GET /products/{id}` through the Next.js data cache (10 minutes, tag `shopier-products`). Webhooks, the daily sync and "Shopier ile eşitle" invalidate that tag.
+- **Reading:** pages read title, description, image, price and discount live from `GET /products` and `GET /products/{id}`, cached by the Catalog module with `'use cache'` (revalidate 10 minutes, tag `akademi-catalog`). Product webhooks and the daily sync call `revalidateTag(tag, "max")`; owner actions call `updateTag`.
 - **What counts as a course:** only products that are *visible, in-stock and digital* are shown. With `SHOPIER_SHOW_HIDDEN_PRODUCTS=true`, set in Development and Preview only, hidden `[TEST]` products are listed too. Production never shows them, even though the database is shared.
 - **Linking:** the sync links new course products as published courses with 365 days of access, which the owner can change.
 - **Removal:** a course whose product is no longer returned is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
 - **Owner decisions stick:** archived courses are never revived.
-- **When it runs:** `/akademi` syncs at most every 10 minutes on the production deployment and in local `next dev`, but never on previews. The daily cron and the owner button run it too.
+- **When it runs:** `product.created`/`product.updated` webhooks link new products immediately; the daily cron and "Shopier ile eşitle" run the full sync (which also archives deleted products). Pages never sync: a deleted product disappears from the catalog on the next cache refresh because it is no longer returned.
 
 ### Announcement bar
 
@@ -112,9 +112,19 @@ Shopier has no sandbox or test cards. Instead:
 
 ### Verification
 
-- `pnpm test`: 36 tests pass, including 10 for purchases/webhooks (idempotency, email matching, claim-by-order, extension, concurrent claims, database constraints, signature checks).
+- `pnpm test`: 36 tests passed at the time (22 September: 44, see "Architecture update").
 - Against a local PostgreSQL 16 production build: all four migrations applied; signed webhooks recorded purchases, duplicates and bad signatures were rejected; a purchase made before registration was granted once on the first account visit; a repeat purchase extended access by the course duration; the sync endpoint required its secret and read the real Shopier API. `pnpm run test:routes` passed, including the new owner route and worker checks.
 - Not yet verified: a real Shopier payment and webhook delivery (needs a public deployment), and the account/owner screens in a signed-in browser session.
+
+## Architecture update — 22 September 2026
+
+- **Modules** (`lib/akademi`): `course-access.ts` records Shopier orders, grants, extends and reads access (`activeCourseAccess`, `activeGrant`); `catalog.ts` owns the sellable-course rule (published row + visible, in-stock, digital product + positive TRY price), linking/archiving and the owner list; `owner-commands.ts` runs every owner change with its audit row in one transaction and writes nothing when no row changed; `provider-inbox.ts` applies verified provider events once; `shopier-webhook.ts` is the Shopier adapter for it. `akademi.ts` composes them from a database, a Shopier client and config, which is how tests build the real wiring with PGlite and a fake Shopier.
+- **Server edge**: `lib/akademi/server.ts` builds the env-backed instance and holds the cached catalog reads and their invalidation. `lib/config.ts` is the only reader of environment variables and defines which features are enabled.
+- **Viewer**: `lib/auth/viewer.ts` reads the session once per request (React `cache`) with owner and MFA state; pages use `studentPage`/`ownerPage`/`ownerEnrollmentPage` (redirect or 404), Server Functions use `requireStudent`/`requireOwner` (throw). `proxy.ts` only redirects visitors without a session cookie.
+- **Fixed on the way**: product webhooks now honour `SHOPIER_SHOW_HIDDEN_PRODUCTS` like the sync; the owner price column applies the TRY rule; changing a missing course's access duration no longer writes an audit row; the account page no longer writes during render.
+- **Stack**: Next.js 16.3.6 with `cacheComponents` and `reactCompiler`, Better Auth `nextCookies()`, Vercel BotID (Basic) on sign-up, sign-in, reset, verification resend and "Siparişimi ekle", `LazyMotion` with `domAnimation`, Shopier 429 `Retry-After` handling.
+- **Verification**: `pnpm test` 44 pass, `pnpm run lint`, `tsc --noEmit`, `pnpm run build`, and `pnpm run test:routes` against a production build all pass. Catalog, course, checkout (including 404 for unknown courses), sitemap and auth pages were checked on the production build.
+- **Vercel settings to do by hand**: mark `SHOPIER_API_TOKEN`, `SHOPIER_WEBHOOK_TOKEN`, `BETTER_AUTH_SECRET`, `EMAIL_ENCRYPTION_KEY` and `CRON_SECRET` as Sensitive; move to Pro before public sales (Hobby is non-commercial and limits cron to daily).
 
 ## Local database workflow
 

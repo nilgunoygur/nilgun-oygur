@@ -1,5 +1,6 @@
 "use client";
-import { motion, useReducedMotion } from "motion/react";
+import * as m from "motion/react-m";
+import { useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 export function Reveal({
@@ -15,7 +16,7 @@ export function Reveal({
 }) {
   const reduced = useReducedMotion();
   return (
-    <motion.div
+    <m.div
       className={cn("motion-reduce:opacity-100! motion-reduce:[transform:none]!", className)}
       initial={{
         opacity: 0,
@@ -30,6 +31,6 @@ export function Reveal({
       }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
