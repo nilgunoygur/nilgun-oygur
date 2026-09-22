@@ -72,9 +72,9 @@ export function productDetails(product: ShopierProduct): ShopierProductDetails |
   };
 }
 
-/** Visible, in-stock digital products are Akademi courses. */
-export const isCourseProduct = (product: ShopierProduct) =>
-  product.type === "digital" && !product.customListing && product.stockStatus !== "outOfStock";
+/** In-stock digital products are Akademi courses; hidden ones only where test products are shown. */
+export const isCourseProduct = (product: ShopierProduct, includeHidden = false) =>
+  product.type === "digital" && (includeHidden || !product.customListing) && product.stockStatus !== "outOfStock";
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {

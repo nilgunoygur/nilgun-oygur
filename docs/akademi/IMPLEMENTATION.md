@@ -64,11 +64,11 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 - **Source of truth:** the Shopier products API. `courses` only links a product to the site: slug, product ID, access duration and owner status (migration `0005` dropped the copied title, description, image, price and discount columns).
 - **Reading:** pages read title, description, image, price and discount live, with `GET /products` and `GET /products/{id}` through the Next.js data cache (10 minutes, tag `shopier-products`). Webhooks, the daily sync and "Shopier ile eşitle" invalidate that tag.
-- **What counts as a course:** only products that are *visible, in-stock and digital* are shown.
+- **What counts as a course:** only products that are *visible, in-stock and digital* are shown. With `SHOPIER_SHOW_HIDDEN_PRODUCTS=true`, set in Development and Preview only, hidden `[TEST]` products are listed too. Production never shows them, even though the database is shared.
 - **Linking:** the sync links new course products as published courses with 365 days of access, which the owner can change.
 - **Removal:** a course whose product is no longer returned is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
 - **Owner decisions stick:** archived courses are never revived.
-- **When it runs:** `/akademi` syncs at most every 10 minutes, only on the production deployment, because Development and Preview share its database. The daily cron and the owner button run it too.
+- **When it runs:** `/akademi` syncs at most every 10 minutes on the production deployment and in local `next dev`, but never on previews. The daily cron and the owner button run it too.
 
 ### Announcement bar
 
@@ -76,7 +76,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Test products
 
-Seven hidden `[TEST]` products remain in Shopier (`51075042`, `51075057`, `51075059`, `51076812`, `51076813`, `51076814`, `51076937`). Hidden products are never shown on the site. Their demo course rows and the simulated purchase were removed from the database on 22 September 2026. Delete the products in the Shopier panel.
+Seven hidden `[TEST]` products remain in Shopier (`51075042`, `51075057`, `51075059`, `51076812`, `51076813`, `51076814`, `51076937`). Hidden products are shown only where `SHOPIER_SHOW_HIDDEN_PRODUCTS=true` (Development and Preview). Their demo course rows and the simulated purchase were removed from the database on 22 September 2026. Delete the products in the Shopier panel.
 
 ### Testing without a card
 

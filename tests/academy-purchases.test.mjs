@@ -162,6 +162,7 @@ test("the Shopier product API is the catalog: link course products, archive dele
     { title: "Kurs", description: "Açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 400, compareAtPriceKurus: 500, currency: "TRY" });
   assert.equal(productDetails(product({ media: [{ url: "https://evil.example/x.jpg" }] })).imageUrl, null);
   assert.deepEqual([product({}), product({ type: "physical" }), product({ customListing: true }), product({ stockStatus: "outOfStock" })].map(isCourseProduct), [true, false, false, false]);
+  assert.deepEqual([product({ customListing: true }), product({ customListing: true, stockStatus: "outOfStock" })].map(p => isCourseProduct(p, true)), [true, false]);
 
   // 51075042 is linked and still exists; 51075057 was deleted; four new products, only one a course.
   const catalog = [

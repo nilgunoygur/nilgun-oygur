@@ -21,9 +21,11 @@ export type CatalogCourse = {
 };
 
 const isConfigured = () => !!process.env.DATABASE_URL && !!process.env.SHOPIER_API_TOKEN;
+/** Development and Preview only: list hidden [TEST] products too. */
+export const showHiddenProducts = () => process.env.SHOPIER_SHOW_HIDDEN_PRODUCTS === "true";
 
 function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProduct | undefined | null): CatalogCourse | null {
-  const details = product && isCourseProduct(product) ? productDetails(product) : null;
+  const details = product && isCourseProduct(product, showHiddenProducts()) ? productDetails(product) : null;
   if (!details || details.currency !== "TRY") return null;
   return {
     slug: row.slug, title: details.title, description: details.description, image: details.imageUrl ?? fallbackCover,

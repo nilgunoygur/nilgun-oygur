@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/db/schema";
 import { getShopier } from "@/lib/shopier";
 import { claimPurchasesByEmail, claimShopierOrder, recordShopierOrder } from "./purchases";
 import { syncCatalogFromShopier } from "./course-sync";
+import { showHiddenProducts } from "./catalog";
 
 const HOUR = 3_600_000;
 
@@ -31,12 +32,12 @@ export async function syncRecentShopierOrders(days = 7) {
 }
 
 export function syncCatalog() {
-  return syncCatalogFromShopier(getDatabase(), getShopier());
+  return syncCatalogFromShopier(getDatabase(), getShopier(), showHiddenProducts());
 }
 
-/** Production only (other environments share its database): syncs at most every 10 minutes; never fails the page. */
+/** Production and local dev (never previews): syncs at most every 10 minutes; never fails the page. */
 export async function syncCatalogIfStale() {
-  if (process.env.VERCEL_ENV !== "production" || !process.env.DATABASE_URL || !process.env.SHOPIER_API_TOKEN) return;
+  if ((process.env.VERCEL_ENV !== "production" && process.env.NODE_ENV !== "development") || !process.env.DATABASE_URL || !process.env.SHOPIER_API_TOKEN) return;
   const key = "shopier-catalog-sync";
   const now = Date.now();
   const db = getDatabase();
