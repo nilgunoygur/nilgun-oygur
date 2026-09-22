@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight, BookOpen, Leaf } from "lucide-react";
+import { ArrowDown, ArrowUpRight, BookOpen, Clock3, Leaf } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { portrait } from "@/lib/content";
 import { formatAccess, listCatalog } from "@/lib/akademi/catalog";
@@ -51,13 +51,14 @@ export default async function Academy() {
             <article className="academy-offering" key={course.slug}>
               <Link href={`/akademi/${course.slug}`} className="academy-offering-image" aria-label={course.title + " programını incele"}>
                 <Image src={course.image} alt="" fill sizes="(max-width: 760px) 90vw, 580px" />
-                <span>{String(index + 1).padStart(2, "0")}</span>
+                <span className="academy-offering-number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="academy-access-badge"><Clock3 size={14} aria-hidden="true" />{formatAccess(course.accessDurationDays)}</span>
               </Link>
               <div className="academy-offering-body">
                 <p className="academy-kicker">ONLINE EĞİTİM</p>
                 <h3><Link href={`/akademi/${course.slug}`}>{course.title}</Link></h3>
                 <p className="academy-offering-summary">{course.summary}</p>
-                <div className="academy-course-meta"><span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>Fiyat</small><CoursePrice priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
+                <div className="academy-card-bottom"><div><small>Fiyat</small><CoursePrice priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
               </div>
             </article>
           ))}
