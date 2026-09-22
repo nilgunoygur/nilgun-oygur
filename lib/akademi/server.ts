@@ -31,14 +31,12 @@ export async function syncRecentShopierOrders(days = 7) {
 }
 
 export function syncCatalog() {
-  const store = process.env.SHOPIER_STORE;
-  if (!store) throw new Error("SHOPIER_STORE is not configured.");
-  return syncCatalogFromShopier(getDatabase(), store);
+  return syncCatalogFromShopier(getDatabase(), getShopier());
 }
 
-/** Syncs the catalog at most every 10 minutes across instances; never fails the page. */
+/** Production only (other environments share its database): syncs at most every 10 minutes; never fails the page. */
 export async function syncCatalogIfStale() {
-  if (!process.env.DATABASE_URL || !process.env.SHOPIER_STORE) return;
+  if (process.env.VERCEL_ENV !== "production" || !process.env.DATABASE_URL || !process.env.SHOPIER_API_TOKEN) return;
   const key = "shopier-catalog-sync";
   const now = Date.now();
   const db = getDatabase();

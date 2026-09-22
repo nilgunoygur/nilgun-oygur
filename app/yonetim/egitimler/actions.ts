@@ -5,8 +5,8 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, courses } from "@/lib/db/schema";
-import { parseShopierProduct } from "@/lib/shopier/api";
-import { fetchShopierProduct } from "@/lib/shopier/public-product";
+import { parseShopierProduct, productDetails } from "@/lib/shopier/api";
+import { getShopier } from "@/lib/shopier";
 import { courseFieldsFromProduct } from "@/lib/akademi/course-sync";
 import { courseSlug } from "@/lib/akademi/slug";
 import { syncCatalog } from "@/lib/akademi/server";
@@ -18,7 +18,7 @@ const linkSchema = z.object({
   accessDays: z.coerce.number().int("Erişim süresi tam gün olmalı.").min(1).max(3650),
 });
 
-/** Links a product the store page cannot list (e.g. hidden in Shopier) as a draft course. */
+/** Links a hidden Shopier product (never auto-published) as a draft course. */
 export async function linkCourse(_: FormState, formData: FormData): Promise<FormState> {
   let session;
   try { session = await requireOwner(); } catch { return { status: "error", message: "Bu işlem için yönetici doğrulaması gerekli." }; }
@@ -26,13 +26,14 @@ export async function linkCourse(_: FormState, formData: FormData): Promise<Form
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0].message };
   const product = parseShopierProduct(parsed.data.shopierLink);
   if (!product) return { status: "error", message: "Shopier ürün linki tanınmadı. Örnek: https://www.shopier.com/51075042" };
-  const lookup = await fetchShopierProduct(product.id);
-  if (lookup.status !== "found") return { status: "error", message: "Shopier ürün sayfası okunamadı. Linki kontrol edin." };
-  if (lookup.product.currency !== "TRY") return { status: "error", message: "Akademi yalnızca TL fiyatlı Shopier ürünlerini destekler." };
+  const shopierProduct = await getShopier().getProduct(product.id).catch(() => null);
+  const details = shopierProduct && productDetails(shopierProduct);
+  if (!details) return { status: "error", message: "Shopier ürünü bulunamadı. Linki kontrol edin." };
+  if (details.currency !== "TRY") return { status: "error", message: "Akademi yalnızca TL fiyatlı Shopier ürünlerini destekler." };
   try {
     const [course] = await getDatabase().insert(courses).values({
-      ...courseFieldsFromProduct(lookup.product, null),
-      slug: parsed.data.slug || courseSlug(lookup.product.title) || `egitim-${product.id}`,
+      ...courseFieldsFromProduct(details, null),
+      slug: parsed.data.slug || courseSlug(details.title) || `egitim-${product.id}`,
       accessDurationDays: parsed.data.accessDays, shopierProductId: product.id, shopierUrl: product.url, status: "draft",
     }).returning({ id: courses.id });
     await getDatabase().insert(adminAuditLog).values({ actorId: session.user.id, action: "course.link", resourceType: "course", resourceId: course.id, reason: `Shopier ürünü ${product.id}` });

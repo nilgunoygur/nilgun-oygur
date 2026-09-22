@@ -51,7 +51,7 @@ Email verification replay is an idempotent success in Better Auth once the addre
 
 Payment happens on Shopier product pages. The site records purchases from Shopier and grants course access; it has no checkout or payment form of its own.
 
-- **Account capabilities** (personal access token with every scope): `POST /products`, `GET /orders`, `GET /orders/{id}` and webhooks work. `GET /products`, `GET /products/{id}` and `PUT /products/{id}` return 403, so courses are stored in our database with their Shopier product ID and link. Products created through the API cannot be edited or deleted through it; use the Shopier panel.
+- **Account capabilities** (personal access token with every scope): products, orders and webhooks all work. Until 22 September 2026, `GET /products` returned 403. Shopier enabled product reads for this account on request (their docs define 403 as a permission they grant).
 - **Schema** (migrations `0002`, `0003`): `courses.shopier_product_id/shopier_url` (required to publish), `shopier_purchases`, and `course_access.source_purchase_id` with composite foreign keys to the purchase's student and course. The unused own-checkout tables `orders` and `order_items` were removed.
 - **Webhook** `POST /api/shopier/webhook`: verifies `Shopier-Signature` (hex HMAC-SHA256 of the raw body, `SHOPIER_WEBHOOK_TOKEN`), deduplicates by `Shopier-Webhook-Id`, and stores only a payload hash in `provider_events`. Returns 500 on processing errors so Shopier retries.
 - **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise `/akademi/hesabim` grants it after the student verifies that email. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
@@ -62,14 +62,15 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Shopier is the course catalog
 
-- **Product webhooks (primary):** the product-read API returns 403 for this account, but it can subscribe to `product.created` and `product.updated`. Shopier then pushes each product (title, description, images, price, discount, type, hidden flag). New visible digital products are published immediately, and linked courses, including hidden ones, update immediately. Each subscription signs with its own token, so `SHOPIER_WEBHOOK_TOKEN` holds a comma-separated list.
-- **Store-page sync (backfill):** every visible *digital* product on the public store page (`shopier.com/$SHOPIER_STORE`) becomes a published course with 365 days of access, which can be changed in the owner panel. Physical products are ignored.
-- **Details:** title, description, image, price and discount are copied from each product page's Open Graph tags and old-price block.
-- **Removal:** a product deleted in Shopier redirects to the store or a not-found page, and its course is archived. Network errors, timeouts or an unreadable store page never archive anything.
-- **Owner decisions stick:** the sync never re-publishes a course the owner archived or unpublished.
-- **When it runs:** `/akademi` regenerates at most every 10 minutes and runs the sync first, claimed through the `rate_limit` row `shopier-catalog-sync` so only one instance syncs. The daily cron and the owner panel's "Shopier ile eşitle" button run it too.
-- **Hidden products:** products hidden in Shopier can't be seen on the store page, so the owner links them by URL as drafts.
-- **Where sync is enabled:** `SHOPIER_STORE` is set only in Production for now, because Development and Preview share the production database.
+- **Source:** `GET /products` (all pages, hidden products included) is the catalog.
+- **What counts as a course:** a *visible, in-stock, digital* product becomes a published course with 365 days of access, which the owner can change. Physical, hidden and out-of-stock products are skipped.
+- **Details:** title, description, primary image, sale price and pre-discount price come from the product model.
+- **Removal:** a linked course whose product is no longer returned by the API is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
+- **Owner decisions stick:** archived courses are never revived.
+- **Instant updates:** `product.created` and `product.updated` webhooks apply changes immediately.
+- **When it runs:** `/akademi` regenerates at most every 10 minutes and syncs first, throttled through the `rate_limit` row `shopier-catalog-sync`. The daily cron and "Shopier ile eşitle" also run it.
+- **Hidden products:** the owner links them by URL, through `GET /products/{id}`, as drafts.
+- **Where sync runs:** page-triggered sync runs only on the production deployment (`VERCEL_ENV=production`), because Development and Preview share its database.
 
 ### Announcement bar
 
@@ -77,7 +78,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Test products
 
-Hidden `[TEST]` demo products using the Akademi artwork: `51076812` (₺1), `51076813` (₺2), `51076814` (₺3) and the discounted `51076937` (₺5 → ₺4). `pnpm run db:seed-demo` links them to demo courses, syncs their details and publishes the ones that synced. The first test products (`51075042`, `51075057`, `51075059`) are no longer used; delete all seven in the Shopier panel and archive the demo courses before launch.
+Hidden `[TEST]` demo products using the Akademi artwork: `51076812` (₺1), `51076813` (₺2), `51076814` (₺3) and the discounted `51076937` (₺5 → ₺4). `pnpm run db:seed-demo` links them as published demo courses with their Shopier details. The first test products (`51075042`, `51075057`, `51075059`) are no longer used; delete all seven in the Shopier panel and archive the demo courses before launch.
 
 ### Testing without a card
 

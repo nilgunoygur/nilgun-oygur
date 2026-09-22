@@ -149,61 +149,46 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
   assert.ok(!failed.errorDetails.includes("c@example.com"));
 });
 
-test("course details are read from the public Shopier product page", async () => {
-  const { parseShopierProductPage } = await import("../lib/shopier/public-product.ts");
-  const { parsePriceKurus } = await import("../lib/shopier/api.ts");
-  const { syncCourseFromShopier, syncCatalogFromShopier } = await import("../lib/akademi/course-sync.ts");
-  const { parseShopierStorePage } = await import("../lib/shopier/public-product.ts");
+test("the Shopier product API is the catalog: add course products, refresh, archive deleted", async () => {
+  const { parsePriceKurus, productDetails, shopierProductSchema: schemaOf } = await import("../lib/shopier/api.ts");
+  const { syncCatalogFromShopier } = await import("../lib/akademi/course-sync.ts");
   assert.equal(parsePriceKurus("950"), 95000);
   assert.equal(parsePriceKurus("2.490,50"), 249050);
-  assert.equal(parsePriceKurus("2490.5"), 249050);
   assert.equal(parsePriceKurus("abc"), null);
-  const page = (title, price, image = "https://cdn.shopier.app/pictures_large/a.jpg", currency = "TRY") => `<html><head>
-    <meta property="og:title" content="${title}"/><meta property="og:description" content="Kısa &amp; öz açıklama"/>
-    <meta property="og:image" content="${image}"/><meta property="product:price:amount" content="${price}"/>
-    <meta property="product:price:currency" content="${currency}"/></head></html>`;
-  assert.deepEqual(parseShopierProductPage(page("Doğal Taş Eğitimi", "950")), { title: "Doğal Taş Eğitimi", description: "Kısa & öz açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 95000, compareAtPriceKurus: null, currency: "TRY" });
-  const sale = page("İndirimli", "4") + '<div class="product-price-old shopier-store--product-price-old" data-price="5,00 TL">';
-  assert.equal(parseShopierProductPage(sale).compareAtPriceKurus, 500);
-  assert.equal(parseShopierProductPage(page("X", "6") + '<div class="product-price-old" data-price="5,00 TL">').compareAtPriceKurus, null);
-  assert.equal(parseShopierProductPage(page("X", "950", "https://evil.example/x.jpg")).imageUrl, null);
-  assert.equal(parseShopierProductPage("<html>Not found</html>"), null);
+  const product = (fields) => schemaOf.parse({ id: "51075042", title: "Kurs", description: "Açıklama", type: "digital", customListing: false, stockStatus: "inStock",
+    media: [{ url: "https://cdn.shopier.app/pictures_large/b.jpg", placement: 2 }, { url: "https://cdn.shopier.app/pictures_large/a.jpg", placement: 1 }],
+    priceData: { currency: "TRY", price: "2490.00", discount: false, discountedPrice: "2490.00" }, ...fields });
+  assert.deepEqual(productDetails(product({ priceData: { currency: "TRY", price: "5.00", discount: true, discountedPrice: "4.00" } })),
+    { title: "Kurs", description: "Açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 400, compareAtPriceKurus: 500, currency: "TRY" });
+  assert.equal(productDetails(product({ media: [{ url: "https://evil.example/x.jpg" }] })).imageUrl, null);
 
-  const card = (id, digital) => `<div class="product-card shopier--product-card"><a data-back-id="${id}"><div class="product-card-header"></div><div class="product-card-body">${digital ? '<span class="badge">Dijital ürün</span>' : ""}</div></a></div>`;
-  assert.deepEqual(parseShopierStorePage(card("111111", true) + card("222222", false) + card("111111", true)), [{ id: "111111", digital: true }, { id: "222222", digital: false }]);
-
-  // Store lists one new digital product and one physical one; 51075057 has been deleted in Shopier.
-  const pages = {
-    "store": `<div id="shopier--product-list-section">${card("51075042", true)}${card("60000001", true)}${card("60000002", false)}</div>`,
-    "51075042": page("Yeni Başlık", "2490"), "60000001": page("Yeni Kurs", "300"), "60000002": page("Kitap", "100"),
-  };
-  const fake = async (url) => {
-    const key = url.endsWith("/TestStore") ? "store" : url.split("/").pop();
-    if (key === "51075057") return redirectTo("https://www.shopier.com/s/notfound/1");
-    return pages[key] ? new Response(pages[key]) : new Response("", { status: 503 });
-  };
-  const redirectTo = (target) => { const response = new Response("<html></html>"); Object.defineProperty(response, "redirected", { value: true }); Object.defineProperty(response, "url", { value: target }); return response; };
-  assert.equal(await syncCourseFromShopier(db, course.id, fake), "updated");
-  assert.equal(await syncCourseFromShopier(db, course.id, fake), "unchanged");
-  const [synced] = await db.select().from(schema.courses).where(eq(schema.courses.id, course.id));
-  assert.equal(synced.title, "Yeni Başlık");
-  assert.equal(synced.priceKurus, 249000);
-  assert.equal(synced.cover, "https://cdn.shopier.app/pictures_large/a.jpg");
-  const result = await syncCatalogFromShopier(db, "TestStore", fake);
-  assert.deepEqual({ added: result.added, archived: result.archived, unchanged: result.unchanged, failed: result.failed }, { added: 1, archived: 1, unchanged: 2, failed: 0 });
+  // 51075042 is linked and still exists; 51075057 was deleted; three new products, one of each kind.
+  const catalog = [
+    product({ title: "Yeni Başlık" }),
+    product({ id: "60000001", title: "Yeni Kurs", priceData: { currency: "TRY", price: "300.00" } }),
+    product({ id: "60000002", title: "Kitap", type: "physical" }),
+    product({ id: "60000003", title: "Gizli", customListing: true }),
+    product({ id: "60000004", title: "Tükendi", stockStatus: "outOfStock" }),
+  ];
+  const source = (products, extraIds = []) => ({ listProducts: async () => ({ products, ids: new Set([...products.map(p => p.id), ...extraIds]) }) });
+  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 1, updated: 1, unchanged: 0, archived: 1, skipped: 0 });
   const bySlug = Object.fromEntries((await db.select().from(schema.courses)).map(c => [c.slug, c]));
+  assert.equal(bySlug["kurs"].title, "Yeni Başlık");
+  assert.equal(bySlug["kurs"].priceKurus, 249000);
+  assert.equal(bySlug["kurs"].cover, "https://cdn.shopier.app/pictures_large/a.jpg");
   assert.equal(bySlug["yeni-kurs"].status, "published");
-  assert.equal(bySlug["yeni-kurs"].priceKurus, 30000);
-  assert.equal(bySlug["kitap"], undefined);
   assert.equal(bySlug["diger"].status, "archived");
-  // A store outage never archives anything.
-  await assert.rejects(() => syncCatalogFromShopier(db, "TestStore", async () => new Response("", { status: 503 })));
-  assert.equal((await syncCourseFromShopier(db, course.id, async () => { throw new Error("timeout"); })), "unavailable");
+  for (const slug of ["kitap", "gizli", "tukendi"]) assert.equal(bySlug[slug], undefined);
+  assert.equal((await syncCatalogFromShopier(db, source(catalog))).unchanged, 2);
+  // A product that fails validation still counts as existing, and a failed list call archives nothing.
+  assert.equal((await syncCatalogFromShopier(db, source([], ["51075042", "60000001"]))).archived, 0);
+  await assert.rejects(() => syncCatalogFromShopier(db, { listProducts: async () => { throw new Error("503"); } }));
+  assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.slug, "yeni-kurs")))[0].status, "published");
 });
 
 test("product webhooks publish new visible digital products and keep linked courses current", async () => {
   const { handleShopierWebhook } = await import("../lib/akademi/shopier-webhook.ts");
-  const product = (fields) => JSON.stringify({ id: "70000001", title: "Kuantum Eğitimi", description: "Açıklama", type: "digital", customListing: false,
+  const product = (fields) => JSON.stringify({ id: "70000001", title: "Kuantum Eğitimi", description: "Açıklama", type: "digital", customListing: false, stockStatus: "inStock",
     media: [{ type: "image", url: "https://cdn.shopier.app/pictures_large/k.jpg", placement: 1 }],
     priceData: { currency: "TRY", price: "2490.00", discount: false, discountedPrice: "" }, ...fields });
   const send = (raw, event, id) => handleShopierWebhook(db, raw, new Headers({ "shopier-event": event, "shopier-webhook-id": id, "shopier-signature": createHmac("sha256", "product-token").update(raw).digest("hex") }), ["order-token", "product-token"]);

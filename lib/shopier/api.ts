@@ -40,8 +40,39 @@ export const shopierProductSchema = z.object({
     discount: z.boolean().nullish(),
     discountedPrice: z.string().nullish(),
   }),
+  stockStatus: z.string().nullish(),
 });
 export type ShopierProduct = z.output<typeof shopierProductSchema>;
+
+export type ShopierProductDetails = {
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  priceKurus: number;
+  compareAtPriceKurus: number | null;
+  currency: string;
+};
+
+/** Sale price, pre-discount price and primary image of a product. */
+export function productDetails(product: ShopierProduct): ShopierProductDetails | null {
+  const regular = parsePriceKurus(product.priceData.price);
+  const sale = product.priceData.discount && product.priceData.discountedPrice ? parsePriceKurus(product.priceData.discountedPrice) : null;
+  const priceKurus = sale ?? regular;
+  if (!priceKurus || priceKurus <= 0) return null;
+  const image = [...(product.media ?? [])].sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99))[0]?.url;
+  return {
+    title: product.title,
+    description: product.description,
+    imageUrl: image && /^https:\/\/cdn\.shopier\.app\/[\w./-]+$/.test(image) ? image : null,
+    priceKurus,
+    compareAtPriceKurus: sale && regular && regular > sale ? regular : null,
+    currency: product.priceData.currency,
+  };
+}
+
+/** Visible, in-stock digital products are Akademi courses. */
+export const isCourseProduct = (product: ShopierProduct) =>
+  product.type === "digital" && !product.customListing && product.stockStatus !== "outOfStock";
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {
@@ -114,6 +145,30 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         if (batch.length < 50) break;
       }
       return orders;
+    },
+    async getProduct(id: string) {
+      if (!/^\d{1,20}$/.test(id)) return null;
+      try {
+        return shopierProductSchema.parse(await call(`/products/${id}`));
+      } catch (error) {
+        if (error instanceof ShopierError && (error.status === 404 || error.status === 400)) return null;
+        throw error;
+      }
+    },
+    /** Every product (hidden ones included). `ids` also covers products that failed validation. */
+    async listProducts(maxPages = 20) {
+      const products: ShopierProduct[] = [];
+      const ids = new Set<string>();
+      for (let page = 1; page <= maxPages; page++) {
+        const batch = z.array(z.object({ id }).loose()).parse(await call(`/products?limit=50&page=${page}`));
+        for (const raw of batch) {
+          ids.add(raw.id);
+          const parsed = shopierProductSchema.safeParse(raw);
+          if (parsed.success) products.push(parsed.data);
+        }
+        if (batch.length < 50) return { products, ids };
+      }
+      throw new Error("Shopier product list exceeded the page limit.");
     },
     listWebhooks: () => call<{ id: string; event: string; url: string }[]>("/webhooks"),
     /** The signing token is returned only in this response. */
