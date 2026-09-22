@@ -73,28 +73,15 @@ export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "ca
 export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
 export const eventStatus = pgEnum("event_status", ["pending", "processed", "failed"]);
 
+// Links a Shopier product to the site. Title, price and images are read live from the Shopier API.
 export const courses = pgTable("courses", {
   id: id(),
   slug: text("slug").notNull().unique(),
-  title: text("title").notNull(),
-  description: text("description").notNull().default(""),
-  cover: text("cover"),
-  priceKurus: integer("price_kurus").notNull(),
-  currency: text("currency").notNull().default("TRY"),
+  shopierProductId: text("shopier_product_id").notNull().unique(),
   accessDurationDays: integer("access_duration_days").notNull().default(365),
-  salesEndAt: time("sales_end_at"),
-  relatedTrainingSlug: text("related_training_slug"),
-  // Payment happens on this Shopier product; its order webhooks identify the course.
-  shopierProductId: text("shopier_product_id").unique(),
-  shopierUrl: text("shopier_url"),
-  status: courseStatus("status").notNull().default("draft"),
+  status: courseStatus("status").notNull().default("published"),
   ...timestamps(),
-}, (t) => [
-  check("courses_published_sellable", sql`${t.status} <> 'published' OR (${t.shopierProductId} IS NOT NULL AND ${t.shopierUrl} IS NOT NULL)`),
-  check("courses_price_valid", sql`${t.priceKurus} > 0`),
-  check("courses_currency_try", sql`${t.currency} = 'TRY'`),
-  check("courses_duration_valid", sql`${t.accessDurationDays} > 0`),
-]);
+}, (t) => [check("courses_duration_valid", sql`${t.accessDurationDays} > 0`)]);
 export const modules = pgTable("modules", {
   id: id(),
   courseId: uuid("course_id").notNull().references(() => courses.id),
@@ -158,8 +145,7 @@ export const liveSessions = pgTable("live_sessions", {
   check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
   index("live_sessions_schedule_idx").on(t.status, t.startsAt),
 ]);
-// One row per paid Shopier order line for an academy course. Matched to a student by
-// verified email, or claimed with order number + buyer email. Snapshots never change.
+// One row per paid Shopier order line for a course, matched to a student by email.
 export const shopierPurchases = pgTable("shopier_purchases", {
   id: id(),
   shopierOrderId: text("shopier_order_id").notNull(),

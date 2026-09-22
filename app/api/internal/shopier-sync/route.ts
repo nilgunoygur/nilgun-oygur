@@ -1,22 +1,21 @@
-import { timingSafeEqual } from "node:crypto";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { PRODUCTS_TAG } from "@/lib/shopier/api";
 import { syncRecentShopierOrders } from "@/lib/akademi/server";
+import { isCronRequest } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const authorization = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${secret}`;
-  if (!secret || Buffer.byteLength(authorization) !== Buffer.byteLength(expected) || !timingSafeEqual(Buffer.from(authorization), Buffer.from(expected))) {
-    return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
-  }
+  if (!isCronRequest(request)) return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
   try {
-    return Response.json(await syncRecentShopierOrders(), { headers: { "Cache-Control": "no-store" } });
+    const result = await syncRecentShopierOrders();
+    revalidateTag(PRODUCTS_TAG, "max");
+    revalidatePath("/akademi", "layout");
+    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Shopier sync is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
 
-// Vercel Cron invokes GET with the same bearer secret; this is the safety net for missed webhooks.
 export const GET = POST;

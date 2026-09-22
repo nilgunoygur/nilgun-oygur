@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
-// Internal Shopier REST client. The server-only entry point in index.ts supplies the token.
-// This account can create products and read orders/webhooks; product reads/updates return 403.
+// Shopier REST client; the server-only index.ts supplies the token.
 const API = "https://api.shopier.com/v1";
+/** Next.js data-cache tag for product reads; invalidate it when products change. */
+export const PRODUCTS_TAG = "shopier-products";
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
 const party = z.object({ email: z.string().optional().nullable() }).partial().nullable().optional();
@@ -27,6 +28,54 @@ export const shopierOrderSchema = z.object({
 });
 export type ShopierOrder = z.output<typeof shopierOrderSchema>;
 
+const id = z.union([z.string(), z.number()]).transform(String);
+export const shopierProductSchema = z.object({
+  id,
+  title: z.string().min(1),
+  description: z.string().nullish().transform(value => value ?? ""),
+  type: z.string(),
+  customListing: z.boolean().nullish(),
+  media: z.array(z.object({ url: z.string(), placement: z.coerce.number().optional() })).nullish(),
+  priceData: z.object({
+    currency: z.string(),
+    price: z.string(),
+    discount: z.boolean().nullish(),
+    discountedPrice: z.string().nullish(),
+  }),
+  stockStatus: z.string().nullish(),
+});
+export type ShopierProduct = z.output<typeof shopierProductSchema>;
+
+export type ShopierProductDetails = {
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  priceKurus: number;
+  compareAtPriceKurus: number | null;
+  currency: string;
+};
+
+/** Sale price, pre-discount price and primary image of a product. */
+export function productDetails(product: ShopierProduct): ShopierProductDetails | null {
+  const regular = parsePriceKurus(product.priceData.price);
+  const sale = product.priceData.discount && product.priceData.discountedPrice ? parsePriceKurus(product.priceData.discountedPrice) : null;
+  const priceKurus = sale ?? regular;
+  if (!priceKurus || priceKurus <= 0) return null;
+  const image = [...(product.media ?? [])].sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99))[0]?.url;
+  return {
+    title: product.title,
+    description: product.description,
+    imageUrl: image && /^https:\/\/cdn\.shopier\.app\/[\w./-]+$/.test(image) ? image : null,
+    priceKurus,
+    compareAtPriceKurus: sale && regular && regular > sale ? regular : null,
+    currency: product.priceData.currency,
+  };
+}
+
+/** In-stock digital products are Akademi courses; hidden ones only where test products are shown. */
+export const isCourseProduct = (product: ShopierProduct, { includeHidden = false } = {}) =>
+  product.type === "digital" && (includeHidden || !product.customListing) && product.stockStatus !== "outOfStock";
+
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {
   for (const candidate of [order.billingInfo?.email, order.shippingInfo?.email]) {
@@ -36,14 +85,22 @@ export function buyerEmail(order: ShopierOrder): string | null {
   return null;
 }
 
-/** Shopier sends decimal strings such as "2750.00". */
-export function toKurus(amount: string): number {
-  if (!/^\d+(\.\d{1,2})?$/.test(amount.trim())) throw new Error("Invalid Shopier amount.");
-  const [lira, kurus = ""] = amount.trim().split(".");
+/** "950", "2490.50", "2.490,50 TL" → kuruş. */
+export function parsePriceKurus(value: string): number | null {
+  let normalized = value.replace(/\s|TL|₺/g, "");
+  if (normalized.includes(",")) normalized = normalized.replace(/\./g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+  const [lira, kurus = ""] = normalized.split(".");
   return Number(lira) * 100 + Number(kurus.padEnd(2, "0"));
 }
 
-/** Shopier-Signature is the hex HMAC-SHA256 of the raw request body, keyed with the webhook token. */
+export function toKurus(amount: string): number {
+  const kurus = parsePriceKurus(amount);
+  if (kurus === null) throw new Error("Invalid Shopier amount.");
+  return kurus;
+}
+
+/** Shopier-Signature = hex HMAC-SHA256(raw body, webhook token). */
 export function isValidWebhookSignature(rawBody: string, signature: string | null, token: string): boolean {
   if (!signature || !token) return false;
   const expected = createHmac("sha256", token).update(rawBody, "utf8").digest("hex");
@@ -51,25 +108,24 @@ export function isValidWebhookSignature(rawBody: string, signature: string | nul
   return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
 }
 
-export class ShopierError extends Error {
+class ShopierError extends Error {
   readonly status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
 export function createShopierClient(token: string, fetcher: typeof fetch = fetch) {
   if (!token) throw new Error("Shopier API token is not configured.");
-  async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async function call<T>(path: string, init: RequestInit = {}, cached = false): Promise<T> {
     const response = await fetcher(API + path, {
       ...init,
       headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${token}`, ...init.headers },
-      cache: "no-store",
+      ...(cached ? { next: { revalidate: 600, tags: [PRODUCTS_TAG] } } : { cache: "no-store" }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new ShopierError(response.status, `Shopier ${init.method ?? "GET"} ${path.split("?")[0]} failed with ${response.status}.`);
     return response.json() as Promise<T>;
   }
   return {
-    /** Returns null when the order does not exist in this shop. */
     async getOrder(id: string) {
       if (!/^\d{1,20}$/.test(id)) return null;
       try {
@@ -79,7 +135,6 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
-    /** Paid orders created at or after `since`, newest first, across pages. */
     async listOrdersSince(since: Date, maxPages = 10) {
       const orders: ShopierOrder[] = [];
       const dateStart = encodeURIComponent(since.toISOString().replace(/\.\d{3}Z$/, "+0000"));
@@ -93,28 +148,35 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       }
       return orders;
     },
-    async createProduct(input: { title: string; description: string; priceKurus: number; imageUrl: string; hidden: boolean }) {
-      const product = await call<{ id: string | number; url: string }>("/products", {
-        method: "POST",
-        body: JSON.stringify({
-          title: input.title,
-          description: input.description,
-          type: "digital",
-          media: [{ type: "image", url: input.imageUrl, placement: 1 }],
-          priceData: { currency: "TRY", price: (input.priceKurus / 100).toFixed(2), vatPercent: "20", shippingPrice: "0" },
-          stockQuantity: 100_000,
-          shippingPayer: "sellerPays",
-          customListing: input.hidden,
-        }),
-      });
-      return { id: String(product.id), url: product.url };
+    async getProduct(id: string, { cached = false } = {}) {
+      if (!/^\d{1,20}$/.test(id)) return null;
+      try {
+        return shopierProductSchema.parse(await call(`/products/${id}`, {}, cached));
+      } catch (error) {
+        if (error instanceof ShopierError && (error.status === 404 || error.status === 400)) return null;
+        throw error;
+      }
+    },
+    /** Every product (hidden ones included). `ids` also covers products that failed validation. */
+    async listProducts({ cached = false, maxPages = 20 } = {}) {
+      const products: ShopierProduct[] = [];
+      const ids = new Set<string>();
+      for (let page = 1; page <= maxPages; page++) {
+        const batch = z.array(z.object({ id }).loose()).parse(await call(`/products?limit=50&page=${page}`, {}, cached));
+        for (const raw of batch) {
+          ids.add(raw.id);
+          const parsed = shopierProductSchema.safeParse(raw);
+          if (parsed.success) products.push(parsed.data);
+        }
+        if (batch.length < 50) return { products, ids };
+      }
+      throw new Error("Shopier product list exceeded the page limit.");
     },
     listWebhooks: () => call<{ id: string; event: string; url: string }[]>("/webhooks"),
     /** The signing token is returned only in this response. */
     createWebhook: (event: string, url: string) => call<{ id: string; event: string; url: string; token: string }>("/webhooks", { method: "POST", body: JSON.stringify({ event, url }) }),
   };
 }
-export type ShopierClient = ReturnType<typeof createShopierClient>;
 
 /** Accepts a bare product id or a shopier.com product link. */
 export function parseShopierProduct(input: string): { id: string; url: string } | null {

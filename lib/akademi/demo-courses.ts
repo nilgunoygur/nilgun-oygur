@@ -1,9 +1,0 @@
-// Presentation fixtures only. Never use these prices for real orders or access grants.
-export const demoCourses = [
-  { slug: "kuantum-egitimi", title: "Kuantum Eğitimi", category: "Farkındalık", image: "academy-art-v1.png", price: 2490, lessons: 12, duration: "6 saat", description: "Düşünce kalıplarınıza yeni bir pencereden bakın. Farkındalık ve günlük uygulamalarla kendinizi keşfedin.", modules: ["Kuantum yaklaşımına giriş", "Düşünce ve farkındalık", "Niyet ve günlük pratikler", "Kişisel uygulama planı"] },
-  { slug: "bioenerji-egitimi", title: "Bioenerji Eğitimi", category: "Denge", image: "bioenerji-v1.png", price: 2990, lessons: 16, duration: "8 saat", description: "Beden farkındalığı, nefes ve odaklanma üzerine bir keşif. Kendinize zaman ayırmanın farklı yollarıyla tanışın.", modules: ["Bioenerji kavramları", "Beden farkındalığı", "Nefes ve odaklanma", "Günlük uygulamalar"] },
-  { slug: "dogal-tas-egitimi", title: "Doğal Taş Eğitimi", category: "Keşif", image: "dogal-tas-v1.png", price: 1490, lessons: 8, duration: "4 saat", description: "Doğal taşların dünyasını keşfedin. Taşları tanıma, bakım ve kişisel ritüeller üzerine ilham dolu bir başlangıç.", modules: ["Taşların dünyasına giriş", "Taşları tanımak", "Bakım ve saklama", "Kişisel koleksiyonunuz"] },
-  { slug: "regresyon-egitimi", title: "Regresyon Eğitimi", category: "İçsel yolculuk", image: "regresyon-v1.png", price: 3490, lessons: 18, duration: "9 saat", description: "Kişisel hikâyenize merakla yaklaşın. İç gözlem, duygular ve farkındalık üzerine farklı bakış açılarını inceleyin.", modules: ["Regresyon yaklaşımına giriş", "Kişisel hikâye ve iç gözlem", "Duyguları anlamak", "Farkındalık pratikleri"] },
-];
-export const demoPrice = (price: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 }).format(price);
-export const demoCourseImage = (image: string) => "/images/akademi/" + image;

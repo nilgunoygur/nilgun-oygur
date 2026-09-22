@@ -32,3 +32,12 @@ test("course addresses are ASCII slugs derived from Turkish titles", async () =>
   assert.equal(courseSlug("Çiçek & Güneş — Öz"), "cicek-gunes-oz");
   assert.equal(courseSlug("???"), "");
 });
+
+test("Shopier descriptions become plain text for cards and allowlisted HTML for the course page", async () => {
+  const { descriptionText, descriptionHtml } = await import("../lib/shopier/description.ts");
+  const html = '<h3>Program</h3><p>7 gün&nbsp;boyunca &amp; <strong>sesli</strong><br>anlatım</p><ul><li>Bir</li></ul>';
+  assert.equal(descriptionText(html), "Program 7 gün boyunca & sesli anlatım Bir");
+  assert.equal(descriptionHtml(html), "<h3>Program</h3><p>7 gün boyunca &amp; <strong>sesli</strong><br>anlatım</p><ul><li>Bir</li></ul>");
+  assert.equal(descriptionHtml('<p onclick="x()">a</p><script>alert(1)</script><img src=x onerror=y><a href="javascript:z">b</a>'), "<p>a</p>b");
+  assert.equal(descriptionHtml("1 &lt; 2 &lt;script&gt;"), "1 &lt; 2 &lt;script&gt;");
+});

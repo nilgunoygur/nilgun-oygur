@@ -23,8 +23,8 @@ before(async () => {
   ]);
   await db.insert(schema.owners).values({ userId: "owner" });
   [courseA, courseB] = await db.insert(schema.courses).values([
-    { slug: "course-a", title: "A", priceKurus: 10000 },
-    { slug: "course-b", title: "B", priceKurus: 20000 },
+    { slug: "course-a", shopierProductId: "1001001" },
+    { slug: "course-b", shopierProductId: "1001002" },
   ]).returning();
   [moduleA] = await db.insert(schema.modules).values({ courseId: courseA.id, title: "Module A" }).returning();
   // Two claimed Shopier purchases of course A by student A (an original and a renewal).
@@ -35,11 +35,10 @@ before(async () => {
 });
 after(async () => { await client.close(); });
 
-test("migration enforces prices, TRY, duration, and a Shopier product before publishing", async () => {
-  for (const fields of [{ priceKurus: -1 }, { currency: "USD" }, { accessDurationDays: 0 }]) {
-    await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "bad", title: "Bad", priceKurus: 100, ...fields }), "23514");
-  }
-  await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "unsold", title: "Unsold", priceKurus: 100, status: "published" }), "23514");
+test("courses need a unique Shopier product and a positive access duration", async () => {
+  await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "bad", shopierProductId: "1001009", accessDurationDays: 0 }), "23514");
+  await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "unlinked" }), "23502");
+  await rejectsConstraint(() => db.insert(schema.courses).values({ slug: "duplicate", shopierProductId: "1001001" }), "23505");
   await rejectsConstraint(() => db.insert(schema.shopierPurchases).values({ shopierOrderId: "1001", courseId: courseA.id, buyerEmail: "x@example.com", amountKurus: 1, currency: "TRY", accessDurationDays: 1, purchasedAt: paidAt }), "23505");
   await rejectsConstraint(() => db.insert(schema.shopierPurchases).values({ shopierOrderId: "1003", courseId: courseA.id, buyerEmail: "x@example.com", amountKurus: 1, currency: "TRY", accessDurationDays: 1, purchasedAt: paidAt, userId: "student-a" }), "23514");
 });

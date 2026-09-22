@@ -3,12 +3,14 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { getDatabase } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { getEmailOutbox } from "@/lib/email";
+import { getEmailOutbox, isConsoleEmail } from "@/lib/email";
 import { createAcademyAuth } from "./create-auth";
 
 let auth: ReturnType<typeof createAcademyAuth> | undefined;
 export function isAuthConfigured() {
-  return ["DATABASE_URL", "BETTER_AUTH_URL", "BETTER_AUTH_SECRET", "EMAIL_ENCRYPTION_KEY", "RESEND_API_KEY", "RESEND_FROM", "RESEND_REPLY_TO"].every(key => !!process.env[key]);
+  const required = ["DATABASE_URL", "BETTER_AUTH_URL", "BETTER_AUTH_SECRET", "EMAIL_ENCRYPTION_KEY"];
+  if (!isConsoleEmail()) required.push("RESEND_API_KEY", "RESEND_FROM", "RESEND_REPLY_TO");
+  return required.every(key => !!process.env[key]);
 }
 export function getAuth() {
   if (auth) return auth;

@@ -51,18 +51,47 @@ Email verification replay is an idempotent success in Better Auth once the addre
 
 Payment happens on Shopier product pages. The site records purchases from Shopier and grants course access; it has no checkout or payment form of its own.
 
-- **Account capabilities** (personal access token with every scope): `POST /products`, `GET /orders`, `GET /orders/{id}` and webhooks work. `GET /products`, `GET /products/{id}` and `PUT /products/{id}` return 403, so courses are stored in our database with their Shopier product ID and link. Products created through the API cannot be edited or deleted through it; use the Shopier panel.
+- **Account capabilities** (personal access token with every scope): products, orders and webhooks all work. Until 22 September 2026, `GET /products` returned 403. Shopier enabled product reads for this account on request (their docs define 403 as a permission they grant).
 - **Schema** (migrations `0002`, `0003`): `courses.shopier_product_id/shopier_url` (required to publish), `shopier_purchases`, and `course_access.source_purchase_id` with composite foreign keys to the purchase's student and course. The unused own-checkout tables `orders` and `order_items` were removed.
 - **Webhook** `POST /api/shopier/webhook`: verifies `Shopier-Signature` (hex HMAC-SHA256 of the raw body, `SHOPIER_WEBHOOK_TOKEN`), deduplicates by `Shopier-Webhook-Id`, and stores only a payload hash in `provider_events`. Returns 500 on processing errors so Shopier retries.
 - **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise `/akademi/hesabim` grants it after the student verifies that email. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
 - **Access** runs from the payment time for the course's duration. A repeat purchase while access is active extends it (the previous grant is retired as `extended_by_purchase`).
 - **Daily sync** `GET/POST /api/internal/shopier-sync` (Bearer `CRON_SECRET`, Vercel Cron 04:00 UTC) replays the last seven days of orders. All steps are idempotent.
-- **Owner panel** `/yonetim/egitimler`: add a course by pasting a Shopier product link, or let the site create a digital product (optionally hidden from the Shopier store); publish, unpublish and archive; see sales and whether each is attached to an account. Price changes must be made in both Shopier and the panel.
+- **Owner panel** `/yonetim/egitimler`: lists courses with their live Shopier title and price, sets access duration, publishes, unpublishes and archives, runs "Shopier ile eşitle", and shows recent sales and whether each is attached to an account.
 - **Refunds** are deliberately not implemented yet (owner decision pending).
+
+### Shopier is the course catalog
+
+- **Source of truth:** the Shopier products API. `courses` only links a product to the site: slug, product ID, access duration and owner status (migration `0005` dropped the copied title, description, image, price and discount columns).
+- **Reading:** pages read title, description, image, price and discount live, with `GET /products` and `GET /products/{id}` through the Next.js data cache (10 minutes, tag `shopier-products`). Webhooks, the daily sync and "Shopier ile eşitle" invalidate that tag.
+- **What counts as a course:** only products that are *visible, in-stock and digital* are shown. With `SHOPIER_SHOW_HIDDEN_PRODUCTS=true`, set in Development and Preview only, hidden `[TEST]` products are listed too. Production never shows them, even though the database is shared.
+- **Linking:** the sync links new course products as published courses with 365 days of access, which the owner can change.
+- **Removal:** a course whose product is no longer returned is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
+- **Owner decisions stick:** archived courses are never revived.
+- **When it runs:** `/akademi` syncs at most every 10 minutes on the production deployment and in local `next dev`, but never on previews. The daily cron and the owner button run it too.
+
+### Announcement bar
+
+`components/announcement-bar.tsx` shows a sliding strip above the header on every page. The messages are in `lib/announcements.ts`; an empty list hides the bar. It is a CSS-only marquee: it pauses on hover or focus, and stays still for visitors who have reduced motion on. The duplicate copy is hidden from screen readers and keyboard focus. When the bar is present, the header and page content move down through `--announcement-offset`.
 
 ### Test products
 
-Three hidden `[TEST]` digital products exist in Nilgün's Shopier account (`51075042` ₺1, `51075057` ₺2, `51075059` ₺3). `pnpm run db:seed-demo` adds them as published courses to the configured database. Remove them in the Shopier panel and archive the courses before launch.
+Seven hidden `[TEST]` products remain in Shopier (`51075042`, `51075057`, `51075059`, `51076812`, `51076813`, `51076814`, `51076937`). Hidden products are shown only where `SHOPIER_SHOW_HIDDEN_PRODUCTS=true` (Development and Preview). Their demo course rows and the simulated purchase were removed from the database on 22 September 2026. Delete the products in the Shopier panel.
+
+### Testing without a card
+
+Shopier has no sandbox or test cards. Instead:
+
+- **Local auth**: with `NODE_ENV=development` and no `RESEND_API_KEY`, verification and reset emails are printed to the `next dev` terminal, so registration and login work locally. Never active in deployments.
+- **Purchases**: `pnpm run shopier:simulate <email> <product-id>` sends a correctly signed `order.created` webhook to the local server using the development-only `SHOPIER_WEBHOOK_TOKEN`. It refuses non-local URLs, and the production token is sensitive in Vercel, so it cannot forge production orders.
+- **End to end**: one real ₺1 purchase of a hidden test product after the production webhook is registered, then a refund in the Shopier panel.
+
+### Security notes
+
+- Secrets exist only in Vercel and ignored local `.env*` files. Only `NEXT_PUBLIC_SITE_URL` reaches the browser. A scan of the full public git history and the client bundles found no secret values. Database, Shopier and email modules import `server-only`.
+- Webhooks require the HMAC signature; the sync and email workers require `CRON_SECRET`; owner actions require the owner role and a session-specific MFA proof; claims are rate-limited; auth has database-backed rate limits.
+- Baseline headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`.
+- Open items: Development currently shares the production Neon branch (use a separate Neon branch or local PostgreSQL via `.env.development.local` before real customer data exists); revoke the first Shopier token; the Shopier token has full account access, so keep Vercel access limited to the owner.
 
 ### Infrastructure (21 September 2026)
 
@@ -76,7 +105,8 @@ Three hidden `[TEST]` digital products exist in Nilgün's Shopier account (`5107
 1. Run `pnpm run db:migrate` **before** each deploy that adds migrations: `/akademi` is prerendered from the database at build time.
 2. Revoke the first Shopier token (it was shared in chat); only the token stored in Vercel should remain.
 3. Deploy, then subscribe the webhook and store its one-time token without printing it:
-   `pnpm run --silent shopier:webhook https://<domain> | vercel env add SHOPIER_WEBHOOK_TOKEN production --global-config ~/.vercel-nilgun`
+   `TOKENS=$(pnpm run --silent shopier:webhook https://<domain>) && printf '%s' "$TOKENS" | vercel env add SHOPIER_WEBHOOK_TOKEN production --sensitive --global-config ~/.vercel-nilgun; unset TOKENS`
+   This subscribes order.created, product.created and product.updated. Capturing first avoids losing the one-time tokens. It was done for `nilgun-oygur.vercel.app` on 21 September 2026; delete the three subscriptions and re-run it when the custom domain goes live.
    and redeploy.
 4. Make a ₺1 purchase of a test product with a registered account email and confirm the course appears in `/akademi/hesabim`.
 
