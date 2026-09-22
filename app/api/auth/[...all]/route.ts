@@ -1,16 +1,23 @@
 import { after } from "next/server";
-import { getAuth, isAuthConfigured } from "@/lib/auth";
+import { checkBotId } from "botid/server";
+import { config } from "@/lib/config";
+import { getAuth } from "@/lib/auth";
 import { deliverPendingEmails } from "@/lib/email";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+const authHeaders = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
+// Also listed in instrumentation-client.ts, which attaches the BotID challenge to these requests.
+const botChecked = /\/(sign-up\/email|sign-in\/email|request-password-reset|send-verification-email)$/;
+const sendsEmail = /\/(sign-up\/email|request-password-reset|send-verification-email)$/;
 
 async function handle(request: Request) {
-  if (!isAuthConfigured()) return Response.json({ error: "Akademi hesap işlemleri henüz kullanıma açılmadı." }, { status: 503, headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+  if (!config().enabled.auth) return Response.json({ error: "Akademi hesap işlemleri henüz kullanıma açılmadı." }, { status: 503, headers: authHeaders });
+  const path = new URL(request.url).pathname;
+  if (request.method === "POST" && botChecked.test(path) && (await checkBotId()).isBot) {
+    return Response.json({ error: "İstek doğrulanamadı." }, { status: 403, headers: authHeaders });
+  }
   const response = await getAuth().handler(request);
-  response.headers.set("Cache-Control", "no-store");
-  response.headers.set("X-Robots-Tag", "noindex");
-  if (request.method === "POST" && /\/(sign-up\/email|request-password-reset|send-verification-email)$/.test(new URL(request.url).pathname)) {
+  for (const [key, value] of Object.entries(authHeaders)) response.headers.set(key, value);
+  if (request.method === "POST" && sendsEmail.test(path)) {
     after(async () => {
       try { await deliverPendingEmails(); } catch { console.error("Akademi email delivery could not run; queued messages require retry."); }
     });

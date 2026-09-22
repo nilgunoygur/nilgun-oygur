@@ -29,7 +29,9 @@ for (const route of authRoutes) {
 for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
-  assert.match(response.headers.get("location"), /^\/akademi\/giris\?next=/);
+  const location = new URL(response.headers.get("location"), origin);
+  assert.equal(location.origin + location.pathname, new URL("/akademi/giris", origin).href, `${route} redirects to login`);
+  assert.ok(location.searchParams.get("next"), `${route} returns after login`);
 }
 for (const method of ["GET", "POST"]) {
   const response = await fetch(new URL("/api/internal/email-delivery", origin), { method });

@@ -2,7 +2,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import * as m from "motion/react-m";
+import { AnimatePresence, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,7 @@ export function PhotoCarousel({
     >
       <div className={cn("relative h-[470px] overflow-hidden rounded-[22px] bg-[#ffffff70] max-tablet:h-[350px]", book && "bg-muted")}>
         <AnimatePresence initial={false}>
-          <motion.div
+          <m.div
             key={index}
             initial={{ opacity: reduced ? 1 : 0 }}
             animate={{ opacity: 1 }}
@@ -45,7 +46,7 @@ export function PhotoCarousel({
               sizes="(max-width: 760px) 90vw, 65vw"
               className="object-contain"
             />
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
       <div className={controls}>

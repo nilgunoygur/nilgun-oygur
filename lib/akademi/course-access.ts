@@ -1,8 +1,11 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { courseAccess, courses, shopierPurchases, user } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
-import { accessExpiryFromPayment } from "./access-policy.ts";
+import { accessExpiryFromPayment, hasActiveAccess, type AccessGrant } from "./access-policy.ts";
 import type { Database } from "../db/types.ts";
+
+// Course Access: the only module that grants course access or answers "can this student use this course now?".
+// Callers pass IDs from a verified session or a verified provider event, never from the browser.
 
 type RecordResult = { purchaseIds: string[]; granted: number; reason?: "unpaid" | "no_course" | "no_email" };
 
@@ -10,6 +13,7 @@ type RecordResult = { purchaseIds: string[]; granted: number; reason?: "unpaid" 
 export async function recordShopierOrder(db: Database, order: ShopierOrder): Promise<RecordResult> {
   if (order.paymentStatus !== "paid") return { purchaseIds: [], granted: 0, reason: "unpaid" };
   const productIds = [...new Set(order.lineItems.map(item => item.productId))];
+  // Any linked course, whatever its status: archiving stops new sales but never refuses a verified payment.
   const matched = await db.select({ id: courses.id, productId: courses.shopierProductId, days: courses.accessDurationDays })
     .from(courses).where(inArray(courses.shopierProductId, productIds));
   if (matched.length === 0) return { purchaseIds: [], granted: 0, reason: "no_course" };
@@ -57,7 +61,7 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
   });
 }
 
-/** Grants every unclaimed purchase made with this verified email. */
+/** Grants every unclaimed purchase made with this verified email. Runs when the email is verified and on sign-in. */
 export async function claimPurchasesByEmail(db: Database, userId: string, email: string): Promise<number> {
   const pending = await db.select({ id: shopierPurchases.id }).from(shopierPurchases)
     .where(and(isNull(shopierPurchases.userId), eq(shopierPurchases.buyerEmail, email.trim().toLowerCase())));
@@ -66,7 +70,7 @@ export async function claimPurchasesByEmail(db: Database, userId: string, email:
   return granted;
 }
 
-type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "not_academy";
+export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "not_academy";
 
 // Claims a Shopier-fetched order (never browser data) whose buyer email matches the typed one.
 export async function claimShopierOrder(db: Database, order: ShopierOrder | null, typedEmail: string, userId: string): Promise<ClaimOutcome> {
@@ -78,4 +82,24 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   if (granted > 0) return "granted";
   const owners = await db.select({ userId: shopierPurchases.userId }).from(shopierPurchases).where(inArray(shopierPurchases.id, purchaseIds));
   return owners.every(p => p.userId === userId) ? "already_yours" : "claimed_by_other";
+}
+
+export type ActiveAccess = AccessGrant & { id: string; shopierProductId: string };
+
+/** The student's grants that are usable right now, soonest expiry first. */
+export async function activeCourseAccess(db: Database, userId: string, now = new Date()): Promise<ActiveAccess[]> {
+  const grants = await db.select({
+    id: courseAccess.id, userId: courseAccess.userId, courseId: courseAccess.courseId, startsAt: courseAccess.startsAt,
+    expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt, shopierProductId: courses.shopierProductId,
+  }).from(courseAccess).innerJoin(courses, eq(courses.id, courseAccess.courseId))
+    .where(and(eq(courseAccess.userId, userId), isNull(courseAccess.revokedAt))).orderBy(asc(courseAccess.expiresAt));
+  return grants.filter(grant => hasActiveAccess(grant, userId, grant.courseId, now));
+}
+
+/** The grant that lets this student use this course now, or null. Playback tokens and live join links start here. */
+export async function activeGrant(db: Database, userId: string, courseId: string, now = new Date()): Promise<AccessGrant | null> {
+  const [grant] = await db.select({
+    userId: courseAccess.userId, courseId: courseAccess.courseId, startsAt: courseAccess.startsAt, expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt,
+  }).from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
+  return grant && hasActiveAccess(grant, userId, courseId, now) ? grant : null;
 }

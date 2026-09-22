@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { twoFactor } from "better-auth/plugins";
+import { nextCookies } from "better-auth/next-js";
 import type { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 export type AuthEmail = {
@@ -17,6 +18,8 @@ type Dependencies = {
   enqueueEmail: (email: AuthEmail) => Promise<void>;
   markMfaSession: (sessionId: string) => Promise<void>;
   revokeUserSessions: (userId: string) => Promise<void>;
+  /** Grants Shopier purchases waiting for this verified email. Failures must never block authentication. */
+  claimPurchases: (userId: string, email: string) => Promise<void>;
 };
 
 export function createAcademyAuth(dependencies: Dependencies) {
@@ -25,6 +28,10 @@ export function createAcademyAuth(dependencies: Dependencies) {
     throw new Error("BETTER_AUTH_URL must be an HTTPS origin (HTTP is allowed only for localhost).");
   }
   if (dependencies.secret.length < 32) throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters.");
+
+  const claimSafely = async (userId: string, email: string) => {
+    try { await dependencies.claimPurchases(userId, email); } catch { console.error("Akademi purchase claim failed; the next sign-in retries it."); }
+  };
 
   return betterAuth({
     appName: "Nilgün Oygur Akademi",
@@ -57,6 +64,9 @@ export function createAcademyAuth(dependencies: Dependencies) {
       sendOnSignIn: false,
       autoSignInAfterVerification: false,
       expiresIn: 3600,
+      afterEmailVerification: async (user) => {
+        await claimSafely(user.id, user.email);
+      },
       sendVerificationEmail: async ({ user, url }) => {
         await dependencies.enqueueEmail({
           to: user.email,
@@ -89,6 +99,11 @@ export function createAcademyAuth(dependencies: Dependencies) {
     },
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
+        // Purchases made before registration, or with the email before it was verified, arrive on sign-in.
+        if (ctx.path === "/sign-in/email" && ctx.context.newSession?.user.emailVerified) {
+          await claimSafely(ctx.context.newSession.user.id, ctx.context.newSession.user.email);
+          return;
+        }
         if (!["/two-factor/verify-totp", "/two-factor/verify-backup-code"].includes(ctx.path)) return;
         const result = ctx.context.returned;
         if (!result || typeof result !== "object" || !("token" in result) || typeof result.token !== "string") return;
@@ -96,6 +111,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
         if (verified) await dependencies.markMfaSession(verified.session.id);
       }),
     },
-    plugins: [twoFactor({ issuer: "Nilgün Oygur Akademi" })],
+    // nextCookies must stay last so auth calls from Server Functions can set cookies.
+    plugins: [twoFactor({ issuer: "Nilgün Oygur Akademi" }), nextCookies()],
   });
 }

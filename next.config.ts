@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withBotId } from "botid/next/config";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -8,10 +9,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  cacheComponents: true,
+  reactCompiler: true,
   images: { remotePatterns: [new URL("https://cdn.shopier.app/**")] },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 
-export default nextConfig;
+export default withBotId(nextConfig);

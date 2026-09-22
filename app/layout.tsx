@@ -4,6 +4,8 @@ import { Header } from "@/components/header";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { announcements } from "@/lib/announcements";
 import { Footer } from "@/components/site";
+import { MotionProvider } from "@/components/motion-provider";
+import { config } from "@/lib/config";
 import "./globals.css";
 const general = localFont({
   src: [
@@ -27,9 +29,7 @@ export const metadata: Metadata = {
   },
   description:
     "Nilgün Oygur ile kendinizi keşfetme yolculuğuna çıkın. Kitaplar, eğitimler, bireysel seanslar ve kişisel gelişim yazıları.",
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-  ),
+  metadataBase: new URL(config().siteUrl),
   openGraph: {
     locale: "tr_TR",
     type: "website",
@@ -52,10 +52,12 @@ export default function RootLayout({
         <a className="fixed top-0 left-5 z-100 -translate-y-[150%] rounded-[10px] bg-white p-3 focus:translate-y-0" href="#main">
           İçeriğe geç
         </a>
-        <AnnouncementBar items={announcements} />
-        <Header />
-        <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
-        <Footer />
+        <MotionProvider>
+          <AnnouncementBar items={announcements} />
+          <Header />
+          <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
+          <Footer />
+        </MotionProvider>
       </body>
     </html>
   );

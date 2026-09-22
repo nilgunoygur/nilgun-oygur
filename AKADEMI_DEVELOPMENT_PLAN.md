@@ -19,6 +19,12 @@ Week 1 now includes the database foundation, a migrated development Neon databas
 - [x] Public Akademi promotion page, course previews, header/footer navigation, and student-login routing.
 - [ ] Database-backed sales catalog, full student and owner UI, payment fulfillment, and remaining launch scope.
 
+## Architecture update — 22 September 2026
+
+The Akademi code is organised around a few deep modules, each with its tests: **Course Access** (grants and "can this student use this course now"), **Catalog** (what a sellable course is, and its cache), **Viewer** (the per-request session, owner and MFA state), **Owner Commands** (every owner change with its audit entry in one transaction) and the **Provider Inbox** (verified provider events applied once). `lib/akademi/akademi.ts` wires them to one database, one Shopier adapter and `lib/config.ts`, the only reader of environment variables. See `CONTEXT.md` for the terms.
+
+Stack updates in the same change: Next.js 16.3.6 (security release) with Cache Components and the React Compiler, `proxy.ts`, Better Auth `nextCookies()`, node-postgres with Vercel `attachDatabasePool`, Vercel BotID on account endpoints, and `LazyMotion`.
+
 Review clarifications: renewal must retire an expired unrevoked grant in the same transaction; playback accepts audited owner grants as well as purchase grants; email delivery needs a durable outbox; draft/preview behavior must not bypass authenticated playback. Details are recorded in the implementation notes. This is an initial foundation, not completion of week 1.
 
 ## 1. Product decisions
@@ -36,7 +42,7 @@ Confirmed launch decisions:
 - Existing public pages, URLs, and visual language remain intact. The existing `/egitimlerim` pages continue to describe in-person and online trainings and link to the matching `/akademi` course where one exists.
 - Provider ownership is handed over to Nilgün at launch. Development may use Hasan's Vercel project and transferable infrastructure integrations, as authorized on 15 September 2026; see section 4.
 
-Each purchase snapshots the course price, currency, access duration, and the accepted legal text versions. Later course changes cannot shorten an existing student's access. Students may watch without limits until expiry. New lessons, including newly scheduled live sessions, published within a purchased course are included for students whose access is still active. Active access blocks duplicate purchases; expired access can be renewed with a new purchase. Archiving stops new sales without removing existing access.
+Each purchase snapshots the course price, currency, access duration, and the accepted legal text versions. Later course changes cannot shorten an existing student's access. Students may watch without limits until expiry. New lessons, including newly scheduled live sessions, published within a purchased course are included for students whose access is still active. Buying again while access is active extends it by the course duration; expired access is renewed from the new payment time. Archiving stops new sales without removing existing access.
 
 ## 2. Launch scope
 
@@ -244,6 +250,14 @@ Existing site integration:
 
 Keep Server Components as the default; isolate forms, the player, and consent controls in focused Client Components.
 
+Rendering and data rules (Next.js 16 with Cache Components):
+
+- Public catalog data is cached with `'use cache'`, `cacheTag` and `cacheLife` in the Catalog module (`lib/akademi/server.ts`). Owner Server Functions invalidate it with `updateTag`; webhooks and cron with `revalidateTag(tag, "max")`. Nothing writes during a page render.
+- Anything that depends on the visitor (session, email, grants) streams inside `<Suspense>`; the rest of the page is a static shell.
+- `proxy.ts` only redirects visitors without a session cookie. Authorization always happens in `lib/auth/viewer.ts`, from pages, Server Functions and route handlers alike.
+- Server Functions plus `useActionState`/`useOptimistic` cover forms and owner edits. TanStack Query is not used; add it only if the owner panel needs client-side filtering, polling or infinite lists.
+- Motion components use `m.*` under `LazyMotion` with `domAnimation`; anything needing `layout` or drag must switch the provider to `domMax` deliberately.
+
 ## 9. Shopier payment flow
 
 Revised 21 September 2026 after checking the Shopier Developer Portal against Nilgün's account. The legacy signed payment form ("API V1") is no longer offered; Shopier's supported integration is its REST API plus signed webhooks. Payment therefore happens entirely on Shopier product pages, and the site learns about purchases from Shopier.
@@ -255,7 +269,7 @@ Purchase sequence:
 1. `/akademi` lists published courses from the database. "Satın al" opens `/akademi/[slug]/satin-al`, which asks the student to sign in and to use their account email at Shopier, then links to the Shopier product page. Buying without an account is allowed.
 2. Shopier sends `order.created` to `/api/shopier/webhook`. The `Shopier-Signature` header (hex HMAC-SHA256 of the raw body with the webhook token) is verified in constant time; unsigned requests get 401.
 3. Each line of a paid order whose product belongs to a course is stored once in `shopier_purchases` with the buyer email, amount, payment time, and the course's access duration at that moment. Webhook IDs are deduplicated in `provider_events`, which keeps only the payload hash.
-4. If a verified account has the buyer email, access is granted in the same step. Otherwise the purchase waits and is granted when a student with that verified email opens `/akademi/hesabim`.
+4. If a verified account has the buyer email, access is granted in the same step. Otherwise the purchase waits and is granted when a student verifies that email, or on their next verified sign-in.
 5. A student who paid with a different email enters the Shopier order number and the email used at Shopier in "Siparişimi ekle". The server fetches the order from Shopier, checks the email and payment, and grants it once. Five attempts per student per hour.
 6. Access starts at the payment time and lasts the stored duration. Buying again while access is active extends it.
 7. A daily Vercel Cron call to `/api/internal/shopier-sync` re-reads the last seven days of orders, in case a webhook was missed.
@@ -275,7 +289,7 @@ Use signed-only playback identifiers. Before issuing a playback token, the serve
 - An unrevoked course-access grant from a verified purchase or an audited owner grant.
 - `starts_at <= now < expires_at` using server time.
 
-Issue a signed token valid for at most ten minutes or until access expiry, whichever comes first, and refresh during playback only after repeating the check. Do not expose signing keys, public playback IDs, or downloadable renditions, and do not publicly cache protected responses.
+Issue a signed token valid for at most ten minutes or until access expiry, whichever comes first, and refresh during playback only after repeating the check. Mux expects a playback token to stay valid for the viewing session, so the week-2 Mux spike must confirm that Mux Player accepts refreshed tokens mid-playback on long videos; if it does not, use a token lifetime of the video duration plus a margin, still capped at access expiry. `activeGrant` in the Course Access module is the check to repeat. Do not expose signing keys, public playback IDs, or downloadable renditions, and do not publicly cache protected responses.
 
 Signed streaming prevents public links and casual sharing but cannot prevent screen recording. Issued tokens and buffered media can remain usable briefly after revocation, bounded by the token lifetime.
 
@@ -315,7 +329,7 @@ Shopier does not issue invoices on Nilgün's behalf. Issuing e-Arşiv invoices f
 
 | Week | Deliverables |
 | --- | --- |
-| 1 | Accounts created in Nilgün's name. Shopier form, callback signature, and API capabilities proven with a test payment. One signed Mux video and one Resend email working. Drizzle schema and migrations. Better Auth registration, verification, login, reset, and owner two-factor. |
+| 1 | Accounts created in Nilgün's name. Shopier REST API, webhook signature, and order capabilities proven with a test payment. One signed Mux video and one Resend email working. Drizzle schema and migrations. Better Auth registration, verification, login, reset, and owner two-factor. |
 | 2 | **Testable environment.** `/akademi` catalog and course pages. Owner panel for courses, modules, video and live lessons, uploads, and publishing. Test checkout with verified fulfillment and expiring access. Protected playback, progress, join window, student calendar, and `.ics` download. |
 | 3 | Nilgün's feedback applied. Refund handling, reconciliation or manual approval list, reminder, reschedule, and recording-published emails. Legal pages and checkout consent. Cookie consent, Google Analytics, Search Console, Merchant Center feed, and Ads conversion linking. Header navigation, `/egitimlerim` links, sitemap, and route checks. |
 | 4 | Real low-value payment and refund on production. One rehearsal live session with invited students, including recording upload. Acceptance criteria verified. `pnpm lint`, `pnpm test`, and `pnpm build` pass. Launch and handover checklist completed. |
