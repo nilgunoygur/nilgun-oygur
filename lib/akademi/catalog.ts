@@ -6,13 +6,17 @@ import { courses } from "@/lib/db/schema";
 import { getShopier } from "@/lib/shopier";
 import { isCourseProduct, productDetails, type ShopierProduct } from "@/lib/shopier/api";
 import { normalizeSlug } from "@/lib/route-slug";
+import { descriptionHtml, descriptionText } from "@/lib/shopier/description";
 
 const fallbackCover = "/images/akademi/academy-art-v1.png";
 
 export type CatalogCourse = {
   slug: string;
   title: string;
-  description: string;
+  /** Plain text for cards and metadata. */
+  summary: string;
+  /** Allowlisted HTML for the course page. */
+  descriptionHtml: string;
   image: string;
   priceKurus: number;
   compareAtPriceKurus: number | null;
@@ -25,10 +29,10 @@ const isConfigured = () => !!process.env.DATABASE_URL && !!process.env.SHOPIER_A
 export const showHiddenProducts = () => process.env.SHOPIER_SHOW_HIDDEN_PRODUCTS === "true";
 
 function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProduct | undefined | null): CatalogCourse | null {
-  const details = product && isCourseProduct(product, showHiddenProducts()) ? productDetails(product) : null;
+  const details = product && isCourseProduct(product, { includeHidden: showHiddenProducts() }) ? productDetails(product) : null;
   if (!details || details.currency !== "TRY") return null;
   return {
-    slug: row.slug, title: details.title, description: details.description, image: details.imageUrl ?? fallbackCover,
+    slug: row.slug, title: details.title, summary: descriptionText(details.description), descriptionHtml: descriptionHtml(details.description), image: details.imageUrl ?? fallbackCover,
     priceKurus: details.priceKurus, compareAtPriceKurus: details.compareAtPriceKurus,
     accessDurationDays: row.accessDurationDays, shopierUrl: `https://www.shopier.com/${row.shopierProductId}`,
   };

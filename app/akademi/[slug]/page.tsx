@@ -12,7 +12,7 @@ export async function generateStaticParams() { return []; }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const course = await getCatalogCourse((await params).slug);
-  return { title: course?.title, description: course?.description, robots: { index: !!course, follow: true }, alternates: course ? { canonical: `/akademi/${course.slug}` } : undefined };
+  return { title: course?.title, description: course?.summary.slice(0, 160), robots: { index: !!course, follow: true }, alternates: course ? { canonical: `/akademi/${course.slug}` } : undefined };
 }
 
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -23,8 +23,9 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     <div className="academy-detail-grid">
       <div>
         <p className="academy-kicker">NİLGÜN OYGUR AKADEMİ</p>
-        <h1>{course.title}</h1><p className="academy-detail-intro">{course.description}</p>
+        <h1>{course.title}</h1><p className="academy-detail-intro">{course.summary}</p>
         <div className="academy-detail-image"><Image src={course.image} alt={course.title} fill sizes="(max-width:760px) 90vw, 760px" priority /></div>
+        {course.descriptionHtml && <div className="academy-description" dangerouslySetInnerHTML={{ __html: course.descriptionHtml }} />}
       </div>
       <aside className="academy-purchase-card">
         <p className="academy-kicker">KENDİNİZE BİR ALAN AÇIN</p>

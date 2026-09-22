@@ -15,14 +15,14 @@ async function linkCourse(db: Database, product: ShopierProduct) {
 }
 
 /** product.created / product.updated webhook: link a new course product; details are read live. */
-export async function applyShopierProduct(db: Database, product: ShopierProduct, includeHidden = false): Promise<"added" | "changed" | "ignored"> {
+export async function applyShopierProduct(db: Database, product: ShopierProduct, { includeHidden = false } = {}): Promise<"added" | "changed" | "ignored"> {
   const [course] = await db.select({ id: courses.id }).from(courses).where(eq(courses.shopierProductId, product.id)).limit(1);
   if (course) return "changed";
-  return isCourseProduct(product, includeHidden) && await linkCourse(db, product) ? "added" : "ignored";
+  return isCourseProduct(product, { includeHidden }) && await linkCourse(db, product) ? "added" : "ignored";
 }
 
 /** Links new course products and archives courses whose product is gone; owner-archived courses stay archived. */
-export async function syncCatalogFromShopier(db: Database, shopier: ProductSource, includeHidden = false) {
+export async function syncCatalogFromShopier(db: Database, shopier: ProductSource, { includeHidden = false } = {}) {
   const { products, ids } = await shopier.listProducts();
   const linked = await db.select({ id: courses.id, productId: courses.shopierProductId, status: courses.status }).from(courses);
   const known = new Set(linked.map(course => course.productId));
@@ -33,7 +33,7 @@ export async function syncCatalogFromShopier(db: Database, shopier: ProductSourc
     result.archived++;
   }
   for (const product of products) {
-    if (!known.has(product.id) && isCourseProduct(product, includeHidden) && await linkCourse(db, product)) result.added++;
+    if (!known.has(product.id) && isCourseProduct(product, { includeHidden }) && await linkCourse(db, product)) result.added++;
   }
   return result;
 }

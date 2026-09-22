@@ -73,7 +73,7 @@ export function productDetails(product: ShopierProduct): ShopierProductDetails |
 }
 
 /** In-stock digital products are Akademi courses; hidden ones only where test products are shown. */
-export const isCourseProduct = (product: ShopierProduct, includeHidden = false) =>
+export const isCourseProduct = (product: ShopierProduct, { includeHidden = false } = {}) =>
   product.type === "digital" && (includeHidden || !product.customListing) && product.stockStatus !== "outOfStock";
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */

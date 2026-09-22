@@ -56,7 +56,7 @@ export default async function Academy() {
               <div className="academy-offering-body">
                 <p className="academy-kicker">ONLINE EĞİTİM</p>
                 <h3><Link href={`/akademi/${course.slug}`}>{course.title}</Link></h3>
-                <p>{course.description}</p>
+                <p className="academy-offering-summary">{course.summary}</p>
                 <div className="academy-course-meta"><span>{formatAccess(course.accessDurationDays)}</span></div><div className="academy-card-bottom"><div><small>Fiyat</small><CoursePrice priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /></div><Link href={`/akademi/${course.slug}`} className={buttonVariants({ size: "pill" })}>Eğitimi keşfet <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
               </div>
             </article>

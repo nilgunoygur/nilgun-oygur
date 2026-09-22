@@ -32,7 +32,7 @@ export async function syncRecentShopierOrders(days = 7) {
 }
 
 export function syncCatalog() {
-  return syncCatalogFromShopier(getDatabase(), getShopier(), showHiddenProducts());
+  return syncCatalogFromShopier(getDatabase(), getShopier(), { includeHidden: showHiddenProducts() });
 }
 
 /** Production and local dev (never previews): syncs at most every 10 minutes; never fails the page. */
