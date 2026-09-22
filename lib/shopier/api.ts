@@ -3,6 +3,8 @@ import { z } from "zod";
 
 // Shopier REST client; the server-only index.ts supplies the token.
 const API = "https://api.shopier.com/v1";
+/** Next.js data-cache tag for product reads; invalidate it when products change. */
+export const PRODUCTS_TAG = "shopier-products";
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
 const party = z.object({ email: z.string().optional().nullable() }).partial().nullable().optional();
@@ -113,11 +115,11 @@ class ShopierError extends Error {
 
 export function createShopierClient(token: string, fetcher: typeof fetch = fetch) {
   if (!token) throw new Error("Shopier API token is not configured.");
-  async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async function call<T>(path: string, init: RequestInit = {}, cached = false): Promise<T> {
     const response = await fetcher(API + path, {
       ...init,
       headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${token}`, ...init.headers },
-      cache: "no-store",
+      ...(cached ? { next: { revalidate: 600, tags: [PRODUCTS_TAG] } } : { cache: "no-store" }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new ShopierError(response.status, `Shopier ${init.method ?? "GET"} ${path.split("?")[0]} failed with ${response.status}.`);
@@ -146,21 +148,21 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       }
       return orders;
     },
-    async getProduct(id: string) {
+    async getProduct(id: string, { cached = false } = {}) {
       if (!/^\d{1,20}$/.test(id)) return null;
       try {
-        return shopierProductSchema.parse(await call(`/products/${id}`));
+        return shopierProductSchema.parse(await call(`/products/${id}`, {}, cached));
       } catch (error) {
         if (error instanceof ShopierError && (error.status === 404 || error.status === 400)) return null;
         throw error;
       }
     },
     /** Every product (hidden ones included). `ids` also covers products that failed validation. */
-    async listProducts(maxPages = 20) {
+    async listProducts({ cached = false, maxPages = 20 } = {}) {
       const products: ShopierProduct[] = [];
       const ids = new Set<string>();
       for (let page = 1; page <= maxPages; page++) {
-        const batch = z.array(z.object({ id }).loose()).parse(await call(`/products?limit=50&page=${page}`));
+        const batch = z.array(z.object({ id }).loose()).parse(await call(`/products?limit=50&page=${page}`, {}, cached));
         for (const raw of batch) {
           ids.add(raw.id);
           const parsed = shopierProductSchema.safeParse(raw);

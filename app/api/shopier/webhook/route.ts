@@ -1,4 +1,5 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { PRODUCTS_TAG } from "@/lib/shopier/api";
 import { getDatabase } from "@/lib/db";
 import { handleShopierWebhook } from "@/lib/akademi/shopier-webhook";
 
@@ -14,6 +15,9 @@ export async function POST(request: Request) {
   const rawBody = await request.text();
   if (rawBody.length > 256_000) return new Response(null, { status: 413, headers: noStore });
   const { status, outcome } = await handleShopierWebhook(getDatabase(), rawBody, request.headers, tokens);
-  if (outcome === "added" || outcome === "updated") revalidatePath("/akademi", "layout");
+  if (outcome === "added" || outcome === "changed") {
+    revalidateTag(PRODUCTS_TAG, "max");
+    revalidatePath("/akademi", "layout");
+  }
   return Response.json({ outcome }, { status, headers: noStore });
 }

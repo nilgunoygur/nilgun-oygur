@@ -1996,8 +1996,7 @@ h1 {
 .academy-checkout-steps > p:first-child svg { display: inline; vertical-align: -4px; margin-right: 6px; }
 .academy-owner-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .academy-owner-table th, .academy-owner-table td { text-align: left; padding: 12px 10px; border-bottom: 1px solid rgb(0 0 0 / 0.08); vertical-align: top; }
-.academy-owner-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 40px; align-items: start; }
-@media (max-width: 860px) { .academy-claim, .academy-owner-grid { grid-template-columns: 1fr; padding: 24px; } .academy-owner-table { display: block; overflow-x: auto; } }
+@media (max-width: 860px) { .academy-claim { grid-template-columns: 1fr; padding: 24px; } .academy-owner-table { display: block; overflow-x: auto; } }
 .academy-security-key { overflow-wrap: anywhere; padding: 16px; background: var(--muted); border-radius: 12px; font-size: 14px; }
 @media (max-width: 900px) { .academy-auth { gap: 38px; } .academy-auth-story { padding: 30px; } }
 @media (max-width: 680px) {

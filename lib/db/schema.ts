@@ -73,29 +73,15 @@ export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "ca
 export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
 export const eventStatus = pgEnum("event_status", ["pending", "processed", "failed"]);
 
+// Links a Shopier product to the site. Title, price and images are read live from the Shopier API.
 export const courses = pgTable("courses", {
   id: id(),
   slug: text("slug").notNull().unique(),
-  title: text("title").notNull(),
-  description: text("description").notNull().default(""),
-  cover: text("cover"),
-  priceKurus: integer("price_kurus").notNull(),
-  compareAtPriceKurus: integer("compare_at_price_kurus"),
-  currency: text("currency").notNull().default("TRY"),
+  shopierProductId: text("shopier_product_id").notNull().unique(),
   accessDurationDays: integer("access_duration_days").notNull().default(365),
-  salesEndAt: time("sales_end_at"),
-  relatedTrainingSlug: text("related_training_slug"),
-  shopierProductId: text("shopier_product_id").unique(),
-  shopierUrl: text("shopier_url"),
-  status: courseStatus("status").notNull().default("draft"),
+  status: courseStatus("status").notNull().default("published"),
   ...timestamps(),
-}, (t) => [
-  check("courses_published_sellable", sql`${t.status} <> 'published' OR (${t.shopierProductId} IS NOT NULL AND ${t.shopierUrl} IS NOT NULL)`),
-  check("courses_price_valid", sql`${t.priceKurus} > 0`),
-  check("courses_compare_at_valid", sql`${t.compareAtPriceKurus} IS NULL OR ${t.compareAtPriceKurus} > ${t.priceKurus}`),
-  check("courses_currency_try", sql`${t.currency} = 'TRY'`),
-  check("courses_duration_valid", sql`${t.accessDurationDays} > 0`),
-]);
+}, (t) => [check("courses_duration_valid", sql`${t.accessDurationDays} > 0`)]);
 export const modules = pgTable("modules", {
   id: id(),
   courseId: uuid("course_id").notNull().references(() => courses.id),

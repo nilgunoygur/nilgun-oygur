@@ -1,11 +1,13 @@
 import "server-only";
 import { cache } from "react";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDatabase } from "@/lib/db";
 import { courses } from "@/lib/db/schema";
+import { getShopier } from "@/lib/shopier";
+import { isCourseProduct, productDetails, type ShopierProduct } from "@/lib/shopier/api";
 import { normalizeSlug } from "@/lib/route-slug";
 
-export const defaultCourseCover = "/images/akademi/academy-art-v1.png";
+const fallbackCover = "/images/akademi/academy-art-v1.png";
 
 export type CatalogCourse = {
   slug: string;
@@ -18,24 +20,40 @@ export type CatalogCourse = {
   shopierUrl: string;
 };
 
-const published = and(eq(courses.status, "published"), isNotNull(courses.shopierUrl));
-const fromRow = (row: typeof courses.$inferSelect): CatalogCourse => ({
-  slug: row.slug, title: row.title, description: row.description, image: row.cover ?? defaultCourseCover,
-  priceKurus: row.priceKurus, compareAtPriceKurus: row.compareAtPriceKurus, accessDurationDays: row.accessDurationDays,
-  shopierUrl: row.shopierUrl ?? "",
+const isConfigured = () => !!process.env.DATABASE_URL && !!process.env.SHOPIER_API_TOKEN;
+
+function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProduct | undefined | null): CatalogCourse | null {
+  const details = product && isCourseProduct(product) ? productDetails(product) : null;
+  if (!details || details.currency !== "TRY") return null;
+  return {
+    slug: row.slug, title: details.title, description: details.description, image: details.imageUrl ?? fallbackCover,
+    priceKurus: details.priceKurus, compareAtPriceKurus: details.compareAtPriceKurus,
+    accessDurationDays: row.accessDurationDays, shopierUrl: `https://www.shopier.com/${row.shopierProductId}`,
+  };
+}
+
+/** Shopier products by id, from the tagged data cache; empty without a token. */
+export const getProductsById = cache(async (): Promise<Map<string, ShopierProduct>> => {
+  if (!process.env.SHOPIER_API_TOKEN) return new Map();
+  const { products } = await getShopier().listProducts({ cached: true });
+  return new Map(products.map(product => [product.id, product]));
 });
 
 export async function listCatalog(): Promise<CatalogCourse[]> {
-  if (!process.env.DATABASE_URL) return [];
-  return (await getDatabase().select().from(courses).where(published).orderBy(asc(courses.createdAt))).map(fromRow);
+  if (!isConfigured()) return [];
+  const [rows, byId] = await Promise.all([
+    getDatabase().select().from(courses).where(eq(courses.status, "published")).orderBy(asc(courses.createdAt)),
+    getProductsById(),
+  ]);
+  return rows.flatMap(row => toCatalogCourse(row, byId.get(row.shopierProductId)) ?? []);
 }
 
-/** Accepts a raw route param; cached so metadata and page share one query. */
+/** Accepts a raw route param; cached so metadata and page share one lookup. */
 export const getCatalogCourse = cache(async (rawSlug: string): Promise<CatalogCourse | null> => {
   const slug = normalizeSlug(rawSlug);
-  if (!slug || !process.env.DATABASE_URL) return null;
-  const [row] = await getDatabase().select().from(courses).where(and(published, eq(courses.slug, slug))).limit(1);
-  return row ? fromRow(row) : null;
+  if (!slug || !isConfigured()) return null;
+  const [row] = await getDatabase().select().from(courses).where(and(eq(courses.status, "published"), eq(courses.slug, slug))).limit(1);
+  return row ? toCatalogCourse(row, await getShopier().getProduct(row.shopierProductId, { cached: true })) : null;
 });
 
 export const formatPrice = (kurus: number) =>

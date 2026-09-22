@@ -57,20 +57,18 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 - **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise `/akademi/hesabim` grants it after the student verifies that email. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
 - **Access** runs from the payment time for the course's duration. A repeat purchase while access is active extends it (the previous grant is retired as `extended_by_purchase`).
 - **Daily sync** `GET/POST /api/internal/shopier-sync` (Bearer `CRON_SECRET`, Vercel Cron 04:00 UTC) replays the last seven days of orders. All steps are idempotent.
-- **Owner panel** `/yonetim/egitimler`: add a course by pasting a Shopier product link, or let the site create a digital product (optionally hidden from the Shopier store); publish, unpublish and archive; see sales and whether each is attached to an account. Price changes must be made in both Shopier and the panel.
+- **Owner panel** `/yonetim/egitimler`: lists courses with their live Shopier title and price, sets access duration, publishes, unpublishes and archives, runs "Shopier ile eşitle", and shows recent sales and whether each is attached to an account.
 - **Refunds** are deliberately not implemented yet (owner decision pending).
 
 ### Shopier is the course catalog
 
-- **Source:** `GET /products` (all pages, hidden products included) is the catalog.
-- **What counts as a course:** a *visible, in-stock, digital* product becomes a published course with 365 days of access, which the owner can change. Physical, hidden and out-of-stock products are skipped.
-- **Details:** title, description, primary image, sale price and pre-discount price come from the product model.
-- **Removal:** a linked course whose product is no longer returned by the API is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
+- **Source of truth:** the Shopier products API. `courses` only links a product to the site: slug, product ID, access duration and owner status (migration `0005` dropped the copied title, description, image, price and discount columns).
+- **Reading:** pages read title, description, image, price and discount live, with `GET /products` and `GET /products/{id}` through the Next.js data cache (10 minutes, tag `shopier-products`). Webhooks, the daily sync and "Shopier ile eşitle" invalidate that tag.
+- **What counts as a course:** only products that are *visible, in-stock and digital* are shown.
+- **Linking:** the sync links new course products as published courses with 365 days of access, which the owner can change.
+- **Removal:** a course whose product is no longer returned is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
 - **Owner decisions stick:** archived courses are never revived.
-- **Instant updates:** `product.created` and `product.updated` webhooks apply changes immediately.
-- **When it runs:** `/akademi` regenerates at most every 10 minutes and syncs first, throttled through the `rate_limit` row `shopier-catalog-sync`. The daily cron and "Shopier ile eşitle" also run it.
-- **Hidden products:** the owner links them by URL, through `GET /products/{id}`, as drafts.
-- **Where sync runs:** page-triggered sync runs only on the production deployment (`VERCEL_ENV=production`), because Development and Preview share its database.
+- **When it runs:** `/akademi` syncs at most every 10 minutes, only on the production deployment, because Development and Preview share its database. The daily cron and the owner button run it too.
 
 ### Announcement bar
 
@@ -78,7 +76,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Test products
 
-Hidden `[TEST]` demo products using the Akademi artwork: `51076812` (₺1), `51076813` (₺2), `51076814` (₺3) and the discounted `51076937` (₺5 → ₺4). `pnpm run db:seed-demo` links them as published demo courses with their Shopier details. The first test products (`51075042`, `51075057`, `51075059`) are no longer used; delete all seven in the Shopier panel and archive the demo courses before launch.
+Seven hidden `[TEST]` products remain in Shopier (`51075042`, `51075057`, `51075059`, `51076812`, `51076813`, `51076814`, `51076937`). Hidden products are never shown on the site. Their demo course rows and the simulated purchase were removed from the database on 22 September 2026. Delete the products in the Shopier panel.
 
 ### Testing without a card
 

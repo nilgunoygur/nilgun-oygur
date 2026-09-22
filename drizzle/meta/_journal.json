@@ -36,6 +36,13 @@
       "when": 1790001870228,
       "tag": "0004_course_compare_at_price",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790091526999,
+      "tag": "0005_thin_courses",
+      "breakpoints": true
     }
   ]
 }
