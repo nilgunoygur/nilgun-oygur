@@ -6,6 +6,8 @@ import { articles } from "@/lib/content";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
+import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
+import { cn } from "@/lib/utils";
 export function generateStaticParams() {
   return articles.map((a) => ({ slug: a.href.slice(6) }));
 }
@@ -32,23 +34,23 @@ export default async function Article({
   if (!a) notFound();
   return (
     <>
-      <article className="article-page page-width">
-        <Link href="/blog" className="article-back">
+      <article className={cn(pageWidth, "max-w-[1180px] pt-[165px] max-tablet:pt-[140px]")}>
+        <Link href="/blog" className="mb-16 block text-[20px] text-primary max-tablet:mb-[42px]">
           ‹ &nbsp; Blog
         </Link>
-        <header className="article-header">
-          <p className="eyebrow">{a.category}</p>
-          <h1>{a.title}</h1>
-          <div className="article-meta">
-            <span className="article-author">
-              <Image src={a.authorImage} alt="" width={32} height={32} />
+        <header className="mx-auto mb-6 max-w-[900px] text-center">
+          <p className={cn(eyebrow, "text-[24px] max-tablet:text-[20px]")}>{a.category}</p>
+          <h1 className="font-display text-[60px] font-normal tracking-[0px] text-foreground max-tablet:text-[38px]">{a.title}</h1>
+          <div className={cn(articleMeta, "mt-16 mb-0 items-center justify-center gap-6 text-[20px] max-tablet:mt-8 max-tablet:flex-wrap max-tablet:gap-[14px] max-tablet:text-[13px]")}>
+            <span className="flex items-center gap-[6px]">
+              <Image src={a.authorImage} alt="" width={32} height={32} className="rounded-full max-tablet:size-7" />
               Nilgün Oygur
             </span>
             <span>{a.date}</span>
             <span>{a.duration}</span>
           </div>
         </header>
-        <div className="article-cover">
+        <div className="relative aspect-[1.484] overflow-hidden rounded-[12px] max-tablet:aspect-[1.2]">
           <Image
             src={a.image}
             alt={a.title}
@@ -57,13 +59,13 @@ export default async function Article({
             preload
           />
         </div>
-        <div className="article-body">
+        <div className="mx-auto mt-[70px] max-w-[760px] max-tablet:mt-10">
           <CopyLink />
           {a.body.map((block, i) =>
             block.tag.startsWith("h") || block.text.endsWith(":") ? (
-              <h2 key={i}>{block.text}</h2>
+              <h2 key={i} className="mt-10 mb-4 text-[28px] tracking-[-0.5px] max-tablet:text-[25px]">{block.text}</h2>
             ) : (
-              <p key={i}>{block.text}</p>
+              <p key={i} className="mb-6 text-[19px] leading-[1.8] text-[#686866] max-tablet:text-[17px]">{block.text}</p>
             ),
           )}
         </div>

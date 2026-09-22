@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formStack } from "@/lib/styles";
 
 export type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 const labels = { login: "Giriş yap", register: "Hesap oluştur", forgot: "Yenileme bağlantısı gönder", reset: "Şifremi yenile", verify: "Doğrulama bağlantısı gönder" };
@@ -72,9 +73,9 @@ export function AuthForm({ mode, configured, token, destination, initialMessage 
   }
 
   return (
-    <div className="academy-form-stack">
+    <div className={formStack}>
       {!configured && <Alert><AlertDescription>Akademi hesapları henüz kullanıma açılmadı. Yakında buradan hesabınızı oluşturabilirsiniz.</AlertDescription></Alert>}
-      {invalidReset && <Alert variant="destructive"><AlertDescription>Şifre yenileme bağlantısı geçersiz veya eksik. <Link href="/akademi/sifremi-unuttum">Yeni bağlantı isteyin.</Link></AlertDescription></Alert>}
+      {invalidReset && <Alert variant="destructive"><AlertDescription>Şifre yenileme bağlantısı geçersiz veya eksik. <Link href="/akademi/sifremi-unuttum" className="underline underline-offset-4">Yeni bağlantı isteyin.</Link></AlertDescription></Alert>}
       {message && <div role="status"><Alert><AlertDescription>{message}</AlertDescription></Alert></div>}
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       {!done && <form onSubmit={submit} aria-busy={pending}>
@@ -89,12 +90,12 @@ export function AuthForm({ mode, configured, token, destination, initialMessage 
             {mode !== "reset" && <Field><FieldLabel htmlFor="email">E-posta adresiniz</FieldLabel><Input id="email" name="email" type="email" autoComplete="email" required maxLength={254} placeholder="ornek@eposta.com" disabled={pending || !configured} /></Field>}
             {(mode === "login" || mode === "register" || mode === "reset") && <Field><FieldLabel htmlFor="password">{mode === "reset" ? "Yeni şifreniz" : "Şifreniz"}</FieldLabel><Input id="password" name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} maxLength={128} disabled={pending || !configured || invalidReset} /><FieldDescription>En az 8 karakter.</FieldDescription></Field>}
             {(mode === "register" || mode === "reset") && <Field data-invalid={error === "Şifreler eşleşmiyor."}><FieldLabel htmlFor="confirmPassword">Şifrenizi tekrar girin</FieldLabel><Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={128} aria-invalid={error === "Şifreler eşleşmiyor."} disabled={pending || !configured || invalidReset} /></Field>}
-            {mode === "login" && <div className="academy-form-options"><Field orientation="horizontal"><Checkbox id="remember" checked={remember} onCheckedChange={setRemember} disabled={pending || !configured} /><FieldLabel htmlFor="remember">Beni hatırla</FieldLabel></Field><Link href="/akademi/sifremi-unuttum">Şifremi unuttum</Link></div>}
+            {mode === "login" && <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap"><Field orientation="horizontal" className="w-auto"><Checkbox id="remember" checked={remember} onCheckedChange={setRemember} disabled={pending || !configured} /><FieldLabel htmlFor="remember">Beni hatırla</FieldLabel></Field><Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link></div>}
           </>}
           <Button type="submit" size="pill" className="w-full min-h-12" disabled={pending || !configured || invalidReset}>{pending ? <LoaderCircle data-icon="inline-start" className="animate-spin motion-reduce:animate-none" /> : null}{pending ? "Lütfen bekleyin…" : mfa ? "Doğrula ve giriş yap" : labels[mode]}{!pending && <ArrowRight data-icon="inline-end" />}</Button>
         </FieldGroup>
       </form>}
-      <nav className="academy-auth-links" aria-label="Hesap işlemleri">
+      <nav className="flex flex-col gap-4 text-center text-[14px] [&_a]:underline [&_a]:underline-offset-4" aria-label="Hesap işlemleri">
         {mode === "login" ? <><span>Henüz hesabınız yok mu? <Link href="/akademi/kayit">Hesap oluşturun</Link></span><Link href="/akademi/dogrulama">Doğrulama e-postasını yeniden gönder</Link></> : <Link href="/akademi/giris">Giriş sayfasına dön</Link>}
       </nav>
     </div>

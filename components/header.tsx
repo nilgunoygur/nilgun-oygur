@@ -17,13 +17,14 @@ import {
 import { nav as links } from "@/lib/content";
 import { AccountLink } from "@/components/account-link";
 import { AcademyNavLink } from "@/components/academy-nav-link";
+import { brand, brandLogo } from "@/lib/styles";
 export function Header() {
   const pathname = usePathname();
   const reduced = useReducedMotion();
   const [open, setOpen] = useState(false);
   return (
     <motion.header
-      className="site-header"
+      className="fixed top-[calc(16px+var(--announcement-offset,0px))] left-1/2 z-40 flex h-[70px] w-[min(860px,calc(100%-40px))] [transform:translateX(-50%)] items-center justify-between rounded-[32px] bg-white/96 px-[26px] shadow-[0_5px_12px_#00000007,0_1px_2px_#00000004] backdrop-blur-[16px] max-tablet:top-[calc(12px+var(--announcement-offset,0px))] max-tablet:h-16 max-tablet:px-[18px] motion-reduce:opacity-100! motion-reduce:[transform:translateX(-50%)]!"
       initial={{ opacity: 0, transform: "translateX(-50%) translateY(-100px)" }}
       animate={{ opacity: 1, transform: "translateX(-50%) translateY(0px)" }}
       transition={{
@@ -32,26 +33,27 @@ export function Header() {
         ease: [0.23, 1, 0.32, 1],
       }}
     >
-      <Link href="/" className="brand" aria-label="Nilgün Oygur — Anasayfa">
+      <Link href="/" className={brand} aria-label="Nilgün Oygur — Anasayfa">
         <Image
           src="/images/TsTjnwVPkEfzrtoq3abevoFKEpU.png"
           alt=""
           width={42}
           height={42}
+          className={brandLogo}
         />
         <span>Nilgün Oygur</span>
       </Link>
-      <nav aria-label="Ana menü" className="desktop-nav">
+      <nav aria-label="Ana menü" className="flex items-center gap-[22px] text-[14px] font-medium text-muted-foreground max-tablet:hidden">
         {links.map((link) => link.href === "/akademi"
           ? <AcademyNavLink key={link.href} label={link.label} href={link.href} current={pathname.startsWith(link.href)} />
           : (
-            <Link key={link.href} href={link.href} aria-current={pathname.startsWith(link.href) ? "page" : undefined}>
+            <Link key={link.href} href={link.href} aria-current={pathname.startsWith(link.href) ? "page" : undefined} className="transition-colors duration-200 hover:text-foreground aria-[current]:text-foreground">
               {link.label}
             </Link>
           ))}
         <AccountLink />
       </nav>
-      <div className="mobile-nav">
+      <div className="hidden max-tablet:block">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             render={

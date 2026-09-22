@@ -48,13 +48,13 @@ export default function RootLayout({
       lang="tr"
       className={`${general.variable} ${recoleta.variable}`}
     >
-      <body>
-        <a className="skip-link" href="#main">
+      <body style={announcements.length ? ({ "--announcement-offset": "38px" } as React.CSSProperties) : undefined}>
+        <a className="fixed top-0 left-5 z-100 -translate-y-[150%] rounded-[10px] bg-white p-3 focus:translate-y-0" href="#main">
           İçeriğe geç
         </a>
         <AnnouncementBar items={announcements} />
         <Header />
-        <main id="main">{children}</main>
+        <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
         <Footer />
       </body>
     </html>

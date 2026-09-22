@@ -5,22 +5,29 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { articleMeta } from "@/lib/styles";
+
+const controls = "mt-6 flex items-center justify-center gap-4 [&_button]:rounded-full";
 export function PhotoCarousel({
   images,
   label = "Etkinlik fotoğrafları",
+  book = false,
 }: {
   images: string[];
   label?: string;
+  /** Book preview: taller pages on a muted background. */
+  book?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const reduced = useReducedMotion();
   return (
     <div
-      className="photo-carousel"
+      className="m-auto max-w-[850px]"
       aria-roledescription="slayt gösterisi"
       aria-label={label}
     >
-      <div className="gallery-window">
+      <div className={cn("relative h-[470px] overflow-hidden rounded-[22px] bg-[#ffffff70] max-tablet:h-[350px]", book && "bg-muted")}>
         <AnimatePresence initial={false}>
           <motion.div
             key={index}
@@ -28,7 +35,7 @@ export function PhotoCarousel({
             animate={{ opacity: 1 }}
             exit={{ opacity: reduced ? 1 : 0 }}
             transition={{ duration: 0.25 }}
-            className="gallery-photo"
+            className={cn("relative", book ? "h-[620px] max-tablet:h-[430px]" : "h-[470px] max-tablet:h-80")}
             style={{ position: "absolute", inset: 0 }}
           >
             <Image
@@ -36,11 +43,12 @@ export function PhotoCarousel({
               alt={`${label} — ${index + 1}. fotoğraf`}
               fill
               sizes="(max-width: 760px) 90vw, 65vw"
+              className="object-contain"
             />
           </motion.div>
         </AnimatePresence>
       </div>
-      <div className="carousel-controls">
+      <div className={controls}>
         <Button
           variant="outline"
           size="icon-lg"
@@ -49,7 +57,7 @@ export function PhotoCarousel({
         >
           <ArrowLeft />
         </Button>
-        <span aria-live="polite">
+        <span aria-live="polite" className="text-[13px] text-muted-foreground">
           {index + 1} / {images.length}
         </span>
         <Button
@@ -72,20 +80,22 @@ type Article = {
   date: string;
   duration: string;
 };
-export function ArticleCard({ article }: { article: Article }) {
+export function ArticleCard({ article, className, card = false }: { article: Article; className?: string; card?: boolean }) {
+  const inset = card && "mx-[15px]";
   return (
-    <Link href={article.href} className="article-card">
-      <div className="article-image">
+    <Link href={article.href} className={cn("group block min-w-0", card && "rounded-[16px] bg-white px-[9px] pt-[9px] pb-6", className)}>
+      <div className="relative mb-[22px] h-[260px] overflow-hidden rounded-[18px] max-tablet:h-[240px]">
         <Image
           src={article.image}
           alt={article.title}
           fill
           sizes="(max-width: 760px) 90vw, 33vw"
+          className="transition-transform duration-500 group-hover:scale-[1.035]"
         />
       </div>
-      <p className="article-category">{article.category}</p>
-      <h3>{article.title}</h3>
-      <div className="article-meta">
+      <p className={cn("mb-3 text-[14px] text-primary", inset)}>{article.category}</p>
+      <h3 className={cn("text-[24px] leading-[1.35]", inset)}>{article.title}</h3>
+      <div className={cn(articleMeta, "mt-5", inset)}>
         <span>{article.date}</span>
         <span>{article.duration}</span>
       </div>
@@ -101,13 +111,13 @@ export function ArticleCarousel({ articles }: { articles: Article[] }) {
       behavior: reduced ? "instant" : "smooth",
     });
   return (
-    <div className="article-carousel">
-      <div className="article-track" ref={ref}>
+    <div className="min-w-0 overflow-hidden">
+      <div className="flex snap-x snap-mandatory gap-6 overflow-x-auto pb-[10px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" ref={ref}>
         {articles.map((a) => (
-          <ArticleCard key={a.href} article={a} />
+          <ArticleCard key={a.href} article={a} className="shrink-0 grow-0 basis-[calc((100%-48px)/3)] snap-start max-tablet:basis-[88%]" />
         ))}
       </div>
-      <div className="carousel-controls">
+      <div className={controls}>
         <Button
           variant="outline"
           size="icon-lg"
@@ -146,7 +156,7 @@ export function CopyLink() {
       >
         {status === "Bağlantı kopyalandı" ? <Check /> : <Copy />} Copy Link
       </Button>
-      <span className="copy-status" role="status">
+      <span className="mt-[10px] mb-6 block min-h-5 text-[13px] text-primary" role="status">
         {status}
       </span>
     </>
@@ -156,17 +166,17 @@ export function CopyLink() {
 export function GalleryStrip({ images }: { images: string[] }) {
   const [paused, setPaused] = useState(false);
   return (
-    <div className="journey-gallery">
-      <div className="gallery-strip" data-paused={paused}>
-        <div className="gallery-strip-track">
+    <div className="text-center">
+      <div className="group ml-[calc(50%-50vw)] w-screen overflow-hidden py-10 motion-reduce:overflow-x-auto" data-paused={paused}>
+        <div className="flex w-max animate-gallery-drift group-focus-within:[animation-play-state:paused] group-data-[paused=true]:[animation-play-state:paused] pointer-fine:group-hover:[animation-play-state:paused] motion-reduce:animate-none">
           {[0, 1].map((copy) => (
             <div
-              className="gallery-strip-group"
+              className={cn("flex gap-4 pr-4", copy === 1 && "motion-reduce:hidden")}
               key={copy}
               aria-hidden={copy === 1}
             >
               {images.map((src, i) => (
-                <div className="gallery-strip-photo" key={src}>
+                <div className="relative h-[400px] w-[300px] overflow-hidden rounded-[16px] even:-translate-y-[30px] max-tablet:h-80 max-tablet:w-[240px]" key={src}>
                   <Image
                     src={src}
                     alt={copy ? "" : `Etkinliklerimizden ${i + 1}. fotoğraf`}
@@ -184,6 +194,7 @@ export function GalleryStrip({ images }: { images: string[] }) {
         size="pill"
         onClick={() => setPaused(!paused)}
         aria-pressed={paused}
+        className="motion-reduce:hidden"
       >
         {paused ? <Play /> : <Pause />}
         {paused ? "Fotoğrafları oynat" : "Fotoğrafları duraklat"}

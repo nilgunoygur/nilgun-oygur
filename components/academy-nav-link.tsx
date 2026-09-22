@@ -10,7 +10,7 @@ export function AcademyNavLink({ label, href, current, onNavigate }: { label: st
   const reduced = useReducedMotion();
   return <MotionLink
     href={href}
-    className="academy-nav-highlight"
+    className="inline-flex items-center gap-2 rounded-[99px] bg-forest px-[17px] py-[10px] text-white! shadow-[0_4px_16px_#224c4020] transition-colors duration-200 hover:bg-forest-hover"
     aria-current={current ? "page" : undefined}
     onClick={onNavigate}
     initial="rest"
@@ -22,7 +22,7 @@ export function AcademyNavLink({ label, href, current, onNavigate }: { label: st
   >
     {label}
     <motion.span
-      className="academy-nav-arrow"
+      className="inline-flex text-lime"
       aria-hidden="true"
       variants={{ rest: { rotate: 0, x: 0 }, active: reduced ? { rotate: 45 } : { rotate: 45, x: 3 } }}
       transition={reduced ? { duration: 0 } : spring}

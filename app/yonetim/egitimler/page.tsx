@@ -8,6 +8,10 @@ import { productDetails } from "@/lib/shopier/api";
 import { setAccessDuration, setCourseStatus, syncCatalogNow } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { accountHeader, accountPage, accountTitle, kicker, pageWidth } from "@/lib/styles";
+import { cn } from "@/lib/utils";
+
+const ownerTable = "w-full border-collapse text-[15px] max-[861px]:block max-[861px]:overflow-x-auto [&_:is(th,td)]:border-b [&_:is(th,td)]:border-black/8 [&_:is(th,td)]:px-[10px] [&_:is(th,td)]:py-3 [&_:is(th,td)]:text-left [&_:is(th,td)]:align-top";
 
 export const metadata = { title: "Eğitimler" };
 const statusLabel = { draft: "Taslak", published: "Yayında", archived: "Arşivde" } as const;
@@ -26,13 +30,13 @@ export default async function OwnerCourses() {
     getProductsById(),
   ]);
   const titleOf = (productId: string) => products.get(productId)?.title ?? `Shopier ürünü ${productId}`;
-  return <section className="academy-account page-width">
-    <header>
-      <div><p className="academy-kicker">AKADEMİ YÖNETİMİ</p><h1>Eğitimler ve satışlar</h1><p>Eğitimler Shopier mağazanızdan gelir: görünür, stokta olan dijital ürünler otomatik eklenir, silinenler kaldırılır. Başlık, görsel ve fiyatı Shopier’de düzenleyin.</p></div>
+  return <section className={cn(pageWidth, accountPage)}>
+    <header className={accountHeader}>
+      <div><p className={kicker}>AKADEMİ YÖNETİMİ</p><h1 className={accountTitle}>Eğitimler ve satışlar</h1><p>Eğitimler Shopier mağazanızdan gelir: görünür, stokta olan dijital ürünler otomatik eklenir, silinenler kaldırılır. Başlık, görsel ve fiyatı Shopier’de düzenleyin.</p></div>
       <div className="flex flex-wrap items-center gap-4"><form action={syncCatalogNow}><Button size="pill">Shopier ile eşitle</Button></form><Link className="underline" href="/yonetim">Yönetim ana sayfası</Link></div>
     </header>
     <h2 className="mb-4 text-2xl">Eğitimler</h2>
-    {rows.length === 0 ? <p>Henüz eğitim yok. Shopier’de görünür bir dijital ürün ekleyin.</p> : <table className="academy-owner-table">
+    {rows.length === 0 ? <p>Henüz eğitim yok. Shopier’de görünür bir dijital ürün ekleyin.</p> : <table className={ownerTable}>
       <thead><tr><th>Eğitim</th><th>Fiyat</th><th>Erişim</th><th>Satış</th><th>Durum</th></tr></thead>
       <tbody>{rows.map(course => {
         const details = products.get(course.productId);
@@ -51,7 +55,7 @@ export default async function OwnerCourses() {
       })}</tbody>
     </table>}
     <h2 className="mb-4 mt-12 text-2xl">Son satışlar</h2>
-    {recent.length === 0 ? <p>Henüz satış yok.</p> : <table className="academy-owner-table">
+    {recent.length === 0 ? <p>Henüz satış yok.</p> : <table className={ownerTable}>
       <thead><tr><th>Tarih</th><th>Eğitim</th><th>Alıcı</th><th>Tutar</th></tr></thead>
       <tbody>{recent.map(sale => <tr key={sale.id}><td>{date.format(sale.at)}<br /><small>#{sale.order}</small></td><td>{titleOf(sale.productId)}</td><td>{sale.email}<br /><small>{sale.claimed ? "Hesaba eklendi" : "Hesap bekleniyor"}</small></td><td>{formatPrice(sale.amount)}</td></tr>)}</tbody>
     </table>}

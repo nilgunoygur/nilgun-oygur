@@ -20,7 +20,7 @@ export function IntroVideo() {
   return (
     <video
       ref={ref}
-      className="process-video"
+      className="h-[500px] w-[280px] max-w-full justify-self-center rounded-[24px] bg-accent object-cover max-tablet:h-[460px]"
       src="/videos/journey.mp4"
       controls
       muted

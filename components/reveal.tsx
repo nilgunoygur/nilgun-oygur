@@ -1,6 +1,7 @@
 "use client";
 import { motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 export function Reveal({
   children,
   className,
@@ -15,7 +16,7 @@ export function Reveal({
   const reduced = useReducedMotion();
   return (
     <motion.div
-      className={`reveal ${className ?? ""}`}
+      className={cn("motion-reduce:opacity-100! motion-reduce:[transform:none]!", className)}
       initial={{
         opacity: 0,
         transform: `translateY(${from === "top" ? -50 : 24}px)`,
