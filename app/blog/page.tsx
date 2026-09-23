@@ -7,7 +7,11 @@ import { ArticleCard } from "@/components/sliders";
 import { Reveal } from "@/components/reveal";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-export const metadata: Metadata = { title: "Yazılarım" };
+export const metadata: Metadata = {
+  title: "Yazılarım",
+  description: "Nilgün Oygur'un kişisel gelişim, farkındalık ve dönüşüm üzerine yazılarını keşfedin.",
+  alternates: { canonical: "/blog" },
+};
 export default function Blog() {
   return <Suspense fallback={<div className="min-h-[70vh]" />}><BlogContent /></Suspense>;
 }

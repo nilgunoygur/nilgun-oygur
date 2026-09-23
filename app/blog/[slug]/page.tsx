@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { articles as importedArticles } from "@/lib/content";
-import { getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { articleBodyText, articlePlainText, getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
@@ -23,10 +23,22 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const a = await findArticle(params);
+  if (!a) return { robots: { index: false, follow: true } };
+
+  const description = articlePlainText(articleBodyText(a)).slice(0, 160);
+  const image = { url: a.image, alt: a.title };
   return {
-    title: a?.title,
-    description: a?.body[0]?.text,
-    openGraph: { type: "article", title: a?.title, images: a ? [a.image] : [] },
+    title: a.title,
+    description,
+    alternates: { canonical: a.href },
+    openGraph: {
+      type: "article",
+      title: a.title,
+      description,
+      url: a.href,
+      images: [image],
+    },
+    twitter: { card: "summary_large_image", title: a.title, description, images: [image] },
   };
 }
 export default async function Article({
