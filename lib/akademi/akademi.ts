@@ -2,7 +2,7 @@ import type { Config } from "../config.ts";
 import type { Database } from "../db/types.ts";
 import type { ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
-import { findCatalogCourse, listCatalog, ownerCatalog, productTitles, syncCatalogFromShopier } from "./catalog.ts";
+import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalogFromShopier } from "./catalog.ts";
 import { setAccessDuration, setCourseStatus, syncCatalogAsOwner, type CourseStatus } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
@@ -26,7 +26,7 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
     catalog: {
       list: async () => listCatalog(db, await products(), options),
       find: (slug: string) => findCatalogCourse(db, slug, id => shopier.getProduct(id), options),
-      titles: async () => productTitles(await products()),
+      cards: async () => productCards(await products()),
       sync: syncCatalog,
     },
     access: {

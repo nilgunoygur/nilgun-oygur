@@ -64,7 +64,8 @@ export function Header() {
         </Suspense>
         <AccountLink />
       </nav>
-      <div className="hidden max-tablet:block">
+      <div className="hidden items-center gap-2 max-tablet:flex">
+        <AccountLink compact />
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             render={
@@ -93,7 +94,6 @@ export function Header() {
                     {link.label}
                   </Link>
                 ))}
-              <AccountLink onNavigate={() => setOpen(false)} />
             </nav>
           </SheetContent>
         </Sheet>

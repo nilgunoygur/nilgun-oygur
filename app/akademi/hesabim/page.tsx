@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { BookOpen } from "lucide-react";
+import Image from "next/image";
+import { ArrowUpRight, BookOpen, Check, Clock3 } from "lucide-react";
 import { studentPage } from "@/lib/auth/viewer";
-import { akademi, courseTitles } from "@/lib/akademi/server";
-import { SignOut } from "@/components/akademi/sign-out";
-import { ClaimOrderForm } from "@/components/akademi/claim-order-form";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { akademi, courseCards } from "@/lib/akademi/server";
+import { fallbackCover } from "@/lib/akademi/catalog";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { buttonVariants } from "@/components/ui/button";
 import { accountHeader, accountPage, accountTitle, kicker, pageWidth } from "@/lib/styles";
@@ -25,13 +24,27 @@ export default function AccountPage() {
 
 async function Account() {
   const viewer = await studentPage();
-  const [access, titles] = await Promise.all([akademi().access.active(viewer.user.id), courseTitles()]);
+  const [access, cards] = await Promise.all([akademi().access.active(viewer.user.id), courseCards()]);
   return <>
-    <header className={accountHeader}><div><p className={kicker}>AKADEMİ · KİŞİSEL ALANINIZ</p><h1 className={accountTitle}>Merhaba, {viewer.user.name}.</h1><p>Eğitimleriniz ve hesabınız burada.</p></div><div className="flex flex-wrap items-center gap-4">{viewer.owner && <Link className={buttonVariants({ variant: "secondary", size: "pill" })} href="/yonetim">Yönetim alanı</Link>}<SignOut /></div></header>
-    {access.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Öğrenme yolculuğunuz burada başlıyor.</EmptyTitle><EmptyDescription>Henüz aktif bir eğitim erişiminiz bulunmuyor. Size uygun eğitimleri keşfedebilirsiniz.</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ size: "pill" })} href="/akademi">Eğitimleri keşfet</Link></EmptyContent></Empty> : <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">{access.map(item => <Card key={item.id}><CardHeader><CardTitle>{titles[item.shopierProductId] ?? "Akademi eğitimi"}</CardTitle><CardDescription>Aktif eğitim erişimi</CardDescription></CardHeader><CardContent>Erişim bitişi: {expiry.format(item.expiresAt)}</CardContent><CardFooter>Ders alanı hazırlandığında eğitiminize buradan ulaşabilirsiniz.</CardFooter></Card>)}</div>}
-    <section className="mt-16 grid grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-10 rounded-[20px] bg-mist p-9 max-[861px]:grid-cols-1 max-[861px]:p-6" aria-labelledby="claim-title">
-      <div><p className={cn(kicker, "leading-[1.7]")}>SATIN ALDIĞINIZ EĞİTİM GÖRÜNMÜYOR MU?</p><h2 id="claim-title" className="my-3 text-[30px]">Siparişinizi ekleyin.</h2><p className="leading-[1.7]">Shopier’de <strong>{viewer.user.email}</strong> adresini kullandıysanız eğitiminiz otomatik eklenir. Farklı bir e-posta kullandıysanız sipariş numaranızla ekleyebilirsiniz.</p></div>
-      <ClaimOrderForm />
-    </section>
+    <header className={accountHeader}><div><p className={kicker}>AKADEMİ · KİŞİSEL ALANINIZ</p><h1 className={accountTitle}>Merhaba, {viewer.user.name}.</h1><p>Eğitimleriniz ve hesabınız burada.</p></div></header>
+    {access.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Öğrenme yolculuğunuz burada başlıyor.</EmptyTitle><EmptyDescription>Henüz aktif bir eğitim erişiminiz bulunmuyor. Size uygun eğitimleri keşfedebilirsiniz.</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ size: "pill" })} href="/akademi">Eğitimleri keşfet</Link></EmptyContent></Empty> : <div className="grid grid-cols-2 gap-8 max-tablet:grid-cols-1">{access.map(item => {
+      const course = cards[item.shopierProductId];
+      const title = course?.title ?? "Akademi eğitimi";
+      const href = `/akademi/hesabim/${item.courseId}`;
+      return <article key={item.id} className="flex min-w-0 flex-col rounded-[24px] border border-[#e1e8dc] bg-white p-[10px] shadow-[0_6px_25px_#19392f08]">
+        <Link href={href} aria-label={`${title} eğitimine devam et`} className="group relative block aspect-[1.65] overflow-hidden rounded-[17px] bg-mist">
+          <Image src={course?.image ?? fallbackCover} alt="" fill sizes="(max-width: 760px) 90vw, (max-width: 1280px) 46vw, 590px" className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" />
+          <span className="absolute top-4 left-4 inline-flex items-center gap-2 rounded-full bg-forest px-3 py-2 text-xs font-semibold text-white shadow-sm"><Check size={14} aria-hidden="true" />Erişiminiz aktif</span>
+        </Link>
+        <div className="flex flex-1 flex-col px-[18px] pt-6 pb-[18px] max-tablet:px-[10px]">
+          <p className="mb-3 text-[10px] font-semibold tracking-[1.6px] text-stone">EĞİTİMİNİZ</p>
+          <h2 className="mb-5 text-[28px] leading-snug max-tablet:text-[25px]"><Link href={href}>{title}</Link></h2>
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-5 border-t border-border pt-5">
+            <div className="flex items-center gap-2.5 text-stone"><Clock3 size={17} aria-hidden="true" /><div><span className="block text-[11px]">Erişim bitişi</span><span className="mt-1 block text-sm text-foreground">{expiry.format(item.expiresAt)}</span></div></div>
+            <Link className={buttonVariants({ size: "pill", className: "min-h-11 bg-forest hover:bg-forest/90" })} href={href}>Eğitime devam et <ArrowUpRight size={17} aria-hidden="true" /></Link>
+          </div>
+        </div>
+      </article>;
+    })}</div>}
   </>;
 }

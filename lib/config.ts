@@ -15,6 +15,10 @@ export function parseConfig(env: Env) {
   const resendReady = !!(resend.apiKey && resend.from && resend.replyTo);
   return {
     databaseUrl,
+    video: {
+      tokenId: value(env, "MUX_TOKEN_ID"), tokenSecret: value(env, "MUX_TOKEN_SECRET"),
+      signingKeyId: value(env, "MUX_SIGNING_KEY_ID"), signingPrivateKey: value(env, "MUX_SIGNING_PRIVATE_KEY"),
+    },
     shopier: {
       token: shopierToken,
       webhookTokens,

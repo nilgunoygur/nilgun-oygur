@@ -6,12 +6,12 @@ import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { getAuth } from "./index";
 import { authDestination } from "./navigation";
-import { ownerStatus } from "./owner-access";
+import { isOwner } from "./owner-access";
 
 type Session = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>["api"]["getSession"]>>>;
 
-/** A verified student; `owner` is set for Nilgün's account, and `mfaVerified` only once this session passed MFA. */
-export type Viewer = Session & { owner: { mfaVerified: boolean } | null };
+/** A verified student; `owner` is true for accounts in the protected owners table. */
+export type Viewer = Session & { owner: boolean };
 
 /** The one session read for a request. Every page, Server Function and route handler authorizes from this. */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
@@ -20,8 +20,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!config().enabled.auth) return null;
   const session = await getAuth().api.getSession({ headers: requestHeaders });
   if (!session?.user.emailVerified) return null;
-  const { isOwner, sessionMfaVerified } = await ownerStatus(getDatabase(), session.user.id, session.session.id);
-  return { ...session, owner: isOwner ? { mfaVerified: session.user.twoFactorEnabled === true && sessionMfaVerified } : null };
+  return { ...session, owner: await isOwner(getDatabase(), session.user.id) };
 });
 
 // Page adapters: redirect or 404.
@@ -32,16 +31,9 @@ export async function studentPage(destination = "/akademi/hesabim") {
   return viewer;
 }
 
-/** Identity-only guard for MFA enrollment. It does NOT authorize owner operations. */
-export async function ownerEnrollmentPage() {
-  const viewer = await studentPage("/yonetim/guvenlik");
-  if (!viewer.owner) notFound();
-  return viewer;
-}
-
 export async function ownerPage() {
-  const viewer = await ownerEnrollmentPage();
-  if (!viewer.owner?.mfaVerified) redirect("/yonetim/guvenlik");
+  const viewer = await studentPage("/yonetim");
+  if (!viewer.owner) notFound();
   return viewer;
 }
 
@@ -55,6 +47,6 @@ export async function requireStudent() {
 
 export async function requireOwner() {
   const viewer = await requireStudent();
-  if (!viewer.owner?.mfaVerified) throw new Error("FORBIDDEN");
+  if (!viewer.owner) throw new Error("FORBIDDEN");
   return viewer;
 }

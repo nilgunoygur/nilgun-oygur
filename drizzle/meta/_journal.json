@@ -43,6 +43,13 @@
       "when": 1790091526999,
       "tag": "0005_thin_courses",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790146782123,
+      "tag": "0006_drop_owner_mfa_sessions",
+      "breakpoints": true
     }
   ]
 }

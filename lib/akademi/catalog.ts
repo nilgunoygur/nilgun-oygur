@@ -15,7 +15,7 @@ export const CATALOG_TAG = "akademi-catalog";
 export type CatalogOptions = { includeHidden: boolean };
 export type ProductSource = { listProducts(): Promise<{ products: ShopierProduct[]; ids: Set<string> }> };
 
-const fallbackCover = "/images/akademi/academy-art-v1.png";
+export const fallbackCover = "/images/akademi/academy-art-v1.png";
 
 export type CatalogCourse = {
   slug: string;
@@ -63,9 +63,9 @@ export async function findCatalogCourse(db: Database, rawSlug: string, getProduc
   return row ? toCatalogCourse(row, await getProduct(row.shopierProductId), options) : null;
 }
 
-/** Product titles by id, for places that name a course whatever its sale state (student account, owner panel). */
-export function productTitles(products: ShopierProduct[]): Record<string, string> {
-  return Object.fromEntries(products.map(product => [product.id, product.title]));
+/** Product title and cover by id, whatever its sale state, so buyers still see courses no longer for sale. */
+export function productCards(products: ShopierProduct[]): Record<string, { title: string; image: string }> {
+  return Object.fromEntries(products.map(product => [product.id, { title: product.title, image: productDetails(product)?.imageUrl ?? fallbackCover }]));
 }
 
 /** Every linked course with its live Shopier title and price, and sales counts, for the owner panel. */

@@ -11,3 +11,4 @@ export const brand = "flex items-center gap-[10px] whitespace-nowrap text-[20px]
 export const brandLogo = "size-10 rounded-full max-tablet:size-9";
 export const formStack = "flex flex-col gap-[22px] [&_[data-slot=input]]:min-h-12";
 export const articleMeta = "flex gap-6 text-[14px] text-muted-foreground";
+export const pillAction = "inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-forest px-5 py-2 text-sm font-medium text-white hover:bg-forest/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary disabled:opacity-50";

@@ -7,7 +7,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { createAcademyAuth } from "../lib/auth/create-auth.ts";
-import { markMfaSession, ownerStatus, revokeUserSessions } from "../lib/auth/owner-access.ts";
+import { isOwner, revokeUserSessions } from "../lib/auth/owner-access.ts";
 import * as schema from "../lib/db/schema.ts";
 
 const client = new PGlite();
@@ -21,7 +21,6 @@ const dependencies = {
   baseURL: origin,
   secret: "integration-test-only-secret-abcdef0123456789",
   enqueueEmail: async message => { messages.push(message); },
-  markMfaSession: sessionId => markMfaSession(db, sessionId),
   revokeUserSessions: userId => revokeUserSessions(db, userId),
   claimPurchases: async (userId, email) => { claims.push([userId, email]); },
 };
@@ -105,7 +104,7 @@ function totp(base32) {
   return ((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).toString().padStart(6, "0");
 }
 
-test("MFA requires a valid code and a session-specific proof; old sessions are revoked", async () => {
+test("MFA sign-in requires a valid code; old sessions are revoked; ownership comes only from the owners table", async () => {
   const login = await request("/sign-in/email", account);
   const oldLogin = await request("/sign-in/email", account);
   const enable = await request("/two-factor/enable", { password: account.password }, cookies(login));
@@ -114,25 +113,20 @@ test("MFA requires a valid code and a session-specific proof; old sessions are r
   const secret = new URL(totpURI).searchParams.get("secret");
   const verified = await request("/two-factor/verify-totp", { code: totp(secret) }, cookies(login));
   assert.equal(verified.status, 200);
-  const proofs = await db.select().from(schema.ownerMfaSessions);
-  assert.equal(proofs.length, 1);
   assert.equal(await (await request("/get-session", undefined, cookies(oldLogin))).json(), null);
   const challenge = await request("/sign-in/email", account);
   assert.equal((await challenge.json()).twoFactorRedirect, true);
   assert.equal(await (await request("/get-session", undefined, cookies(challenge))).json(), null);
   const badCode = await request("/two-factor/verify-totp", { code: "invalid" }, cookies(challenge));
   assert.ok(badCode.status >= 400);
-  assert.equal((await db.select().from(schema.ownerMfaSessions)).length, 1);
   const complete = await request("/two-factor/verify-totp", { code: totp(secret) }, cookies(challenge));
   assert.equal(complete.status, 200);
   const session = await (await request("/get-session", undefined, cookies(complete))).json();
   assert.ok(session.session.id);
-  assert.equal((await db.select().from(schema.ownerMfaSessions).where(eq(schema.ownerMfaSessions.sessionId, session.session.id))).length, 1);
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
-  assert.deepEqual(await ownerStatus(db, user.id, session.session.id), { isOwner: false, sessionMfaVerified: true }, "an MFA proof alone is not ownership");
+  assert.equal(await isOwner(db, user.id), false, "MFA alone is not ownership");
   await db.insert(schema.owners).values({ userId: user.id });
-  assert.deepEqual(await ownerStatus(db, user.id, session.session.id), { isOwner: true, sessionMfaVerified: true });
-  assert.equal((await ownerStatus(db, user.id, "another-session")).sessionMfaVerified, false, "the proof belongs to one session");
+  assert.equal(await isOwner(db, user.id), true);
 });
 
 test("untrusted redirect origins and short passwords are rejected", async () => {
@@ -150,4 +144,26 @@ test("expired verification and password-reset tokens cannot authenticate", async
   const resetToken = new URL(messageUrl(messages.at(-1))).pathname.split("/").at(-1);
   await db.update(schema.verification).set({ expiresAt: new Date(0) });
   assert.equal((await request("/reset-password", { token: resetToken, newPassword: "expired-token-password" })).status, 400);
+});
+
+test("profile changes stay on the signed-in account and password changes require current password", async () => {
+  const account = { name: "Profile student", email: "profile@example.com", password: "profile-password-123" };
+  await request("/sign-up/email", account);
+  await auth.handler(new Request(messageUrl(messages.at(-1))));
+  const login = await request("/sign-in/email", account);
+  const cookie = cookies(login);
+  assert.equal(login.status, 200);
+  const otherLogin = await request("/sign-in/email", account);
+  const updated = await request("/update-user", { name: "Updated student", image: "data:image/png;base64,aGVsbG8=" }, cookie);
+  assert.equal(updated.status, 200);
+  const session = await (await request("/get-session", undefined, cookie)).json();
+  assert.equal(session.user.name, "Updated student");
+  assert.equal((await request("/update-user", { name: "Anonymous" })).status, 401);
+  const body = { currentPassword: "incorrect-password", newPassword: "profile-test-password-789", revokeOtherSessions: true };
+  assert.equal((await request("/change-password", body, cookie)).status, 400);
+  body.currentPassword = account.password;
+  const changed = await request("/change-password", body, cookie);
+  assert.equal(changed.status, 200);
+  assert.equal(await (await request("/get-session", undefined, cookies(otherLogin))).json(), null);
+  assert.equal((await request("/sign-in/email", { ...account, password: body.newPassword })).status, 200);
 });

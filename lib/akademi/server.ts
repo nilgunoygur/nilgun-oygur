@@ -35,13 +35,13 @@ export async function catalogStaticParams() {
   return courses.length ? courses.map(course => ({ slug: course.slug })) : [{ slug: "_" }];
 }
 
-/** Course names by Shopier product id; empty when the catalog is unavailable. */
-export async function courseTitles(): Promise<Record<string, string>> {
+/** Course title and cover by Shopier product id; empty when the catalog is unavailable. */
+export async function courseCards(): Promise<Record<string, { title: string; image: string }>> {
   "use cache";
   cacheTag(CATALOG_TAG);
   cacheLife(catalogLife);
   if (!config().enabled.catalog) return {};
-  try { return await akademi().catalog.titles(); } catch { return {}; }
+  try { return await akademi().catalog.cards(); } catch { return {}; }
 }
 
 /** From a Server Function: the next render reads fresh data. */

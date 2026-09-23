@@ -2,6 +2,7 @@
 export function authDestination(value: unknown): string {
   if (value === "/yonetim" || value === "/yonetim/guvenlik") return value;
   if (typeof value === "string" && /^\/akademi\/[a-z0-9-]{1,80}\/satin-al$/.test(value)) return value;
+  if (typeof value === "string" && /^\/akademi\/hesabim\/[a-f0-9-]{36}$/.test(value)) return value;
   return "/akademi/hesabim";
 }
 

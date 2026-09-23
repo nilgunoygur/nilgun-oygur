@@ -225,10 +225,6 @@ export const rateLimit = pgTable("rate_limit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 // A server-only proof for this session, not merely the user's MFA-enabled flag.
-export const ownerMfaSessions = pgTable("owner_mfa_sessions", {
-  sessionId: text("session_id").primaryKey().references(() => session.id, { onDelete: "cascade" }),
-  verifiedAt: time("verified_at").notNull().defaultNow(),
-});
 export const emailDeliveries = pgTable("email_deliveries", {
   id: id(),
   deduplicationKey: text("deduplication_key").notNull().unique(),
