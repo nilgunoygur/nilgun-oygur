@@ -5,6 +5,7 @@ import { AnnouncementBar } from "@/components/announcement-bar";
 import { getPublishedBanner } from "@/lib/banner";
 import { Footer } from "@/components/site";
 import { MotionProvider } from "@/components/motion-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { config } from "@/lib/config";
 import "./globals.css";
 const general = localFont({
@@ -58,6 +59,7 @@ export default async function RootLayout({
           <Header />
           <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
           <Footer />
+          <Toaster position="top-right" richColors />
         </MotionProvider>
       </body>
     </html>

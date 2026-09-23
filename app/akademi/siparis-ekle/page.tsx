@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { studentPage } from "@/lib/auth/viewer";
 import { ClaimOrderForm } from "@/components/akademi/claim-order-form";
 import { pageWidth, accountPage, kicker } from "@/lib/styles";
@@ -22,10 +22,6 @@ async function ClaimContent() {
       <h1 className="mt-3 text-[clamp(36px,5vw,52px)]">Shopier siparişinizi ekleyin</h1>
       <p className="mt-3 mb-10 text-stone">Satın aldığınız eğitimi hesabınıza bağlamak için sipariş bilgilerinizi doğrulayın.</p>
       <div className="rounded-[24px] border border-forest/10 bg-white p-6 shadow-sm sm:p-8">
-        <div className="mb-8 grid gap-3 rounded-2xl bg-mist p-5 text-sm text-forest sm:grid-cols-2">
-          <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 size-5 shrink-0" /> Bilgileriniz doğrudan Shopier siparişiyle doğrulanır.</p>
-          <p className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 size-5 shrink-0" /> Bir sipariş yalnızca tek bir hesaba eklenebilir.</p>
-        </div>
         <ClaimOrderForm />
       </div>
     </div>
