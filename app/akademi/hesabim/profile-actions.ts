@@ -3,13 +3,12 @@ import { headers } from "next/headers";
 import { refresh } from "next/cache";
 import { requireStudent } from "@/lib/auth/viewer";
 import { getAuth } from "@/lib/auth";
-import { config } from "@/lib/config";
 import { profileInput } from "@/lib/auth/profile";
 import type { FormState } from "@/components/akademi/form-status";
 
 export async function accountOptions() {
   const viewer = await requireStudent();
-  return { isOwner: viewer.owner, localEmail: config().consoleEmail };
+  return { isOwner: viewer.owner };
 }
 
 export async function saveProfile(input: { name: string; image: string | null }): Promise<FormState> {

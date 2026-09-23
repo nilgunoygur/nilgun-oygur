@@ -1,23 +1,28 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { articles } from "@/lib/content";
+import { articles as importedArticles } from "@/lib/content";
+import { getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export function generateStaticParams() {
-  return articles.map((a) => ({ slug: a.href.slice(6) }));
+  return importedArticles.map((a) => ({ slug: slugOf(a) }));
+}
+async function findArticle(params: Promise<{ slug: string }>) {
+  const { slug } = await params;
+  return (await getPublicArticles()).find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
 }
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
-  const a = articles.find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
+  const a = await findArticle(params);
   return {
     title: a?.title,
     description: a?.body[0]?.text,
@@ -29,8 +34,10 @@ export default async function Article({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
-  const a = articles.find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
+  return <Suspense fallback={<div className="min-h-[70vh]" />}><ArticleContent params={params} /></Suspense>;
+}
+async function ArticleContent({ params }: { params: Promise<{ slug: string }> }) {
+  const a = await findArticle(params);
   if (!a) notFound();
   return (
     <>
@@ -55,13 +62,14 @@ export default async function Article({
             src={a.image}
             alt={a.title}
             fill
+            unoptimized={a.image.startsWith(uploadedImagePrefix)}
             sizes="(max-width:760px) 95vw, 1100px"
             preload
           />
         </div>
         <div className="mx-auto mt-[70px] max-w-[760px] max-tablet:mt-10">
           <CopyLink />
-          {a.body.map((block, i) =>
+          {a.richBody ? <div className="[&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-mint [&_blockquote]:pl-5 [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[28px] [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[23px] [&_li]:mb-2 [&_ol]:mb-6 [&_ol]:list-decimal [&_ol]:pl-7 [&_p]:mb-6 [&_p]:text-[19px] [&_p]:leading-[1.8] [&_p]:text-[#686866] [&_ul]:mb-6 [&_ul]:list-disc [&_ul]:pl-7 max-tablet:[&_p]:text-[17px]" dangerouslySetInnerHTML={{ __html: a.richBody }} /> : a.body.map((block, i) =>
             block.tag.startsWith("h") || block.text.endsWith(":") ? (
               <h2 key={i} className="mt-10 mb-4 text-[28px] tracking-[-0.5px] max-tablet:text-[25px]">{block.text}</h2>
             ) : (

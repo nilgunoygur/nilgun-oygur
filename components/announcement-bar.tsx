@@ -1,22 +1,68 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { Announcement } from "@/lib/announcements";
+import { AnimatePresence, useReducedMotion } from "motion/react";
+import * as m from "motion/react-m";
+import type { BannerConfig, Announcement } from "@/lib/announcements";
 import { cn } from "@/lib/utils";
 
-// Each half must be wider than the widest screen, or the loop shows a gap before restarting.
-const REPEAT = 5;
+function AnnouncementText({ item, tabIndex }: { item: Announcement; tabIndex?: number }) {
+  return item.href
+    ? <Link href={item.href} tabIndex={tabIndex} className="text-inherit no-underline hover:underline hover:underline-offset-3 focus-visible:underline focus-visible:underline-offset-3">{item.text}</Link>
+    : <span>{item.text}</span>;
+}
 
-export function AnnouncementBar({ items }: { items: Announcement[] }) {
-  if (items.length === 0) return null;
-  const run = Array.from({ length: REPEAT }, () => items).flat();
-  const half = (hidden: boolean) => <ul className={cn("m-0 flex list-none items-center p-0 motion-reduce:w-screen motion-reduce:justify-center motion-reduce:overflow-x-auto", hidden && "motion-reduce:hidden")} aria-hidden={hidden || undefined}>
+export function AnnouncementBar({ config, preview = false }: { config: BannerConfig; preview?: boolean }) {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    if (config.animation !== "fade" || reducedMotion || paused || config.items.length < 2) return;
+    const timer = window.setInterval(() => setActive(index => {
+      if (index === config.items.length - 1 && !config.loop) return index;
+      return (index + 1) % config.items.length;
+    }), config.speedSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [config.animation, config.speedSeconds, config.loop, config.items.length, reducedMotion, paused]);
+
+  if (config.items.length === 0) return null;
+  const moving = config.animation === "scroll" && !reducedMotion;
+  // Each half must be wider than the widest screen, or the loop shows a gap.
+  const run = Array.from({ length: Math.max(5, Math.ceil(24 / config.items.length)) }, () => config.items).flat();
+  const half = (hidden: boolean) => <ul className="m-0 flex shrink-0 list-none items-center p-0" aria-hidden={hidden || undefined}>
     {run.map((item, index) => {
-      const copy = hidden || index >= items.length;
-      return <li key={index} aria-hidden={copy && !hidden ? true : undefined} className={cn("flex items-center whitespace-nowrap after:mx-7 after:text-[10px] after:text-lime after:content-['✦']", copy && !hidden && "motion-reduce:hidden")}>
-        {item.href ? <Link href={item.href} tabIndex={copy ? -1 : undefined} className="text-inherit no-underline hover:text-lime hover:underline hover:underline-offset-3 focus-visible:text-lime focus-visible:underline focus-visible:underline-offset-3">{item.text}</Link> : item.text}
+      const copy = hidden || index >= config.items.length;
+      return <li key={index} aria-hidden={copy || undefined} className="flex shrink-0 items-center whitespace-nowrap">
+        <span className={cn("px-1", copy && "pointer-events-none")}><AnnouncementText item={item} tabIndex={copy || preview ? -1 : undefined} /></span>
+        <span aria-hidden="true" className="mx-6 text-[10px]" style={{ color: config.accentColor }}>{config.separator}</span>
       </li>;
     })}
   </ul>;
-  return <aside className="group fixed inset-x-0 top-0 z-41 h-[38px] overflow-hidden bg-forest text-[13px] text-mist [mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)]" aria-label="Duyurular" style={{ "--announcement-duration": `${run.length * 7}s` } as React.CSSProperties}>
-    <div className="flex h-full w-max animate-announcement will-change-transform group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused] motion-reduce:animate-none">{half(false)}{half(true)}</div>
+
+  return <aside
+    aria-label="Duyurular"
+    aria-hidden={preview || undefined}
+    className={cn("group h-[38px] overflow-hidden text-[13px]", preview ? "relative w-full rounded-xl" : "fixed inset-x-0 top-0 z-41", moving && "[mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)]")}
+    style={{ backgroundColor: config.backgroundColor, color: config.textColor }}
+    onMouseEnter={() => config.pauseOnHover && setPaused(true)}
+    onMouseLeave={() => setPaused(false)}
+    onFocusCapture={() => config.pauseOnHover && setPaused(true)}
+    onBlurCapture={() => setPaused(false)}
+  >
+    {moving ? <div className="flex h-full w-max animate-announcement items-center will-change-transform" style={{
+      "--announcement-duration": `${run.length * config.speedSeconds}s`,
+      animationDirection: config.direction === "right" ? "reverse" : "normal",
+      animationIterationCount: config.loop ? "infinite" : "1",
+      animationFillMode: "forwards",
+      animationPlayState: paused ? "paused" : "running",
+    } as React.CSSProperties}>{half(false)}{half(true)}</div>
+      : <div className="relative flex h-full items-center justify-center overflow-hidden px-5 text-center">
+        {config.animation === "fade" && !reducedMotion ? <AnimatePresence initial={false} mode="wait">
+          <m.div key={active % config.items.length} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: Math.min(0.5, config.speedSeconds / 5) }} className="absolute inset-0 flex items-center justify-center px-5">
+            <AnnouncementText item={config.items[active % config.items.length]} tabIndex={preview ? -1 : undefined} />
+          </m.div>
+        </AnimatePresence> : <AnnouncementText item={config.items[0]} tabIndex={preview ? -1 : undefined} />}
+      </div>}
   </aside>;
 }

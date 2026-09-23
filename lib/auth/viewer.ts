@@ -50,3 +50,11 @@ export async function requireOwner() {
   if (!viewer.owner) throw new Error("FORBIDDEN");
   return viewer;
 }
+
+export const privateNoStore = { "Cache-Control": "private, no-store" };
+
+// Route handler adapter: a private 403 for non-owners, otherwise null.
+export async function ownerRouteDenied() {
+  const viewer = await getViewer();
+  return viewer?.owner ? null : Response.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403, headers: privateNoStore });
+}

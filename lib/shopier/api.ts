@@ -6,15 +6,17 @@ const API = "https://api.shopier.com/v1";
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
 const party = z.object({ email: z.string().optional().nullable() }).partial().nullable().optional();
+const shopierDate = z.string().transform((value, ctx) => {
+  const date = new Date(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+  if (Number.isNaN(date.getTime())) { ctx.addIssue({ code: "custom", message: "Invalid Shopier date" }); return z.NEVER; }
+  return date;
+});
 export const shopierOrderSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
   paymentStatus: z.string(),
-  dateCreated: z.string().transform((value, ctx) => {
-    const date = new Date(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
-    if (Number.isNaN(date.getTime())) { ctx.addIssue({ code: "custom", message: "Invalid order date" }); return z.NEVER; }
-    return date;
-  }),
+  dateCreated: shopierDate,
   currency: z.string(),
+  totals: z.object({ total: z.string() }).optional(),
   shippingInfo: party,
   billingInfo: party,
   lineItems: z.array(z.object({
@@ -25,6 +27,17 @@ export const shopierOrderSchema = z.object({
   })).min(1),
 });
 export type ShopierOrder = z.output<typeof shopierOrderSchema>;
+const shopierRefundSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  orderId: z.union([z.string(), z.number()]).transform(String),
+  status: z.enum(["pending", "failed", "succeeded"]),
+  type: z.enum(["full", "partial"]),
+  dateCreated: shopierDate,
+  dateRefunded: shopierDate.nullish(),
+  currency: z.string(),
+  total: z.string(),
+});
+type ShopierRefund = z.output<typeof shopierRefundSchema>;
 
 const id = z.union([z.string(), z.number()]).transform(String);
 export const shopierProductSchema = z.object({
@@ -156,6 +169,32 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       }
       return orders;
     },
+    async listRecentTransactions(start: Date, end: Date) {
+      const query = new URLSearchParams({
+        dateStart: start.toISOString().replace(/\.\d{3}Z$/, "+0000"),
+        dateEnd: new Date(end.getTime() - 1).toISOString().replace(/\.\d{3}Z$/, "+0000"),
+        limit: "50",
+        page: "1",
+        sort: "dateDesc",
+      });
+      const [rawOrders, refundResult] = await Promise.all([
+        call<unknown>(`/orders?${query}`),
+        (async () => {
+          const refunds: ShopierRefund[] = [];
+          // Shopier currently returns HTTP 500 for refunds dateStart/dateEnd; filter processed dates locally.
+          for (let page = 1; page <= 20; page++) {
+            const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
+            refunds.push(...batch.filter(refund => (refund.dateRefunded ?? refund.dateCreated) >= start && (refund.dateRefunded ?? refund.dateCreated) < end));
+            if (batch.length < 50) return refunds;
+          }
+          throw new Error("Shopier refund list exceeded the page limit.");
+        })().then(refunds => ({ refunds, unavailable: false }), () => ({ refunds: [] as ShopierRefund[], unavailable: true })),
+      ]);
+      return {
+        orders: z.array(shopierOrderSchema).parse(rawOrders),
+        ...refundResult,
+      };
+    },
     async getProduct(id: string) {
       if (!/^\d{1,20}$/.test(id)) return null;
       try {
@@ -164,6 +203,13 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         if (error instanceof ShopierError && (error.status === 404 || error.status === 400)) return null;
         throw error;
       }
+    },
+    async updateProductPrice(id: string, priceKurus: number) {
+      if (!/^\d{1,20}$/.test(id) || !Number.isSafeInteger(priceKurus) || priceKurus < 100) throw new Error("Invalid Shopier product price.");
+      return shopierProductSchema.parse(await call(`/products/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ priceData: { price: (priceKurus / 100).toFixed(2) } }),
+      }));
     },
     /** Every product (hidden ones included). `ids` also covers products that failed validation. */
     async listProducts({ maxPages = 20 } = {}) {

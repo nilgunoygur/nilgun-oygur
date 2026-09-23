@@ -15,6 +15,7 @@ const messages = {
   already_yours: "Bu sipariş zaten hesabınızda.",
   claimed_by_other: "Bu sipariş başka bir hesaba eklenmiş. Yardım için bizimle iletişime geçin.",
   not_found: "Sipariş bulunamadı. Numarayı ve Shopier’de kullandığınız e-posta adresini kontrol edin.",
+  unpaid: "Shopier siparişi bulundu ancak ödeme henüz onaylanmamış. Ödeme onaylandıktan sonra tekrar deneyin.",
   not_academy: "Bu sipariş bir Akademi eğitimi içermiyor.",
   rate_limited: "Çok fazla deneme yaptınız. Lütfen bir saat sonra yeniden deneyin.",
 } as const;

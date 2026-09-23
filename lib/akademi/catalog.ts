@@ -83,7 +83,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   return {
     courses: rows.map(row => {
       const product = byId.get(row.productId);
-      return { ...row, title: titleOf(row.productId), priceKurus: product ? saleDetails(product)?.priceKurus ?? null : null };
+      return { ...row, title: titleOf(row.productId), priceKurus: product ? saleDetails(product)?.priceKurus ?? null : null, discounted: Boolean(product?.priceData.discount) };
     }),
     recentSales: recent.map(sale => ({ ...sale, title: titleOf(sale.productId) })),
   };

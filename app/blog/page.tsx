@@ -1,13 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import type { Metadata } from "next";
-import { articles } from "@/lib/content";
+import { getPublicArticles } from "@/lib/articles";
 import { ArticleCard } from "@/components/sliders";
 import { Reveal } from "@/components/reveal";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Yazılarım" };
 export default function Blog() {
+  return <Suspense fallback={<div className="min-h-[70vh]" />}><BlogContent /></Suspense>;
+}
+async function BlogContent() {
+  const articles = await getPublicArticles();
+  if (!articles.length) return <section className={cn(pageWidth, "min-h-[70vh] pt-[175px] max-tablet:pt-[135px]")}><h1>Yazılarım</h1><p className="mt-5 text-stone">Yeni yazılar yakında burada olacak.</p></section>;
   const featured =
     articles.find((a) => a.href.includes("biliçaltının")) || articles[0];
   return (
@@ -34,11 +40,11 @@ export default function Blog() {
           </div>
         </Link>
       </Reveal>
-      <div className="grid grid-cols-3 gap-x-7 gap-y-[65px] max-tablet:grid-cols-1 max-tablet:gap-[45px]">
+      <div className="grid grid-cols-3 auto-rows-fr gap-x-7 gap-y-[65px] max-tablet:grid-cols-1 max-tablet:auto-rows-auto max-tablet:gap-[45px]">
         {articles
           .filter((a) => a.href !== featured.href)
           .map((a) => (
-            <Reveal key={a.href}>
+            <Reveal key={a.href} className="h-full">
               <ArticleCard article={a} card />
             </Reveal>
           ))}
