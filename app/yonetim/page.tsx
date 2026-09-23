@@ -2,11 +2,11 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight, BookOpen, FileText, Megaphone, ShoppingBag, Users } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
-import { chartSeries, dashboardRange, ownerDashboard, recentShopierTransactions } from "@/lib/akademi/dashboard";
+import { chartSeries, dashboardRange, ownerDashboard } from "@/lib/akademi/dashboard";
 import { DashboardDatePicker } from "@/components/dashboard-date-picker";
-import { Badge } from "@/components/ui/badge";
+import { OwnerRecentTransactions } from "@/components/owner-recent-transactions";
+import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
@@ -22,14 +22,14 @@ const panel = "rounded-[26px] border-forest/10 bg-white py-6 shadow-[0_12px_40px
 
 export default function OwnerPage({ searchParams }: { searchParams: Search }) {
   return <section className={cn(pageWidth, "min-h-[75vh] pt-[150px] pb-24 max-tablet:pt-[130px]")}>
-    <Suspense fallback={<p className="text-stone">Panel yükleniyor…</p>}><Dashboard searchParams={searchParams} /></Suspense>
+    <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Spinner className="size-6 text-forest" aria-label="Yönetim paneli yükleniyor" /></div>}><Dashboard searchParams={searchParams} /></Suspense>
   </section>;
 }
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
   await ownerPage();
   const range = dashboardRange(await searchParams);
-  const [data, transactions] = await Promise.all([ownerDashboard(range), recentShopierTransactions(range)]);
+  const data = await ownerDashboard(range);
   const chart = chartSeries(range, data.activity);
   const primaryRevenue = data.revenue.find(item => item.currency === "TRY");
   const otherRevenue = data.revenue.filter(item => item.currency !== "TRY");
@@ -60,7 +60,7 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
     </div>
 
     <Card className={cn(panel, "mt-5")}><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3"><div><p className="text-[12px] font-semibold tracking-[0.14em] text-primary">SON İŞLEMLER</p><CardTitle className="mt-2 text-[26px]">Son satışlar ve iadeler</CardTitle></div><Link href="/yonetim/egitimler" className="inline-flex items-center gap-2 text-[13px] font-semibold text-forest hover:underline">Eğitimleri yönet <ArrowRight className="size-4" /></Link></CardHeader>
-      <CardContent>{transactions.refundsUnavailable && !transactions.unavailable && <p className="mt-3 text-sm text-stone">İade bilgileri şu anda Shopier’den alınamıyor; satışlar gösteriliyor.</p>}{transactions.unavailable ? <p className="mt-6 text-[14px] text-stone">Shopier işlemleri şu anda yüklenemiyor.</p> : transactions.items.length ? <Table className="mt-5"><TableHeader><TableRow><TableHead>İşlem</TableHead><TableHead>Detay</TableHead><TableHead>Tarih</TableHead><TableHead className="text-right">Tutar</TableHead></TableRow></TableHeader><TableBody>{transactions.items.map(item => <TableRow key={item.id}><TableCell><div className="flex items-center gap-2"><Badge variant={item.kind === "refund" ? "destructive" : "secondary"}>{item.kind === "refund" ? "İade" : "Satış"}</Badge><span className="font-medium">#{item.order}</span></div></TableCell><TableCell><span className="block max-w-[280px] truncate">{item.title}</span>{item.email && <span className="text-xs text-stone">{item.email}</span>}</TableCell><TableCell className="whitespace-nowrap text-stone">{shortDate.format(item.at)}</TableCell><TableCell className={cn("text-right font-semibold", item.kind === "refund" ? "text-destructive" : "text-forest")}>{money(item.amount, item.currency)}</TableCell></TableRow>)}</TableBody></Table> : <p className="mt-6 text-[14px] text-stone">Seçilen dönemde Shopier işlemi yok.</p>}</CardContent>
+      <CardContent><OwnerRecentTransactions from={range.from} to={range.to} /></CardContent>
     </Card>
   </>;
 }
