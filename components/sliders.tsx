@@ -84,7 +84,7 @@ type Article = {
 export function ArticleCard({ article, className, card = false }: { article: Article; className?: string; card?: boolean }) {
   const inset = card && "mx-[15px]";
   return (
-    <Link href={article.href} className={cn("group block min-w-0", card && "rounded-[16px] bg-white px-[9px] pt-[9px] pb-6", className)}>
+    <Link href={article.href} className={cn("group block min-w-0", card && "flex h-full flex-col rounded-[16px] bg-white px-[9px] pt-[9px] pb-6", className)}>
       <div className="relative mb-[22px] h-[260px] overflow-hidden rounded-[18px] max-tablet:h-[240px]">
         <Image
           src={article.image}
@@ -96,7 +96,7 @@ export function ArticleCard({ article, className, card = false }: { article: Art
       </div>
       <p className={cn("mb-3 text-[14px] text-primary", inset)}>{article.category}</p>
       <h3 className={cn("text-[24px] leading-[1.35]", inset)}>{article.title}</h3>
-      <div className={cn(articleMeta, "mt-5", inset)}>
+      <div className={cn(articleMeta, card ? "mt-auto pt-5" : "mt-5", inset)}>
         <span>{article.date}</span>
         <span>{article.duration}</span>
       </div>

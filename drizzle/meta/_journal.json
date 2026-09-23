@@ -50,6 +50,20 @@
       "when": 1790146782123,
       "tag": "0006_drop_owner_mfa_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790153045484,
+      "tag": "0007_easy_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790161031378,
+      "tag": "0008_fuzzy_senator_kelly",
+      "breakpoints": true
     }
   ]
 }

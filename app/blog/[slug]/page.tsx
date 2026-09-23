@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { articles } from "@/lib/content";
+import { articles as importedArticles } from "@/lib/content";
+import { getPublicArticles } from "@/lib/articles";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export function generateStaticParams() {
-  return articles.map((a) => ({ slug: a.href.slice(6) }));
+  return importedArticles.map((a) => ({ slug: a.href.slice(6) }));
 }
 export async function generateMetadata({
   params,
@@ -17,6 +19,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const articles = await getPublicArticles();
   const a = articles.find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
   return {
     title: a?.title,
@@ -29,7 +32,11 @@ export default async function Article({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  return <Suspense fallback={<div className="min-h-[70vh]" />}><ArticleContent params={params} /></Suspense>;
+}
+async function ArticleContent({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const articles = await getPublicArticles();
   const a = articles.find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
   if (!a) notFound();
   return (

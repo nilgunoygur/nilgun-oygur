@@ -70,11 +70,12 @@ export async function claimPurchasesByEmail(db: Database, userId: string, email:
   return granted;
 }
 
-export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "not_academy";
+export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "unpaid" | "not_academy";
 
 // Claims a Shopier-fetched order (never browser data) whose buyer email matches the typed one.
 export async function claimShopierOrder(db: Database, order: ShopierOrder | null, typedEmail: string, userId: string): Promise<ClaimOutcome> {
-  if (!order || order.paymentStatus !== "paid" || buyerEmail(order) !== typedEmail.trim().toLowerCase()) return "not_found";
+  if (!order || buyerEmail(order) !== typedEmail.trim().toLowerCase()) return "not_found";
+  if (order.paymentStatus !== "paid") return "unpaid";
   const { purchaseIds } = await recordShopierOrder(db, order);
   if (purchaseIds.length === 0) return "not_academy";
   let granted = 0;

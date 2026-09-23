@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -20,11 +20,11 @@ import {
   logo,
   bookingUrl,
   courses,
-  articles,
   blogIntro,
   socials,
   email,
 } from "@/lib/content";
+import { getPublicArticles } from "@/lib/articles";
 import { cn } from "@/lib/utils";
 import { brand, brandLogo, eyebrow as eyebrowClass, pageWidth } from "@/lib/styles";
 
@@ -235,6 +235,10 @@ export function Journey({ gallery = true }: { gallery?: boolean }) {
   );
 }
 export function BlogSection() {
+  return <Suspense fallback={<div className="min-h-[320px]" />}><BlogSectionContent /></Suspense>;
+}
+async function BlogSectionContent() {
+  const articles = await getPublicArticles();
   return (
     <section className={cn(pageWidth, "block py-[130px] max-tablet:py-20")}>
       <Reveal className="mx-auto mb-[54px] max-w-[780px] text-center">

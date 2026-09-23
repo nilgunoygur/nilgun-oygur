@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, check, foreignKey, index, integer, pgEnum, pgTable,
+  bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable,
   primaryKey, text, timestamp, unique, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
+import type { BannerConfig } from "@/lib/announcements";
 
 const time = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const timestamps = () => ({
@@ -65,6 +66,27 @@ export const owners = pgTable("academy_owners", {
   userId: text("user_id").primaryKey().references(() => user.id),
   createdAt: time("created_at").notNull().defaultNow(),
 });
+
+// Overrides the imported articles and also stores new owner-written articles.
+export const articleEdits = pgTable("article_edits", {
+  slug: text("slug").primaryKey(),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  image: text("image").notNull(),
+  dateLabel: text("date_label").notNull(),
+  duration: text("duration").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull().default("draft"),
+  ...timestamps(),
+}, (t) => [check("article_edits_status_valid", sql`${t.status} IN ('draft', 'published')`)]);
+
+export const bannerSettings = pgTable("banner_settings", {
+  id: integer("id").primaryKey().default(1),
+  draft: jsonb("draft").$type<BannerConfig>().notNull(),
+  published: jsonb("published").$type<BannerConfig>(),
+  isPublished: boolean("is_published").notNull().default(true),
+  ...timestamps(),
+}, (t) => [check("banner_settings_singleton", sql`${t.id} = 1`)]);
 
 export const courseStatus = pgEnum("course_status", ["draft", "published", "archived"]);
 export const publicationStatus = pgEnum("publication_status", ["draft", "published"]);
