@@ -3,6 +3,7 @@ import { cacheLife, cacheTag, revalidateTag, updateTag } from "next/cache";
 import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { getShopier } from "@/lib/shopier";
+import { productDetails } from "@/lib/shopier/api";
 import { createAkademi, type Akademi } from "./akademi";
 import { CATALOG_TAG, type CatalogCourse } from "./catalog";
 
@@ -42,6 +43,21 @@ export async function courseTitles(): Promise<Record<string, string>> {
   cacheLife(catalogLife);
   if (!config().enabled.catalog) return {};
   try { return await akademi().catalog.titles(); } catch { return {}; }
+}
+
+/** Purchased-course cards include products that are no longer available for sale. */
+export async function courseCardDetails(): Promise<Record<string, { title: string; image: string }>> {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife(catalogLife);
+  if (!config().enabled.catalog) return {};
+  try {
+    const { products } = await getShopier().listProducts();
+    return Object.fromEntries(products.map(product => [product.id, {
+      title: product.title,
+      image: productDetails(product)?.imageUrl ?? "/images/akademi/academy-art-v1.png",
+    }]));
+  } catch { return {}; }
 }
 
 /** From a Server Function: the next render reads fresh data. */

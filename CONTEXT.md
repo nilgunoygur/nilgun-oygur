@@ -14,7 +14,7 @@
 
 **Viewer**: the verified student behind a request, with owner status and whether this session passed MFA.
 
-**Owner**: Nilgün's account, from the protected owners table. Owner operations require a session-specific MFA proof.
+**Owner**: the explicitly designated, verified account authorized to manage the academy’s courses, lessons, and sales. Authenticator enrollment is optional.
 
 **Owner command**: an owner change applied together with its audit entry.
 

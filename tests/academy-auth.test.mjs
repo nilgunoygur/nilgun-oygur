@@ -151,3 +151,25 @@ test("expired verification and password-reset tokens cannot authenticate", async
   await db.update(schema.verification).set({ expiresAt: new Date(0) });
   assert.equal((await request("/reset-password", { token: resetToken, newPassword: "expired-token-password" })).status, 400);
 });
+
+test("profile changes stay on the signed-in account and password changes require current password", async () => {
+  const account = { name: "Profile student", email: "profile@example.com", password: "profile-password-123" };
+  await request("/sign-up/email", account);
+  await auth.handler(new Request(messageUrl(messages.at(-1))));
+  const login = await request("/sign-in/email", account);
+  const cookie = cookies(login);
+  assert.equal(login.status, 200);
+  const otherLogin = await request("/sign-in/email", account);
+  const updated = await request("/update-user", { name: "Updated student", image: "data:image/png;base64,aGVsbG8=" }, cookie);
+  assert.equal(updated.status, 200);
+  const session = await (await request("/get-session", undefined, cookie)).json();
+  assert.equal(session.user.name, "Updated student");
+  assert.equal((await request("/update-user", { name: "Anonymous" })).status, 401);
+  const body = { currentPassword: "incorrect-password", newPassword: "profile-test-password-789", revokeOtherSessions: true };
+  assert.equal((await request("/change-password", body, cookie)).status, 400);
+  body.currentPassword = account.password;
+  const changed = await request("/change-password", body, cookie);
+  assert.equal(changed.status, 200);
+  assert.equal(await (await request("/get-session", undefined, cookies(otherLogin))).json(), null);
+  assert.equal((await request("/sign-in/email", { ...account, password: body.newPassword })).status, 200);
+});

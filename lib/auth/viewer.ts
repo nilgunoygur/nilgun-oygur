@@ -32,17 +32,15 @@ export async function studentPage(destination = "/akademi/hesabim") {
   return viewer;
 }
 
-/** Identity-only guard for MFA enrollment. It does NOT authorize owner operations. */
+/** Owner access is based on the protected owner row; MFA enrollment is optional. */
 export async function ownerEnrollmentPage() {
-  const viewer = await studentPage("/yonetim/guvenlik");
+  const viewer = await studentPage("/yonetim");
   if (!viewer.owner) notFound();
   return viewer;
 }
 
 export async function ownerPage() {
-  const viewer = await ownerEnrollmentPage();
-  if (!viewer.owner?.mfaVerified) redirect("/yonetim/guvenlik");
-  return viewer;
+  return ownerEnrollmentPage();
 }
 
 // Server Function adapters: throw. Call in every action as well as its page; never trust a client role.
@@ -55,6 +53,6 @@ export async function requireStudent() {
 
 export async function requireOwner() {
   const viewer = await requireStudent();
-  if (!viewer.owner?.mfaVerified) throw new Error("FORBIDDEN");
+  if (!viewer.owner) throw new Error("FORBIDDEN");
   return viewer;
 }

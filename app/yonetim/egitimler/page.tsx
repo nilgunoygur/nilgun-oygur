@@ -37,7 +37,7 @@ async function CoursesAndSales() {
       <thead><tr><th>Eğitim</th><th>Fiyat</th><th>Erişim</th><th>Satış</th><th>Durum</th></tr></thead>
       <tbody>{rows.map(course => {
         return <tr key={course.id}>
-          <td><strong>{course.title}</strong><br /><small>/akademi/{course.slug}</small><br /><a className="underline" href={`https://www.shopier.com/${course.productId}`} rel="noopener" target="_blank">Shopier ürünü</a></td>
+          <td><strong>{course.title}</strong><br /><Link className="my-2 inline-block font-medium text-primary underline underline-offset-4" href={`/yonetim/egitimler/${course.id}`}>Ders içeriklerini düzenle →</Link><br /><small>/akademi/{course.slug}</small><br /><a className="underline" href={`https://www.shopier.com/${course.productId}`} rel="noopener" target="_blank">Shopier ürünü</a></td>
           <td>{course.priceKurus ? formatPrice(course.priceKurus) : "—"}</td>
           <td><form action={setAccessDuration} className="flex items-center gap-2"><input type="hidden" name="courseId" value={course.id} /><Input className="h-7 w-20" name="accessDays" type="number" min={1} max={3650} defaultValue={course.accessDurationDays} aria-label="Erişim süresi (gün)" /><small>gün</small><Button size="sm" variant="outline">Kaydet</Button></form></td>
           <td>{course.sales}<br /><small>{course.sales - course.claimed} hesap bekliyor</small></td>
