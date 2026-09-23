@@ -4,11 +4,11 @@ import dynamic from "next/dynamic";
 import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, LoaderCircle, Video } from "lucide-react";
 import { getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
 import type { studentCourse } from "@/lib/akademi/learning";
+import { pillAction } from "@/lib/styles";
 
 const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), { ssr: false, loading: () => <div className="aspect-video animate-pulse bg-forest/10" /> });
 type Lesson = NonNullable<Awaited<ReturnType<typeof studentCourse>>>["lessons"][number];
 const date = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" });
-const actionClass = "inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-forest px-5 py-2 text-sm font-medium text-white hover:bg-forest/90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary disabled:opacity-50";
 
 export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
@@ -47,7 +47,7 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
     {error && <p role="alert" className="px-7 pb-5 text-sm text-destructive">{error}</p>}
     {open && <div id={`lesson-${lesson.id}`} className="border-t border-border p-5 sm:p-7">
       {lesson.description && <p className="mb-6 max-w-[75ch] whitespace-pre-wrap leading-relaxed text-stone">{lesson.description}</p>}
-      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><a href={destination.url} target="_blank" rel="noopener noreferrer" className={actionClass}>Canlı derse katıl <ArrowUpRight size={16} /></a>{destination.passcode && <p className="mt-2 text-sm">Toplantı şifresi: {destination.passcode}</p>}</div> : <button type="button" className={actionClass} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : lesson.videoReady ? <LessonPlayer lessonId={lesson.id} startTime={lesson.lastPositionSeconds ?? 0} onEnded={() => startTransition(() => mark(true))} /> : <p className="rounded-2xl bg-mist p-6 text-stone">Video hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>}
+      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><a href={destination.url} target="_blank" rel="noopener noreferrer" className={pillAction}>Canlı derse katıl <ArrowUpRight size={16} /></a>{destination.passcode && <p className="mt-2 text-sm">Toplantı şifresi: {destination.passcode}</p>}</div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : lesson.videoReady ? <LessonPlayer lessonId={lesson.id} startTime={lesson.lastPositionSeconds ?? 0} onEnded={() => startTransition(() => mark(true))} /> : <p className="rounded-2xl bg-mist p-6 text-stone">Video hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>}
       {completed && <p className="mt-5 flex items-center gap-2 text-sm text-forest"><Check size={16} />Bu dersi tamamladınız. Dilediğiniz zaman tekrar izleyebilirsiniz.</p>}
     </div>}
   </article>;

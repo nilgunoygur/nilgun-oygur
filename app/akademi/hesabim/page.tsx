@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowUpRight, BookOpen, Check, Clock3 } from "lucide-react";
 import { studentPage } from "@/lib/auth/viewer";
-import { akademi, courseCardDetails } from "@/lib/akademi/server";
+import { akademi, courseCards } from "@/lib/akademi/server";
+import { fallbackCover } from "@/lib/akademi/catalog";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { buttonVariants } from "@/components/ui/button";
 import { accountHeader, accountPage, accountTitle, kicker, pageWidth } from "@/lib/styles";
@@ -23,16 +24,16 @@ export default function AccountPage() {
 
 async function Account() {
   const viewer = await studentPage();
-  const [access, details] = await Promise.all([akademi().access.active(viewer.user.id), courseCardDetails()]);
+  const [access, cards] = await Promise.all([akademi().access.active(viewer.user.id), courseCards()]);
   return <>
     <header className={accountHeader}><div><p className={kicker}>AKADEMİ · KİŞİSEL ALANINIZ</p><h1 className={accountTitle}>Merhaba, {viewer.user.name}.</h1><p>Eğitimleriniz ve hesabınız burada.</p></div></header>
     {access.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Öğrenme yolculuğunuz burada başlıyor.</EmptyTitle><EmptyDescription>Henüz aktif bir eğitim erişiminiz bulunmuyor. Size uygun eğitimleri keşfedebilirsiniz.</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ size: "pill" })} href="/akademi">Eğitimleri keşfet</Link></EmptyContent></Empty> : <div className="grid grid-cols-2 gap-8 max-tablet:grid-cols-1">{access.map(item => {
-      const course = details[item.shopierProductId];
+      const course = cards[item.shopierProductId];
       const title = course?.title ?? "Akademi eğitimi";
       const href = `/akademi/hesabim/${item.courseId}`;
       return <article key={item.id} className="flex min-w-0 flex-col rounded-[24px] border border-[#e1e8dc] bg-white p-[10px] shadow-[0_6px_25px_#19392f08]">
         <Link href={href} aria-label={`${title} eğitimine devam et`} className="group relative block aspect-[1.65] overflow-hidden rounded-[17px] bg-mist">
-          <Image src={course?.image ?? "/images/akademi/academy-art-v1.png"} alt="" fill sizes="(max-width: 760px) 90vw, (max-width: 1280px) 46vw, 590px" className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" />
+          <Image src={course?.image ?? fallbackCover} alt="" fill sizes="(max-width: 760px) 90vw, (max-width: 1280px) 46vw, 590px" className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" />
           <span className="absolute top-4 left-4 inline-flex items-center gap-2 rounded-full bg-forest px-3 py-2 text-xs font-semibold text-white shadow-sm"><Check size={14} aria-hidden="true" />Erişiminiz aktif</span>
         </Link>
         <div className="flex flex-1 flex-col px-[18px] pt-6 pb-[18px] max-tablet:px-[10px]">
@@ -45,7 +46,5 @@ async function Account() {
         </div>
       </article>;
     })}</div>}
-
-
   </>;
 }

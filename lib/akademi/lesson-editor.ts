@@ -9,11 +9,10 @@ export const lessonInput = z.object({
   courseId: z.uuid(), lessonId: z.uuid(), title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(10000), position: z.coerce.number().int().min(0).max(1000),
   status: z.enum(["draft", "published"]),
-  startsAt: z.string().default(""), durationMinutes: z.coerce.number().int().min(1).max(1440),
-  joinUrl: z.string().trim().max(2048), passcode: z.string().trim().max(100),
-  liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]),
+  startsAt: z.string().default(""), durationMinutes: z.coerce.number().int().min(1).max(1440).default(60),
+  joinUrl: z.string().trim().max(2048).default(""), passcode: z.string().trim().max(100).default(""),
+  liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]).default("scheduled"),
 });
-export type LessonInput = z.infer<typeof lessonInput>;
 
 export async function ownerLessons(db: Database, courseId: string) {
   return db.select({ lesson: lessons, live: liveSessions, asset: videoAssets }).from(lessons)
@@ -39,9 +38,9 @@ export async function createLessons(db: Database, actorId: string, courseId: str
   });
 }
 
-export async function updateLesson(db: Database, actorId: string, raw: LessonInput) {
+export async function updateLesson(db: Database, actorId: string, raw: unknown) {
   const input = lessonInput.parse(raw);
-  return db.transaction(async tx => {
+  await db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.courseId, input.courseId))).for("update");
     if (!lesson) throw new Error("Ders bulunamadı.");
     if (lesson.kind === "video" && input.status === "published") {
@@ -64,4 +63,5 @@ export async function updateLesson(db: Database, actorId: string, raw: LessonInp
     if (input.status === "published") await tx.update(modules).set({ status: "published" }).where(eq(modules.id, lesson.moduleId));
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.update", resourceType: "lesson", resourceId: lesson.id, reason: input.status === "published" ? "Ders yayınlandı / güncellendi" : "Taslak kaydedildi" });
   });
+  return input;
 }

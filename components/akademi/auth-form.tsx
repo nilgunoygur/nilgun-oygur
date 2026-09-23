@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formStack } from "@/lib/styles";
 
 export type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
+const inboxHint = "Gelen kutunuzu ve spam klasörünüzü kontrol edin.";
 const labels = { login: "Giriş yap", register: "Hesap oluştur", forgot: "Yenileme bağlantısı gönder", reset: "Şifremi yenile", verify: "Doğrulama bağlantısı gönder" };
 
 export function AuthForm({ mode, configured, localEmail = false, token, destination, initialMessage }: {
@@ -28,6 +29,7 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [done, setDone] = useState(false);
   const invalidReset = mode === "reset" && !token;
+  const sent = (link: string, message: string) => setMessage(localEmail ? `Yerel test ${link} bağlantısı, pnpm run dev komutunun çalıştığı terminale yazdırıldı.` : `${message} ${inboxHint}`);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,15 +57,15 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
       } else if (mode === "register") {
         const result = await authClient.signUp.email({ name: String(data.get("name")).trim(), email, password, callbackURL });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
-        setMessage(localEmail ? "Yerel test doğrulama bağlantısı, pnpm run dev komutunun çalıştığı terminale yazdırıldı." : "Adresinizle hesap oluşturulabiliyorsa doğrulama bağlantısı gönderilecektir. Gelen kutunuzu ve spam klasörünüzü kontrol edin."); setDone(true);
+        sent("doğrulama", "Adresinizle hesap oluşturulabiliyorsa doğrulama bağlantısı gönderilecektir."); setDone(true);
       } else if (mode === "forgot") {
         const result = await authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
-        setMessage(localEmail ? "Yerel test şifre yenileme bağlantısı, pnpm run dev komutunun çalıştığı terminale yazdırıldı." : "Bu adresle bir hesabınız varsa şifre yenileme bağlantısı gönderilecektir. Gelen kutunuzu ve spam klasörünüzü kontrol edin."); setDone(true);
+        sent("şifre yenileme", "Bu adresle bir hesabınız varsa şifre yenileme bağlantısı gönderilecektir."); setDone(true);
       } else if (mode === "verify") {
         const result = await authClient.sendVerificationEmail({ email, callbackURL });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
-        setMessage(localEmail ? "Yerel test doğrulama bağlantısı, pnpm run dev komutunun çalıştığı terminale yazdırıldı." : "Adresiniz doğrulanmayı bekliyorsa yeni bir bağlantı gönderilecektir. Gelen kutunuzu ve spam klasörünüzü kontrol edin."); setDone(true);
+        sent("doğrulama", "Adresiniz doğrulanmayı bekliyorsa yeni bir bağlantı gönderilecektir."); setDone(true);
       } else {
         const result = await authClient.resetPassword({ newPassword: password, token: token! });
         if (result.error) { setError(authErrorMessage(result.error)); return; }

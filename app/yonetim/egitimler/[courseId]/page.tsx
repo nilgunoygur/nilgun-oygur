@@ -7,7 +7,7 @@ import { ownerPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { courses } from "@/lib/db/schema";
 import { ownerLessons } from "@/lib/akademi/lesson-editor";
-import { courseTitles } from "@/lib/akademi/server";
+import { courseCards } from "@/lib/akademi/server";
 import { videoConfigured } from "@/lib/video/mux";
 import { CourseEditor } from "@/components/akademi/lesson-editor";
 import { accountPage, accountTitle, kicker, pageWidth } from "@/lib/styles";
@@ -24,6 +24,6 @@ async function Content({ params }: { params: Promise<{ courseId: string }> }) {
   const db = getDatabase();
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId));
   if (!course) notFound();
-  const [rows, titles] = await Promise.all([ownerLessons(db, courseId), courseTitles()]);
-  return <><Link className="mb-8 inline-block text-sm underline underline-offset-4" href="/yonetim/egitimler">← Eğitimler ve satışlar</Link><header className="mb-9"><p className={kicker}>AKADEMİ YÖNETİMİ · DERS İÇERİKLERİ</p><h1 className={accountTitle}>{titles[course.shopierProductId] ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir.</p></header><CourseEditor courseId={courseId} rows={rows} uploadsEnabled={videoConfigured()} /></>;
+  const [rows, cards] = await Promise.all([ownerLessons(db, courseId), courseCards()]);
+  return <><Link className="mb-8 inline-block text-sm underline underline-offset-4" href="/yonetim/egitimler">← Eğitimler ve satışlar</Link><header className="mb-9"><p className={kicker}>AKADEMİ YÖNETİMİ · DERS İÇERİKLERİ</p><h1 className={accountTitle}>{cards[course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir.</p></header><CourseEditor courseId={courseId} rows={rows} uploadsEnabled={videoConfigured()} /></>;
 }

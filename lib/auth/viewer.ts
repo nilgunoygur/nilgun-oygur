@@ -10,8 +10,8 @@ import { ownerStatus } from "./owner-access";
 
 type Session = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>["api"]["getSession"]>>>;
 
-/** A verified student; `owner` is set for Nilgün's account, and `mfaVerified` only once this session passed MFA. */
-export type Viewer = Session & { owner: { mfaVerified: boolean } | null };
+/** A verified student; `owner` is true for accounts in the protected owners table. */
+export type Viewer = Session & { owner: boolean };
 
 /** The one session read for a request. Every page, Server Function and route handler authorizes from this. */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
@@ -20,8 +20,8 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!config().enabled.auth) return null;
   const session = await getAuth().api.getSession({ headers: requestHeaders });
   if (!session?.user.emailVerified) return null;
-  const { isOwner, sessionMfaVerified } = await ownerStatus(getDatabase(), session.user.id, session.session.id);
-  return { ...session, owner: isOwner ? { mfaVerified: session.user.twoFactorEnabled === true && sessionMfaVerified } : null };
+  const { isOwner } = await ownerStatus(getDatabase(), session.user.id, session.session.id);
+  return { ...session, owner: isOwner };
 });
 
 // Page adapters: redirect or 404.
@@ -32,15 +32,10 @@ export async function studentPage(destination = "/akademi/hesabim") {
   return viewer;
 }
 
-/** Owner access is based on the protected owner row; MFA enrollment is optional. */
-export async function ownerEnrollmentPage() {
+export async function ownerPage() {
   const viewer = await studentPage("/yonetim");
   if (!viewer.owner) notFound();
   return viewer;
-}
-
-export async function ownerPage() {
-  return ownerEnrollmentPage();
 }
 
 // Server Function adapters: throw. Call in every action as well as its page; never trust a client role.

@@ -7,7 +7,7 @@ import { getSessionCookie } from "better-auth/cookies";
 export function proxy(request: NextRequest) {
   if (getSessionCookie(request)) return NextResponse.next();
   const { pathname } = request.nextUrl;
-  const next = pathname.startsWith("/yonetim/guvenlik") ? "/yonetim/guvenlik" : pathname.startsWith("/yonetim") ? "/yonetim" : authDestination(pathname);
+  const next = pathname.startsWith("/yonetim") ? "/yonetim" : authDestination(pathname);
   return NextResponse.redirect(new URL(`/akademi/giris?next=${encodeURIComponent(next)}`, request.url));
 }
 

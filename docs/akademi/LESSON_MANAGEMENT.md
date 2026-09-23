@@ -12,7 +12,7 @@ No lessons are fabricated for a purchased course. Until the owner publishes less
 
 ## Owner workflow
 
-The designated owner account is **butunselsifaakademi@gmail.com**. It was registered, activated for local testing, and assigned owner access on 22 September 2026. An audit entry records the assignment. Owner access requires a verified signed-in account and the protected owner assignment. Mandatory authenticator enrollment was removed at the owner’s request.
+The designated owner account is **butunselsifaakademi@gmail.com**. Owner access requires a verified signed-in account and a row in the protected owners table; authenticator enrollment is optional.
 
 1. Sign in and choose **Yönetim** from the account menu. The old `/yonetim/guvenlik` URL redirects to `/yonetim`.
 2. Open `/yonetim/egitimler` and choose **Ders içeriklerini düzenle** beneath a course title.
@@ -24,9 +24,9 @@ The designated owner account is **butunselsifaakademi@gmail.com**. It was regist
 
 Course titles, marketing descriptions, images, and prices remain managed in Shopier. Lesson content, live dates, and publishing are managed here.
 
-## Video connection still required
+## Video (Mux)
 
-The earlier data model selected Mux for signed video playback. The editor now has direct uploads using chunked transfers, and the student page uses Mux Player. Set these server-only environment values:
+The editor uploads directly to Mux in chunks, and the student page plays signed assets with Mux Player. Set these server-only environment values:
 
 - `MUX_TOKEN_ID`
 - `MUX_TOKEN_SECRET`
@@ -37,17 +37,13 @@ Restart the development server after adding credentials. Uploaded assets use the
 
 The owner explicitly checks processing status; background Mux webhooks are not configured in this slice. The private player renews ten-minute tokens after rechecking course access, preserving the current playback position. Token expiry is capped by the access grant.
 
-The environment currently has no Mux credentials, so a real upload, processing, and playback cycle has not yet been verified. Real videos and the live date/meeting link still need to be supplied. No external Mux resources were created during implementation.
-
 Provider references: [direct uploads](https://www.mux.com/docs/guides/upload-files-directly), [secured video playback](https://www.mux.com/docs/guides/secure-video-playback), [React player](https://www.mux.com/docs/guides/player-api-reference/react).
 
 ## Authorization and verification
 
 Private page reads, progress writes, token issuance, and live joins check the verified student and active grant. Published lesson and module status are checked independently of public catalog status, so removing a product from sale does not remove an existing buyer's course access. Owner pages/actions require the protected owner row. Owner content changes and upload preparation are audited.
 
-No migration was needed: lessons, modules, live sessions, video assets and progress tables already existed.
-
-Tests exercise template creation, draft visibility, publication validation, unpaid/expired access, completion persistence/undo, live join windows, module unpublishing, and RSA token signatures. Browser checks cover the purchased-course entry point, the private empty state, the five-card layout on desktop/mobile, live details, owner fields, and failed-save behavior. Layout fixtures were temporary and removed afterward.
+`tests/academy-learning.test.mjs` covers template creation, draft visibility, publication rules, unpaid/expired access, progress, live join windows and unpublishing.
 
 ## Account menu
 

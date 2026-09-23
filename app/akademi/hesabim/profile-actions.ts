@@ -9,7 +9,7 @@ import type { FormState } from "@/components/akademi/form-status";
 
 export async function accountOptions() {
   const viewer = await requireStudent();
-  return { isOwner: !!viewer.owner, localEmail: config().consoleEmail };
+  return { isOwner: viewer.owner, localEmail: config().consoleEmail };
 }
 
 export async function saveProfile(input: { name: string; image: string | null }): Promise<FormState> {

@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, lessons, videoAssets } from "@/lib/db/schema";
-import { createLessons, lessonInput, updateLesson } from "@/lib/akademi/lesson-editor";
+import { createLessons, updateLesson } from "@/lib/akademi/lesson-editor";
 import { muxRequest, videoConfigured } from "@/lib/video/mux";
 import { config } from "@/lib/config";
 import type { FormState } from "@/components/akademi/form-status";
@@ -28,8 +28,7 @@ export async function addLessons(_: FormState, form: FormData): Promise<FormStat
 export async function saveLesson(_: FormState, form: FormData): Promise<FormState> {
   try {
     const viewer = await requireOwner();
-    const input = lessonInput.parse(Object.fromEntries(form));
-    await updateLesson(getDatabase(), viewer.user.id, input);
+    const input = await updateLesson(getDatabase(), viewer.user.id, Object.fromEntries(form));
     changed(input.courseId);
     return { status: "success", message: input.status === "published" ? "Ders öğrencilerinize açıldı." : "Taslak kaydedildi." };
   } catch (error) { return report(error); }

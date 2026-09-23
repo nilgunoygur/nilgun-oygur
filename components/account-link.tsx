@@ -13,18 +13,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ClaimOrderForm } from "@/components/akademi/claim-order-form";
 import { ProfileSettings } from "@/components/akademi/profile-settings";
 
+const guestOptions = { isOwner: false, localEmail: false };
+
 export function AccountLink({ compact = false }: { compact?: boolean }) {
   const { data, refetch } = authClient.useSession();
   const router = useRouter();
   const trigger = useRef<HTMLButtonElement>(null);
   const [dialog, setDialog] = useState<"profile" | "claim" | null>(null);
-  const [options, setOptions] = useState({ isOwner: false, localEmail: false });
+  const [options, setOptions] = useState(guestOptions);
   const [error, setError] = useState("");
   if (!data?.user.emailVerified) return null;
   const user = data.user;
   const firstName = user.name.trim().split(/\s+/)[0] || "Hesabım";
   return <>
-    <DropdownMenu onOpenChange={(open) => { if (open) void accountOptions().then(setOptions).catch(() => setOptions({ isOwner: false, localEmail: false })); }}>
+    <DropdownMenu onOpenChange={(open) => { if (open) void accountOptions().then(setOptions).catch(() => setOptions(guestOptions)); }}>
       <DropdownMenuTrigger ref={trigger} render={<Button variant="ghost" className="gap-2 rounded-full px-2" />} aria-label={`Hesap menüsü — ${user.name}`}>
         <Avatar><AvatarImage src={avatarSource(user.image)} alt="" /><AvatarFallback>{firstName.charAt(0).toLocaleUpperCase("tr-TR")}</AvatarFallback></Avatar>
         {!compact && <><span>{firstName}</span><ChevronDown className="size-3" /></>}

@@ -12,7 +12,7 @@
 
 **Claim**: attaching a purchase to a student: automatically by verified email, or by order number plus the Shopier email ("Siparişimi ekle").
 
-**Viewer**: the verified student behind a request, with owner status and whether this session passed MFA.
+**Viewer**: the verified student behind a request, with owner status.
 
 **Owner**: the explicitly designated, verified account authorized to manage the academy’s courses, lessons, and sales. Authenticator enrollment is optional.
 
