@@ -6,7 +6,7 @@ import * as schema from "@/lib/db/schema";
 import { getEmailOutbox } from "@/lib/email";
 import { claimPurchasesByEmail } from "@/lib/akademi/course-access";
 import { createAcademyAuth } from "./create-auth";
-import { markMfaSession, revokeUserSessions } from "./owner-access";
+import { revokeUserSessions } from "./owner-access";
 
 let auth: ReturnType<typeof createAcademyAuth> | undefined;
 export function getAuth() {
@@ -19,7 +19,6 @@ export function getAuth() {
     baseURL: settings.url!,
     secret: settings.secret!,
     enqueueEmail: getEmailOutbox().enqueue,
-    markMfaSession: sessionId => markMfaSession(db, sessionId),
     revokeUserSessions: userId => revokeUserSessions(db, userId),
     claimPurchases: async (userId, email) => { await claimPurchasesByEmail(db, userId, email); },
   });

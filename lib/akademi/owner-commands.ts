@@ -3,7 +3,7 @@ import { adminAuditLog, courses } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 
 // Owner Commands: every owner change runs with its audit entry in one transaction, and only when something changed.
-// Callers authorize the owner (session, owner row and this session's MFA proof) before calling.
+// Callers authorize the owner (verified session and owner row) before calling.
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type AuditEntry = { action: string; resourceType: string; resourceId: string; reason: string };

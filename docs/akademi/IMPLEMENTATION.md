@@ -14,7 +14,7 @@
 
 - Better Auth is pinned to 1.7.5, mounted at `/api/auth/[...all]`, with verified email/password login, neutral registration/reset responses, one-hour verification/reset links, no automatic sign-in, and database-backed rate limits.
 - The installed two-factor plugin schema was inspected and its `verified`, `failedVerificationCount`, and `lockedUntil` fields added in migration `0001`. Real Better Auth adapter flows run against the migrated PostgreSQL schema in tests.
-- Owner authorization requires a verified student session, a protected `academy_owners` row, enabled MFA, and a server-written `owner_mfa_sessions` proof for that exact session. Only a successful TOTP/backup-code endpoint writes the proof. A trusted-device password login alone does not qualify for owner access.
+- Owner authorization requires a verified student session and a protected `academy_owners` row. Authenticator (TOTP) sign-in is optional.
 - Enabling MFA revokes earlier sessions. As a conservative policy, profile updates on MFA-enabled accounts also revoke sessions. Better Auth's MFA enrollment then issues the replacement session.
 - Auth emails are encrypted in `email_deliveries` with a separate stable `EMAIL_ENCRYPTION_KEY`. Successful/expired messages have their payload erased. Failures retain a generic error for the future attention UI. Claims use expiring leases; retries use a stable Resend idempotency key, exponential backoff, and a five-attempt limit.
 - Relevant auth POST requests run a delivery batch through Next.js `after`. `GET /api/internal/email-delivery` and `POST /api/internal/email-delivery` accepts only `Authorization: Bearer <CRON_SECRET>` for retries. No scheduler is configured yet: configure a periodic caller before opening registration. The GET entry point supports Vercel Cron, but the current Hobby team only permits daily schedules. Frequent retries need an appropriate scheduler or a separately approved plan change; no paid upgrade or schedule was configured.
@@ -26,7 +26,7 @@
 
 - Turkish login, registration, forgotten-password, reset, and verification screens are implemented under `/akademi`. Unconfigured authentication displays an unavailable state and disables submission.
 - `/akademi/hesabim` requires a verified session and lists actual active access grants. Lesson navigation and the full learning experience remain pending.
-- `/yonetim/guvenlik` provides owner-only TOTP enrollment and backup codes; `/yonetim` requires MFA proof for the current session. The content/order management panel remains pending.
+- `/yonetim/guvenlik` redirects to `/yonetim`, which requires the owner row.
 - Auth destinations are allowlisted, sensitive pages are noindex, and reset pages use a no-referrer policy.
 - (Superseded 21 September 2026: the first Neon resource lived in the previous Vercel account; see "Infrastructure" below.)
 - `vercel.json` selects pnpm builds and Frankfurt functions. Production database setup remains pending.
@@ -89,7 +89,7 @@ Shopier has no sandbox or test cards. Instead:
 ### Security notes
 
 - Secrets exist only in Vercel and ignored local `.env*` files. Only `NEXT_PUBLIC_SITE_URL` reaches the browser. A scan of the full public git history and the client bundles found no secret values. Database, Shopier and email modules import `server-only`.
-- Webhooks require the HMAC signature; the sync and email workers require `CRON_SECRET`; owner actions require the owner role and a session-specific MFA proof; claims are rate-limited; auth has database-backed rate limits.
+- Webhooks require the HMAC signature; the sync and email workers require `CRON_SECRET`; owner actions require the owner role; claims are rate-limited; auth has database-backed rate limits.
 - Baseline headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`.
 - Open items: Development currently shares the production Neon branch (use a separate Neon branch or local PostgreSQL via `.env.development.local` before real customer data exists); revoke the first Shopier token; the Shopier token has full account access, so keep Vercel access limited to the owner.
 

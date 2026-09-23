@@ -7,7 +7,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { createAcademyAuth } from "../lib/auth/create-auth.ts";
-import { isOwner, markMfaSession, revokeUserSessions } from "../lib/auth/owner-access.ts";
+import { isOwner, revokeUserSessions } from "../lib/auth/owner-access.ts";
 import * as schema from "../lib/db/schema.ts";
 
 const client = new PGlite();
@@ -21,7 +21,6 @@ const dependencies = {
   baseURL: origin,
   secret: "integration-test-only-secret-abcdef0123456789",
   enqueueEmail: async message => { messages.push(message); },
-  markMfaSession: sessionId => markMfaSession(db, sessionId),
   revokeUserSessions: userId => revokeUserSessions(db, userId),
   claimPurchases: async (userId, email) => { claims.push([userId, email]); },
 };
@@ -105,7 +104,7 @@ function totp(base32) {
   return ((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).toString().padStart(6, "0");
 }
 
-test("MFA requires a valid code and a session-specific proof; old sessions are revoked", async () => {
+test("MFA sign-in requires a valid code; old sessions are revoked; ownership comes only from the owners table", async () => {
   const login = await request("/sign-in/email", account);
   const oldLogin = await request("/sign-in/email", account);
   const enable = await request("/two-factor/enable", { password: account.password }, cookies(login));
@@ -114,22 +113,18 @@ test("MFA requires a valid code and a session-specific proof; old sessions are r
   const secret = new URL(totpURI).searchParams.get("secret");
   const verified = await request("/two-factor/verify-totp", { code: totp(secret) }, cookies(login));
   assert.equal(verified.status, 200);
-  const proofs = await db.select().from(schema.ownerMfaSessions);
-  assert.equal(proofs.length, 1);
   assert.equal(await (await request("/get-session", undefined, cookies(oldLogin))).json(), null);
   const challenge = await request("/sign-in/email", account);
   assert.equal((await challenge.json()).twoFactorRedirect, true);
   assert.equal(await (await request("/get-session", undefined, cookies(challenge))).json(), null);
   const badCode = await request("/two-factor/verify-totp", { code: "invalid" }, cookies(challenge));
   assert.ok(badCode.status >= 400);
-  assert.equal((await db.select().from(schema.ownerMfaSessions)).length, 1);
   const complete = await request("/two-factor/verify-totp", { code: totp(secret) }, cookies(challenge));
   assert.equal(complete.status, 200);
   const session = await (await request("/get-session", undefined, cookies(complete))).json();
   assert.ok(session.session.id);
-  assert.equal((await db.select().from(schema.ownerMfaSessions).where(eq(schema.ownerMfaSessions.sessionId, session.session.id))).length, 1);
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
-  assert.equal(await isOwner(db, user.id), false, "an MFA proof alone is not ownership");
+  assert.equal(await isOwner(db, user.id), false, "MFA alone is not ownership");
   await db.insert(schema.owners).values({ userId: user.id });
   assert.equal(await isOwner(db, user.id), true);
 });

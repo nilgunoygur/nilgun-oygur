@@ -16,7 +16,6 @@ type Dependencies = {
   baseURL: string;
   secret: string;
   enqueueEmail: (email: AuthEmail) => Promise<void>;
-  markMfaSession: (sessionId: string) => Promise<void>;
   revokeUserSessions: (userId: string) => Promise<void>;
   /** Grants Shopier purchases waiting for this verified email. Failures must never block authentication. */
   claimPurchases: (userId: string, email: string) => Promise<void>;
@@ -102,13 +101,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
         // Purchases made before registration, or with the email before it was verified, arrive on sign-in.
         if (ctx.path === "/sign-in/email" && ctx.context.newSession?.user.emailVerified) {
           await claimSafely(ctx.context.newSession.user.id, ctx.context.newSession.user.email);
-          return;
         }
-        if (!["/two-factor/verify-totp", "/two-factor/verify-backup-code"].includes(ctx.path)) return;
-        const result = ctx.context.returned;
-        if (!result || typeof result !== "object" || !("token" in result) || typeof result.token !== "string") return;
-        const verified = ctx.context.newSession ?? ctx.context.session;
-        if (verified) await dependencies.markMfaSession(verified.session.id);
       }),
     },
     // nextCookies must stay last so auth calls from Server Functions can set cookies.
