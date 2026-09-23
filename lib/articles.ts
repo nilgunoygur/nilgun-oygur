@@ -1,17 +1,38 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { io } from "next/cache";
+import sanitizeHtml from "sanitize-html";
 import { config } from "@/lib/config";
 import { articles as importedArticles } from "@/lib/content";
 import { getDatabase } from "@/lib/db";
-import { articleEdits } from "@/lib/db/schema";
+import { articleAssets, articleEdits } from "@/lib/db/schema";
 
-type Article = (typeof importedArticles)[number];
+type Article = (typeof importedArticles)[number] & { richBody?: string };
 type Edit = typeof articleEdits.$inferSelect;
 const slugOf = (article: Article) => article.href.slice("/blog/".length);
-export const articleBodyText = (article: Article) => article.body.map(block => block.tag.startsWith("h") ? `## ${block.text}` : block.text).join("\n\n");
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+export const articleBodyText = (article: Article) => article.richBody ?? article.body.map(block => block.tag.startsWith("h") ? `<h2>${escapeHtml(block.text)}</h2>` : `<p>${escapeHtml(block.text)}</p>`).join("");
+
+export function cleanArticleHtml(value: string) {
+  return sanitizeHtml(value, {
+    allowedTags: ["p", "h2", "h3", "strong", "b", "em", "i", "u", "s", "ul", "ol", "li", "blockquote", "a", "br"],
+    allowedAttributes: { a: ["href", "target", "rel"] },
+    allowedSchemes: ["http", "https", "mailto"],
+    transformTags: { a: (_tag, attributes) => ({ tagName: "a", attribs: { href: attributes.href ?? "#", rel: "noopener noreferrer", target: "_blank" } }) },
+  });
+}
+
+export async function getArticleImageLibrary() {
+  await io();
+  const assets = await getDatabase().select({ id: articleAssets.id, name: articleAssets.name }).from(articleAssets).orderBy(articleAssets.createdAt);
+  const choices = new Map(importedArticles.map(article => [article.image, article.title]));
+  for (const asset of assets) choices.set(`/api/article-images/${asset.id}`, asset.name);
+  return [...choices].map(([url, name]) => ({ url, name }));
+}
 
 function mergeArticle(edit: Edit, original?: Article): Article {
+  const richBody = /^\s*</.test(edit.body) ? cleanArticleHtml(edit.body) : undefined;
+  const plainText = richBody ? sanitizeHtml(richBody, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim() : "";
   return {
     href: `/blog/${edit.slug}`,
     title: edit.title,
@@ -20,7 +41,8 @@ function mergeArticle(edit: Edit, original?: Article): Article {
     duration: edit.duration,
     image: edit.image,
     authorImage: original?.authorImage ?? importedArticles[0].authorImage,
-    body: edit.body.split(/\n\s*\n/).map(value => value.trim()).filter(Boolean).map(value => value.startsWith("## ") ? { tag: "h2", text: value.slice(3) } : { tag: "p", text: value }),
+    body: richBody ? [{ tag: "p", text: plainText.slice(0, 240) }] : edit.body.split(/\n\s*\n/).map(value => value.trim()).filter(Boolean).map(value => value.startsWith("## ") ? { tag: "h2", text: value.slice(3) } : { tag: "p", text: value }),
+    richBody,
   };
 }
 
@@ -36,7 +58,7 @@ async function savedArticles(strict = false) {
   }
 }
 
-export async function getPublicArticles() {
+export async function getPublicArticles(): Promise<Article[]> {
   const edits = await savedArticles();
   const bySlug = new Map(edits.map(edit => [edit.slug, edit]));
   const base = importedArticles.flatMap(article => {

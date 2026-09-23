@@ -64,6 +64,13 @@
       "when": 1790161031378,
       "tag": "0008_fuzzy_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790167717080,
+      "tag": "0009_plain_cable",
+      "breakpoints": true
     }
   ]
 }

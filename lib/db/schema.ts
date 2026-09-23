@@ -80,6 +80,15 @@ export const articleEdits = pgTable("article_edits", {
   ...timestamps(),
 }, (t) => [check("article_edits_status_valid", sql`${t.status} IN ('draft', 'published')`)]);
 
+// Small owner-uploaded cover images. Public reads use an immutable image route; writes require owner access.
+export const articleAssets = pgTable("article_assets", {
+  id: id(),
+  name: text("name").notNull(),
+  mime: text("mime").notNull(),
+  data: text("data").notNull(),
+  createdAt: time("created_at").notNull().defaultNow(),
+});
+
 export const bannerSettings = pgTable("banner_settings", {
   id: integer("id").primaryKey().default(1),
   draft: jsonb("draft").$type<BannerConfig>().notNull(),
