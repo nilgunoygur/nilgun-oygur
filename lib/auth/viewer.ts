@@ -6,7 +6,7 @@ import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { getAuth } from "./index";
 import { authDestination } from "./navigation";
-import { ownerStatus } from "./owner-access";
+import { isOwner } from "./owner-access";
 
 type Session = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>["api"]["getSession"]>>>;
 
@@ -20,8 +20,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!config().enabled.auth) return null;
   const session = await getAuth().api.getSession({ headers: requestHeaders });
   if (!session?.user.emailVerified) return null;
-  const { isOwner } = await ownerStatus(getDatabase(), session.user.id, session.session.id);
-  return { ...session, owner: isOwner };
+  return { ...session, owner: await isOwner(getDatabase(), session.user.id) };
 });
 
 // Page adapters: redirect or 404.

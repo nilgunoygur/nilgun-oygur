@@ -7,7 +7,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { eq } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { createAcademyAuth } from "../lib/auth/create-auth.ts";
-import { markMfaSession, ownerStatus, revokeUserSessions } from "../lib/auth/owner-access.ts";
+import { isOwner, markMfaSession, revokeUserSessions } from "../lib/auth/owner-access.ts";
 import * as schema from "../lib/db/schema.ts";
 
 const client = new PGlite();
@@ -129,10 +129,9 @@ test("MFA requires a valid code and a session-specific proof; old sessions are r
   assert.ok(session.session.id);
   assert.equal((await db.select().from(schema.ownerMfaSessions).where(eq(schema.ownerMfaSessions.sessionId, session.session.id))).length, 1);
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
-  assert.deepEqual(await ownerStatus(db, user.id, session.session.id), { isOwner: false, sessionMfaVerified: true }, "an MFA proof alone is not ownership");
+  assert.equal(await isOwner(db, user.id), false, "an MFA proof alone is not ownership");
   await db.insert(schema.owners).values({ userId: user.id });
-  assert.deepEqual(await ownerStatus(db, user.id, session.session.id), { isOwner: true, sessionMfaVerified: true });
-  assert.equal((await ownerStatus(db, user.id, "another-session")).sessionMfaVerified, false, "the proof belongs to one session");
+  assert.equal(await isOwner(db, user.id), true);
 });
 
 test("untrusted redirect origins and short passwords are rejected", async () => {
