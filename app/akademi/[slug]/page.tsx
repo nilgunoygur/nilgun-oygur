@@ -14,7 +14,23 @@ export const generateStaticParams = catalogStaticParams;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const course = await getCatalogCourse((await params).slug);
-  return { title: course?.title, description: course?.summary.slice(0, 160), robots: { index: !!course, follow: true }, alternates: course ? { canonical: `/akademi/${course.slug}` } : undefined };
+  if (!course) return { robots: { index: false, follow: true } };
+
+  const description = course.summary.trim().slice(0, 160);
+  const image = { url: course.image, alt: course.title };
+  return {
+    title: course.title,
+    description,
+    alternates: { canonical: `/akademi/${course.slug}` },
+    openGraph: {
+      type: "website",
+      title: course.title,
+      description,
+      url: `/akademi/${course.slug}`,
+      images: [image],
+    },
+    twitter: { card: "summary_large_image", title: course.title, description, images: [image] },
+  };
 }
 
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
