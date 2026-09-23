@@ -204,6 +204,13 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
+    async updateProductPrice(id: string, priceKurus: number) {
+      if (!/^\d{1,20}$/.test(id) || !Number.isSafeInteger(priceKurus) || priceKurus < 100) throw new Error("Invalid Shopier product price.");
+      return shopierProductSchema.parse(await call(`/products/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ priceData: { price: (priceKurus / 100).toFixed(2) } }),
+      }));
+    },
     /** Every product (hidden ones included). `ids` also covers products that failed validation. */
     async listProducts({ maxPages = 20 } = {}) {
       const products: ShopierProduct[] = [];
