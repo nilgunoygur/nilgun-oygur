@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { io } from "next/cache";
 import sanitizeHtml from "sanitize-html";
@@ -9,9 +10,12 @@ import { articleAssets, articleEdits } from "@/lib/db/schema";
 
 type Article = (typeof importedArticles)[number] & { richBody?: string };
 type Edit = typeof articleEdits.$inferSelect;
-const slugOf = (article: Article) => article.href.slice("/blog/".length);
+export const slugOf = (article: { href: string }) => article.href.slice("/blog/".length);
+export const uploadedImagePrefix = "/api/article-images/";
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
 export const articleBodyText = (article: Article) => article.richBody ?? article.body.map(block => block.tag.startsWith("h") ? `<h2>${escapeHtml(block.text)}</h2>` : `<p>${escapeHtml(block.text)}</p>`).join("");
+
+export const articlePlainText = (html: string) => sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim();
 
 export function cleanArticleHtml(value: string) {
   return sanitizeHtml(value, {
@@ -26,13 +30,13 @@ export async function getArticleImageLibrary() {
   await io();
   const assets = await getDatabase().select({ id: articleAssets.id, name: articleAssets.name }).from(articleAssets).orderBy(articleAssets.createdAt);
   const choices = new Map(importedArticles.map(article => [article.image, article.title]));
-  for (const asset of assets) choices.set(`/api/article-images/${asset.id}`, asset.name);
+  for (const asset of assets) choices.set(`${uploadedImagePrefix}${asset.id}`, asset.name);
   return [...choices].map(([url, name]) => ({ url, name }));
 }
 
 function mergeArticle(edit: Edit, original?: Article): Article {
   const richBody = /^\s*</.test(edit.body) ? cleanArticleHtml(edit.body) : undefined;
-  const plainText = richBody ? sanitizeHtml(richBody, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim() : "";
+  const plainText = richBody ? articlePlainText(richBody) : "";
   return {
     href: `/blog/${edit.slug}`,
     title: edit.title,
@@ -58,7 +62,7 @@ async function savedArticles(strict = false) {
   }
 }
 
-export async function getPublicArticles(): Promise<Article[]> {
+export const getPublicArticles = cache(async (): Promise<Article[]> => {
   const edits = await savedArticles();
   const bySlug = new Map(edits.map(edit => [edit.slug, edit]));
   const base = importedArticles.flatMap(article => {
@@ -67,7 +71,7 @@ export async function getPublicArticles(): Promise<Article[]> {
   });
   const importedSlugs = new Set(importedArticles.map(slugOf));
   return [...base, ...edits.filter(edit => !importedSlugs.has(edit.slug) && edit.status === "published").map(edit => mergeArticle(edit))];
-}
+});
 
 export async function getManagedArticles() {
   const edits = await savedArticles(true);

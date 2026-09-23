@@ -1,8 +1,8 @@
-import { requireOwner } from "@/lib/auth/viewer";
+import { ownerRouteDenied, privateNoStore } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { articleAssets } from "@/lib/db/schema";
+import { uploadedImagePrefix } from "@/lib/articles";
 
-const noStore = { "Cache-Control": "private, no-store" };
 const maxBytes = 1_500_000;
 
 function imageMime(bytes: Uint8Array) {
@@ -13,15 +13,15 @@ function imageMime(bytes: Uint8Array) {
 }
 
 export async function POST(request: Request) {
-  try { await requireOwner(); }
-  catch { return Response.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403, headers: noStore }); }
+  const denied = await ownerRouteDenied();
+  if (denied) return denied;
 
   const file = (await request.formData()).get("file");
-  if (!(file instanceof File) || file.size === 0 || file.size > maxBytes) return Response.json({ error: "1,5 MB altında bir JPG, PNG veya WebP seçin." }, { status: 400, headers: noStore });
+  if (!(file instanceof File) || file.size === 0 || file.size > maxBytes) return Response.json({ error: "1,5 MB altında bir JPG, PNG veya WebP seçin." }, { status: 400, headers: privateNoStore });
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = imageMime(bytes);
-  if (!mime) return Response.json({ error: "Yalnızca JPG, PNG ve WebP görselleri yüklenebilir." }, { status: 400, headers: noStore });
+  if (!mime) return Response.json({ error: "Yalnızca JPG, PNG ve WebP görselleri yüklenebilir." }, { status: 400, headers: privateNoStore });
 
   const [asset] = await getDatabase().insert(articleAssets).values({ name: file.name.slice(0, 160), mime, data: Buffer.from(bytes).toString("base64") }).returning({ id: articleAssets.id, name: articleAssets.name });
-  return Response.json({ url: `/api/article-images/${asset.id}`, name: asset.name }, { headers: noStore });
+  return Response.json({ url: `${uploadedImagePrefix}${asset.id}`, name: asset.name }, { headers: privateNoStore });
 }

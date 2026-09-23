@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, MoreHorizontal, Pencil, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { setAccessDuration, setCourseStatus, syncCatalogNow, updateCoursePrice } from "@/app/yonetim/egitimler/actions";
@@ -23,6 +23,7 @@ type Course = { id: string; slug: string; productId: string; title: string; pric
 type Filter = "published" | "inactive" | "all";
 type Edit = { kind: "price" | "access"; course: Course } | null;
 const perPage = 6;
+const statusLabel = { published: "Yayında", draft: "Taslak", archived: "Arşivde" } as const;
 const queryKey = ["owner", "courses"] as const;
 
 function formData(fields: Record<string, string>) {
@@ -32,11 +33,6 @@ function formData(fields: Record<string, string>) {
 }
 
 export function OwnerCourseTable({ initialCourses }: { initialCourses: Course[] }) {
-  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, gcTime: 300_000, retry: 1, refetchOnWindowFocus: false } } }));
-  return <QueryClientProvider client={client}><CourseTable initialCourses={initialCourses} /></QueryClientProvider>;
-}
-
-function CourseTable({ initialCourses }: { initialCourses: Course[] }) {
   const client = useQueryClient();
   const [tab, setTab] = useState<Filter>("published");
   const [search, setSearch] = useState("");
@@ -54,14 +50,13 @@ function CourseTable({ initialCourses }: { initialCourses: Course[] }) {
   const refresh = () => client.invalidateQueries({ queryKey });
   const status = useMutation({ mutationFn: async ({ id, next }: { id: string; next: Course["status"] }) => setCourseStatus(formData({ courseId: id, status: next })), onSuccess: () => { toast.success("Eğitim durumu güncellendi."); void refresh(); }, onError: () => toast.error("Eğitim durumu güncellenemedi.") });
   const sync = useMutation({ mutationFn: syncCatalogNow, onSuccess: () => { toast.success("Shopier ürünleri eşitlendi."); void refresh(); }, onError: () => toast.error("Shopier eşitlemesi başarısız oldu.") });
-  const edit = useMutation({ mutationFn: async ({ kind, course, value }: { kind: "price" | "access"; course: Course; value: string }) => {
-    const fields = { courseId: course.id, [kind === "price" ? "price" : "accessDays"]: value };
-    if (kind === "price") await updateCoursePrice(formData(fields));
-    else await setAccessDuration(formData(fields));
-  }, onSuccess: () => { setEditing(null); toast.success("Değişiklik kaydedildi."); void refresh(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Değişiklik kaydedilemedi.") });
+  const edit = useMutation({ mutationFn: ({ kind, course, value }: { kind: "price" | "access"; course: Course; value: string }) =>
+    kind === "price" ? updateCoursePrice(formData({ courseId: course.id, price: value })) : setAccessDuration(formData({ courseId: course.id, accessDays: value })),
+  onSuccess: () => { setEditing(null); toast.success("Değişiklik kaydedildi."); void refresh(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Değişiklik kaydedilemedi.") });
 
   const courses = data.courses;
-  const counts = { published: courses.filter(item => item.status === "published").length, inactive: courses.filter(item => item.status !== "published").length, all: courses.length };
+  const published = courses.filter(item => item.status === "published").length;
+  const counts = { published, inactive: courses.length - published, all: courses.length };
   const matching = courses.filter(item => (tab === "all" || (tab === "inactive" ? item.status !== "published" : item.status === "published")) && `${item.title} ${item.slug}`.toLocaleLowerCase("tr-TR").includes(search.toLocaleLowerCase("tr-TR").trim()));
   const pages = Math.max(1, Math.ceil(matching.length / perPage));
   const currentPage = Math.min(page, pages);
@@ -74,7 +69,7 @@ function CourseTable({ initialCourses }: { initialCourses: Course[] }) {
       <TabsContent value={tab}>
         {isError && <p className="mb-4 text-sm text-destructive">Güncel veriler yüklenemedi; son görülen liste gösteriliyor.</p>}
         {isFetching && <p className="sr-only" aria-live="polite">Eğitimler yenileniyor</p>}
-        {visible.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{courses.length === 0 ? "Henüz eğitim yok. Shopier’de bir dijital ürün oluşturup eşitleyin." : "Bu görünümde eğitim bulunamadı."}</div> : <div className="overflow-x-auto rounded-xl border"><Table className="min-w-[720px]"><TableHeader><TableRow className="bg-muted/30"><TableHead className="w-[38%] pl-5">Eğitim</TableHead><TableHead>Fiyat ve erişim</TableHead><TableHead>Satış</TableHead><TableHead>Durum</TableHead><TableHead className="w-14 text-right"><span className="sr-only">İşlemler</span></TableHead></TableRow></TableHeader><TableBody>{visible.map(course => <TableRow key={course.id} className="h-20"><TableCell className="pl-5"><Link href={`/yonetim/egitimler/${course.id}`} className="block font-semibold text-foreground hover:text-primary hover:underline">{course.title}</Link><span className="mt-1 block max-w-[320px] truncate text-xs text-muted-foreground">/akademi/{course.slug}</span></TableCell><TableCell><span className="block font-medium">{course.priceKurus ? formatPrice(course.priceKurus) : "Fiyat yok"}</span><span className="text-xs text-muted-foreground">{course.accessDurationDays} gün erişim</span></TableCell><TableCell><span className="block font-medium">{course.sales}</span>{course.sales - course.claimed > 0 && <span className="text-xs text-muted-foreground">{course.sales - course.claimed} hesap bekliyor</span>}</TableCell><TableCell><Badge variant={course.status === "published" ? "secondary" : "outline"}>{course.status === "published" ? "Yayında" : course.status === "draft" ? "Taslak" : "Arşivde"}</Badge></TableCell><TableCell className="pr-4 text-right"><DropdownMenu><DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" />} aria-label={`${course.title} işlemleri`}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-52"><DropdownMenuGroup><DropdownMenuItem render={<Link href={`/yonetim/egitimler/${course.id}`} />}><BookOpen />Dersleri düzenle</DropdownMenuItem><DropdownMenuItem onClick={() => setEditing({ kind: "access", course })}><SlidersHorizontal />Erişim süresi</DropdownMenuItem>{!course.discounted && course.priceKurus && <DropdownMenuItem onClick={() => setEditing({ kind: "price", course })}><Pencil />Fiyatı değiştir</DropdownMenuItem>}<DropdownMenuItem render={<a href={`https://www.shopier.com/${course.productId}`} target="_blank" rel="noopener noreferrer" />}><ExternalLink />Shopier’de aç</DropdownMenuItem></DropdownMenuGroup><DropdownMenuSeparator /><DropdownMenuGroup>{course.status === "published" ? <DropdownMenuItem disabled={status.isPending} onClick={() => status.mutate({ id: course.id, next: "draft" })}>Yayından kaldır</DropdownMenuItem> : <DropdownMenuItem disabled={status.isPending} onClick={() => status.mutate({ id: course.id, next: "published" })}>Yayınla</DropdownMenuItem>}{course.status !== "archived" && <DropdownMenuItem disabled={status.isPending} onClick={() => status.mutate({ id: course.id, next: "archived" })}><Archive />Arşivle</DropdownMenuItem>}</DropdownMenuGroup></DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table></div>}
+        {visible.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{courses.length === 0 ? "Henüz eğitim yok. Shopier’de bir dijital ürün oluşturup eşitleyin." : "Bu görünümde eğitim bulunamadı."}</div> : <div className="overflow-x-auto rounded-xl border"><Table className="min-w-[720px]"><TableHeader><TableRow className="bg-muted/30"><TableHead className="w-[38%] pl-5">Eğitim</TableHead><TableHead>Fiyat ve erişim</TableHead><TableHead>Satış</TableHead><TableHead>Durum</TableHead><TableHead className="w-14 text-right"><span className="sr-only">İşlemler</span></TableHead></TableRow></TableHeader><TableBody>{visible.map(course => <TableRow key={course.id} className="h-20"><TableCell className="pl-5"><Link href={`/yonetim/egitimler/${course.id}`} className="block font-semibold text-foreground hover:text-primary hover:underline">{course.title}</Link><span className="mt-1 block max-w-[320px] truncate text-xs text-muted-foreground">/akademi/{course.slug}</span></TableCell><TableCell><span className="block font-medium">{course.priceKurus ? formatPrice(course.priceKurus) : "Fiyat yok"}</span><span className="text-xs text-muted-foreground">{course.accessDurationDays} gün erişim</span></TableCell><TableCell><span className="block font-medium">{course.sales}</span>{course.sales - course.claimed > 0 && <span className="text-xs text-muted-foreground">{course.sales - course.claimed} hesap bekliyor</span>}</TableCell><TableCell><Badge variant={course.status === "published" ? "secondary" : "outline"}>{statusLabel[course.status]}</Badge></TableCell><TableCell className="pr-4 text-right"><DropdownMenu><DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" />} aria-label={`${course.title} işlemleri`}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-52"><DropdownMenuGroup><DropdownMenuItem render={<Link href={`/yonetim/egitimler/${course.id}`} />}><BookOpen />Dersleri düzenle</DropdownMenuItem><DropdownMenuItem onClick={() => setEditing({ kind: "access", course })}><SlidersHorizontal />Erişim süresi</DropdownMenuItem>{!course.discounted && course.priceKurus && <DropdownMenuItem onClick={() => setEditing({ kind: "price", course })}><Pencil />Fiyatı değiştir</DropdownMenuItem>}<DropdownMenuItem render={<a href={`https://www.shopier.com/${course.productId}`} target="_blank" rel="noopener noreferrer" />}><ExternalLink />Shopier’de aç</DropdownMenuItem></DropdownMenuGroup><DropdownMenuSeparator /><DropdownMenuGroup>{course.status === "published" ? <DropdownMenuItem disabled={status.isPending} onClick={() => status.mutate({ id: course.id, next: "draft" })}>Yayından kaldır</DropdownMenuItem> : <DropdownMenuItem disabled={status.isPending} onClick={() => status.mutate({ id: course.id, next: "published" })}>Yayınla</DropdownMenuItem>}{course.status !== "archived" && <DropdownMenuItem disabled={status.isPending} onClick={() => status.mutate({ id: course.id, next: "archived" })}><Archive />Arşivle</DropdownMenuItem>}</DropdownMenuGroup></DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table></div>}
       </TabsContent>
     </Tabs>
     {pages > 1 && <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">{matching.length} eğitim · Sayfa {currentPage}/{pages}</p><Pagination className="mx-0 w-auto"><PaginationContent><PaginationItem><Button type="button" size="sm" variant="outline" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Önceki</Button></PaginationItem><PaginationItem><Button type="button" size="sm" variant="outline" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Sonraki</Button></PaginationItem></PaginationContent></Pagination></div>}

@@ -7,7 +7,7 @@ import { tr } from "date-fns/locale";
 import { CalendarDays, Check, ImagePlus, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { saveArticle } from "@/app/yonetim/yazilar/actions";
-import { articleSlugFromTitle } from "@/lib/article-slug";
+import { articleSlug } from "@/lib/akademi/slug";
 import { ArticleRichEditor } from "@/components/akademi/article-rich-editor";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -33,7 +33,7 @@ function dateFromLabel(label?: string) {
 
 export function ArticleForm({ article, initialImages }: { article?: ArticleValues; initialImages: ImageChoice[] }) {
   const [title, setTitle] = useState(article?.title ?? "");
-  const [date, setDate] = useState<Date>(dateFromLabel(article?.date));
+  const [date, setDate] = useState<Date>(() => dateFromLabel(article?.date));
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [images, setImages] = useState(initialImages);
   const [image, setImage] = useState(article?.image ?? initialImages[0]?.url ?? "");
@@ -70,7 +70,7 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
     <input type="hidden" name="body" value={body} />
     <FieldGroup className="grid gap-7 sm:grid-cols-2">
       <Field className="sm:col-span-2"><FieldLabel htmlFor="article-title">Başlık</FieldLabel><Input id="article-title" className="h-11" name="title" value={title} onChange={event => setTitle(event.target.value)} required maxLength={180} /></Field>
-      <Field><FieldLabel htmlFor="article-slug">URL adı</FieldLabel><Input id="article-slug" className="h-11 bg-muted/50" value={article?.slug ?? articleSlugFromTitle(title)} readOnly tabIndex={-1} /><FieldDescription>Başlıktan otomatik oluşturulur.</FieldDescription></Field>
+      <Field><FieldLabel htmlFor="article-slug">URL adı</FieldLabel><Input id="article-slug" className="h-11 bg-muted/50" value={article?.slug ?? articleSlug(title)} readOnly tabIndex={-1} /><FieldDescription>Başlıktan otomatik oluşturulur.</FieldDescription></Field>
       <Field><FieldLabel htmlFor="article-category">Kategori</FieldLabel><Input id="article-category" className="h-11" name="category" defaultValue={article?.category} required maxLength={70} /></Field>
       <Field><FieldLabel>Tarih</FieldLabel><Popover open={calendarOpen} onOpenChange={setCalendarOpen}><PopoverTrigger render={<Button type="button" variant="outline" className="h-11 w-full justify-start font-normal" />}><CalendarDays className="size-4" />{format(date, "d MMM yyyy", { locale: tr })}</PopoverTrigger><PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={date} onSelect={selected => { if (selected) { setDate(selected); setCalendarOpen(false); } }} locale={tr} /></PopoverContent></Popover></Field>
       <Field><FieldLabel htmlFor="article-duration">Okuma süresi</FieldLabel><InputGroup className="h-11"><InputGroupInput id="article-duration" name="durationAmount" type="number" min={1} max={999} required defaultValue={durationMatch?.[1] ?? "5"} className="h-full" /><InputGroupAddon align="inline-end" className="pr-1"><Select name="durationUnit" defaultValue={durationMatch?.[2]?.toLowerCase() === "saat" ? "hour" : "minute"}><SelectTrigger aria-label="Okuma süresi birimi" className="h-9 border-0 shadow-none"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="minute">dk.</SelectItem><SelectItem value="hour">saat</SelectItem></SelectContent></Select></InputGroupAddon></InputGroup></Field>

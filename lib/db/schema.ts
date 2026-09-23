@@ -80,7 +80,7 @@ export const articleEdits = pgTable("article_edits", {
   ...timestamps(),
 }, (t) => [check("article_edits_status_valid", sql`${t.status} IN ('draft', 'published')`)]);
 
-// Small owner-uploaded cover images. Public reads use an immutable image route; writes require owner access.
+// Owner-uploaded cover images (base64), served by /api/article-images/[id].
 export const articleAssets = pgTable("article_assets", {
   id: id(),
   name: text("name").notNull(),

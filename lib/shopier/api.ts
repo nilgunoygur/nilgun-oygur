@@ -27,7 +27,7 @@ export const shopierOrderSchema = z.object({
   })).min(1),
 });
 export type ShopierOrder = z.output<typeof shopierOrderSchema>;
-export const shopierRefundSchema = z.object({
+const shopierRefundSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
   orderId: z.union([z.string(), z.number()]).transform(String),
   status: z.enum(["pending", "failed", "succeeded"]),
@@ -37,7 +37,7 @@ export const shopierRefundSchema = z.object({
   currency: z.string(),
   total: z.string(),
 });
-export type ShopierRefund = z.output<typeof shopierRefundSchema>;
+type ShopierRefund = z.output<typeof shopierRefundSchema>;
 
 const id = z.union([z.string(), z.number()]).transform(String);
 export const shopierProductSchema = z.object({

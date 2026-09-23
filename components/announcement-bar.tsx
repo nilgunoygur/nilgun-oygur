@@ -28,6 +28,7 @@ export function AnnouncementBar({ config, preview = false }: { config: BannerCon
 
   if (config.items.length === 0) return null;
   const moving = config.animation === "scroll" && !reducedMotion;
+  // Each half must be wider than the widest screen, or the loop shows a gap.
   const run = Array.from({ length: Math.max(5, Math.ceil(24 / config.items.length)) }, () => config.items).flat();
   const half = (hidden: boolean) => <ul className="m-0 flex shrink-0 list-none items-center p-0" aria-hidden={hidden || undefined}>
     {run.map((item, index) => {
@@ -40,7 +41,6 @@ export function AnnouncementBar({ config, preview = false }: { config: BannerCon
   </ul>;
 
   return <aside
-    data-announcement-bar
     aria-label="Duyurular"
     aria-hidden={preview || undefined}
     className={cn("group h-[38px] overflow-hidden text-[13px]", preview ? "relative w-full rounded-xl" : "fixed inset-x-0 top-0 z-41", moving && "[mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)]")}
@@ -57,7 +57,7 @@ export function AnnouncementBar({ config, preview = false }: { config: BannerCon
       animationFillMode: "forwards",
       animationPlayState: paused ? "paused" : "running",
     } as React.CSSProperties}>{half(false)}{half(true)}</div>
-      : <div className="relative flex h-full items-center justify-center overflow-hidden px-5 text-center" aria-live="off">
+      : <div className="relative flex h-full items-center justify-center overflow-hidden px-5 text-center">
         {config.animation === "fade" && !reducedMotion ? <AnimatePresence initial={false} mode="wait">
           <m.div key={active % config.items.length} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: Math.min(0.5, config.speedSeconds / 5) }} className="absolute inset-0 flex items-center justify-center px-5">
             <AnnouncementText item={config.items[active % config.items.length]} tabIndex={preview ? -1 : undefined} />

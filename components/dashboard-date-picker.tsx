@@ -9,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import type { Period } from "@/lib/akademi/dashboard";
+import { dayLabel, istanbulDay } from "@/lib/akademi/format";
 
-const dateLabel = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Istanbul" });
-const isoDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Europe/Istanbul" }).format(date);
 const calendarDay = (value: string) => new Date(`${value}T12:00:00+03:00`);
 const labels: Record<Period, string> = { week: "Hafta", month: "Ay", year: "Yıl", custom: "Özel tarih" };
 
@@ -25,7 +24,7 @@ export function DashboardDatePicker({ period, from, to, today }: { period: Perio
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger render={<Button variant="outline" size="pill" className="border-forest/10 bg-mist text-forest hover:bg-mist/80" />}>
       <CalendarDays className="size-4" />
-      <span className="max-sm:hidden">{labels[period]} · </span>{dateLabel.format(calendarDay(from))} – {dateLabel.format(calendarDay(to))}
+      <span className="max-sm:hidden">{labels[period]} · </span>{dayLabel.format(calendarDay(from))} – {dayLabel.format(calendarDay(to))}
       <ChevronDown className="size-3.5 opacity-60" />
     </PopoverTrigger>
     <PopoverContent align="end" className="w-[390px] max-w-[calc(100vw-2rem)] rounded-2xl p-4">
@@ -38,7 +37,7 @@ export function DashboardDatePicker({ period, from, to, today }: { period: Perio
       </div>
       {custom && <>
         <Calendar mode="range" required={false} locale={tr} timeZone="Europe/Istanbul" selected={selected} onSelect={setSelected} disabled={{ after: calendarDay(today) }} numberOfMonths={1} className="w-full px-0 py-4" classNames={{ root: "w-full", months: "w-full", month: "w-full", month_grid: "w-full" }} />
-        <Button className="w-full" disabled={!selected?.from || !selected?.to} onClick={() => { if (selected?.from && selected.to) navigate(`/yonetim?period=custom&from=${isoDay(selected.from)}&to=${isoDay(selected.to)}`); }}>Uygula</Button>
+        <Button className="w-full" disabled={!selected?.from || !selected?.to} onClick={() => { if (selected?.from && selected.to) navigate(`/yonetim?period=custom&from=${istanbulDay(selected.from)}&to=${istanbulDay(selected.to)}`); }}>Uygula</Button>
       </>}
     </PopoverContent>
   </Popover>;

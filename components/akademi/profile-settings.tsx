@@ -1,4 +1,5 @@
 "use client";
+import { accountCard } from "@/lib/styles";
 import { useId, useState } from "react";
 import { authClient } from "@/lib/auth/client";
 import { avatarSource } from "@/lib/auth/profile";
@@ -20,7 +21,7 @@ export function ProfileSettings({ user, localEmail }: { user: { name: string; em
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [show, setShow] = useState(false);
   return <div className="grid gap-8">
-    <form className="rounded-[24px] border border-forest/10 bg-white p-6 shadow-sm sm:p-8" onSubmit={async (event) => { event.preventDefault(); setBusy(true); try { const result = await saveProfile({ name, image }); setProfile(result); if (result.status === "success") void refetch(); } catch { setProfile({ status: "error", message: "Profil kaydedilemedi. Lütfen tekrar deneyin." }); } finally { setBusy(false); } }}>
+    <form className={accountCard} onSubmit={async (event) => { event.preventDefault(); setBusy(true); try { const result = await saveProfile({ name, image }); setProfile(result); if (result.status === "success") void refetch(); } catch { setProfile({ status: "error", message: "Profil kaydedilemedi. Lütfen tekrar deneyin." }); } finally { setBusy(false); } }}>
       <FieldGroup>
         <div className="mb-2"><h2 className="text-2xl font-semibold text-forest">Kişisel bilgiler</h2><p className="mt-2 text-sm text-stone">Adınızı ve profil fotoğrafınızı güncelleyin.</p></div>
         <div className="flex items-center gap-4"><Avatar className="size-16"><AvatarImage src={image ?? undefined} alt="Profil fotoğrafınız" /><AvatarFallback>{name.charAt(0).toLocaleUpperCase("tr-TR")}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><Field><FieldLabel htmlFor={`${id}-photo`}>Profil fotoğrafı</FieldLabel><Input id={`${id}-photo`} type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={async (event) => {
@@ -43,7 +44,7 @@ export function ProfileSettings({ user, localEmail }: { user: { name: string; em
         <FormStatus state={profile} /><Button disabled={busy} type="submit">{busy ? "Kaydediliyor…" : "Profili kaydet"}</Button>
       </FieldGroup>
     </form>
-    <form className="rounded-[24px] border border-forest/10 bg-white p-6 shadow-sm sm:p-8" onSubmit={async (event) => {
+    <form className={accountCard} onSubmit={async (event) => {
       event.preventDefault(); const form = event.currentTarget; const values = new FormData(form);
       const newPassword = String(values.get("newPassword"));
       if (newPassword !== values.get("confirmPassword")) { setPassword({ status: "error", message: "Yeni şifreler eşleşmiyor." }); return; }

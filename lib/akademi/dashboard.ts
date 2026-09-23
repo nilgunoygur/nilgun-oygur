@@ -4,15 +4,18 @@ import { getDatabase } from "@/lib/db";
 import { shopierPurchases, user } from "@/lib/db/schema";
 import { getShopier } from "@/lib/shopier";
 import { buyerEmail, parsePriceKurus } from "@/lib/shopier/api";
+import { istanbulDay } from "./format";
 
 export type Period = "week" | "month" | "year" | "custom";
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const dateInIstanbul = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 const dayAfter = (value: string) => new Date(Date.parse(`${value}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 const toInstant = (value: string) => new Date(`${value}T00:00:00+03:00`);
+const purchaseDay = sql<string>`to_char(${shopierPurchases.purchasedAt} AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD')`;
+const purchaseTotal = sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::float8`;
+export type DashboardRange = ReturnType<typeof dashboardRange>;
 
 export function dashboardRange(params: { period?: string; from?: string; to?: string }) {
-  const today = dateInIstanbul(new Date());
+  const today = istanbulDay(new Date());
   const period: Period = params.period === "week" || params.period === "year" || params.period === "custom" ? params.period : "month";
   const [year, month, day] = today.split("-").map(Number);
   const dayOfWeek = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
@@ -24,20 +27,20 @@ export function dashboardRange(params: { period?: string; from?: string; to?: st
   return { period, from, to, today, start: toInstant(from), end: toInstant(dayAfter(to)) };
 }
 
-export async function ownerDashboard(range: ReturnType<typeof dashboardRange>) {
+export async function ownerDashboard(range: DashboardRange) {
   const db = getDatabase();
   const purchasePeriod = and(gte(shopierPurchases.purchasedAt, range.start), lt(shopierPurchases.purchasedAt, range.end));
   const [allUsers, newUsers, sales, revenue, activity] = await Promise.all([
     db.select({ value: count() }).from(user),
     db.select({ value: count() }).from(user).where(and(gte(user.createdAt, range.start), lt(user.createdAt, range.end))),
     db.select({ orders: countDistinct(shopierPurchases.shopierOrderId), items: count() }).from(shopierPurchases).where(purchasePeriod),
-    db.select({ currency: shopierPurchases.currency, amount: sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::float8` }).from(shopierPurchases).where(purchasePeriod).groupBy(shopierPurchases.currency),
-    db.select({ day: sql<string>`to_char(${shopierPurchases.purchasedAt} AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD')`, amount: sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::float8`, orders: countDistinct(shopierPurchases.shopierOrderId) }).from(shopierPurchases).where(and(purchasePeriod, eq(shopierPurchases.currency, "TRY"))).groupBy(sql`to_char(${shopierPurchases.purchasedAt} AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD')`).orderBy(sql`to_char(${shopierPurchases.purchasedAt} AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD')`),
+    db.select({ currency: shopierPurchases.currency, amount: purchaseTotal }).from(shopierPurchases).where(purchasePeriod).groupBy(shopierPurchases.currency),
+    db.select({ day: purchaseDay, amount: purchaseTotal, orders: countDistinct(shopierPurchases.shopierOrderId) }).from(shopierPurchases).where(and(purchasePeriod, eq(shopierPurchases.currency, "TRY"))).groupBy(purchaseDay).orderBy(purchaseDay),
   ]);
   return { totalUsers: allUsers[0].value, newUsers: newUsers[0].value, orders: sales[0].orders, items: sales[0].items, revenue, activity };
 }
 
-export async function recentShopierTransactions(range: ReturnType<typeof dashboardRange>) {
+export async function recentShopierTransactions(range: DashboardRange) {
   try {
     const { orders, refunds, unavailable: refundsUnavailable } = await getShopier().listRecentTransactions(range.start, range.end);
     const sales = orders.filter(order => order.paymentStatus === "paid").map(order => ({
@@ -58,7 +61,7 @@ export async function recentShopierTransactions(range: ReturnType<typeof dashboa
   }
 }
 
-export function chartSeries(range: ReturnType<typeof dashboardRange>, activity: Awaited<ReturnType<typeof ownerDashboard>>["activity"]) {
+export function chartSeries(range: DashboardRange, activity: Awaited<ReturnType<typeof ownerDashboard>>["activity"]) {
   const days = (Date.parse(`${range.to}T00:00:00Z`) - Date.parse(`${range.from}T00:00:00Z`)) / 86_400_000 + 1;
   const unit = days > 1095 ? "year" : days > 45 ? "month" : "day";
   const size = unit === "year" ? 4 : unit === "month" ? 7 : 10;

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { defaultBanner, type BannerConfig } from "@/lib/announcements";
 import { requireOwner } from "@/lib/auth/viewer";
@@ -54,22 +53,11 @@ export async function saveBanner(previous: BannerActionState, formData: FormData
   }
 
   try {
-    const db = getDatabase();
-    const [current] = await db.select().from(bannerSettings).where(eq(bannerSettings.id, 1)).limit(1);
-    if (!current) {
-      await db.insert(bannerSettings).values({
-        id: 1,
-        draft: draft ?? defaultBanner,
-        published: intent === "publish" ? draft! : defaultBanner,
-        isPublished: intent !== "unpublish",
-      });
-    } else if (intent === "unpublish") {
-      await db.update(bannerSettings).set({ isPublished: false, updatedAt: new Date() }).where(eq(bannerSettings.id, 1));
-    } else if (intent === "publish") {
-      await db.update(bannerSettings).set({ draft: draft!, published: draft!, isPublished: true, updatedAt: new Date() }).where(eq(bannerSettings.id, 1));
-    } else {
-      await db.update(bannerSettings).set({ draft: draft!, updatedAt: new Date() }).where(eq(bannerSettings.id, 1));
-    }
+    const changes = !draft ? { isPublished: false } : intent === "publish" ? { draft, published: draft, isPublished: true } : { draft };
+    const [saved] = await getDatabase().insert(bannerSettings)
+      .values({ id: 1, draft: draft ?? defaultBanner, published: intent === "publish" ? draft : defaultBanner, isPublished: intent !== "unpublish" })
+      .onConflictDoUpdate({ target: bannerSettings.id, set: { ...changes, updatedAt: new Date() } })
+      .returning({ isPublished: bannerSettings.isPublished });
     if (intent !== "save") {
       updateTag("public-banner");
       revalidatePath("/", "layout");
@@ -78,7 +66,7 @@ export async function saveBanner(previous: BannerActionState, formData: FormData
     return {
       message: intent === "save" ? "Taslak kaydedildi." : intent === "publish" ? "Banner yayınlandı." : "Banner yayından kaldırıldı.",
       error: false,
-      isPublished: intent === "save" ? current?.isPublished ?? true : intent === "publish",
+      isPublished: saved.isPublished,
     };
   } catch (error) {
     console.error("Banner settings could not be saved.", error);

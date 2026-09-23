@@ -12,15 +12,12 @@ export type BannerConfig = {
   separator: string;
 };
 
-// Sliding banner at the top of every page; an empty list hides it.
-export const announcements: Announcement[] = [
-  { text: "Nilgün Oygur Akademi açıldı: online eğitimleri keşfedin", href: "/akademi" },
-  { text: "Ödemeler Shopier güvencesiyle", href: "/akademi#egitimler" },
-  { text: "Satın aldığınız eğitimlere hesabınızdan ulaşın", href: "/akademi/giris" },
-];
-
 export const defaultBanner: BannerConfig = {
-  items: announcements,
+  items: [
+    { text: "Nilgün Oygur Akademi açıldı: online eğitimleri keşfedin", href: "/akademi" },
+    { text: "Ödemeler Shopier güvencesiyle", href: "/akademi#egitimler" },
+    { text: "Satın aldığınız eğitimlere hesabınızdan ulaşın", href: "/akademi/giris" },
+  ],
   backgroundColor: "#224c40",
   textColor: "#f1f5e9",
   accentColor: "#d8ef9f",

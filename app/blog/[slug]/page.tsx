@@ -4,23 +4,25 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { articles as importedArticles } from "@/lib/content";
-import { getPublicArticles } from "@/lib/articles";
+import { getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export function generateStaticParams() {
-  return importedArticles.map((a) => ({ slug: a.href.slice(6) }));
+  return importedArticles.map((a) => ({ slug: slugOf(a) }));
+}
+async function findArticle(params: Promise<{ slug: string }>) {
+  const { slug } = await params;
+  return (await getPublicArticles()).find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
 }
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
-  const articles = await getPublicArticles();
-  const a = articles.find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
+  const a = await findArticle(params);
   return {
     title: a?.title,
     description: a?.body[0]?.text,
@@ -35,9 +37,7 @@ export default async function Article({
   return <Suspense fallback={<div className="min-h-[70vh]" />}><ArticleContent params={params} /></Suspense>;
 }
 async function ArticleContent({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const articles = await getPublicArticles();
-  const a = articles.find((a) => a.href === `/blog/${normalizeSlug(slug)}`);
+  const a = await findArticle(params);
   if (!a) notFound();
   return (
     <>
@@ -62,7 +62,7 @@ async function ArticleContent({ params }: { params: Promise<{ slug: string }> })
             src={a.image}
             alt={a.title}
             fill
-            unoptimized={a.image.startsWith("/api/article-images/")}
+            unoptimized={a.image.startsWith(uploadedImagePrefix)}
             sizes="(max-width:760px) 95vw, 1100px"
             preload
           />
