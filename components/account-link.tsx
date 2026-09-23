@@ -23,7 +23,7 @@ export function AccountLink({ compact = false }: { compact?: boolean }) {
   const firstName = user.name.trim().split(/\s+/)[0] || "Hesabım";
   return <>
     <DropdownMenu onOpenChange={(open) => { if (open) void accountOptions().then(setOptions).catch(() => setOptions(guestOptions)); }}>
-      <DropdownMenuTrigger render={<Button variant="ghost" className="gap-2 rounded-full px-2 hover:bg-mist hover:text-forest aria-expanded:bg-mist aria-expanded:text-forest" />} aria-label={`Hesap menüsü — ${user.name}`}>
+      <DropdownMenuTrigger render={<Button variant="ghost" className="h-auto min-h-11 gap-2 rounded-full px-1.5 py-1.5 hover:bg-mist hover:text-forest aria-expanded:bg-mist aria-expanded:text-forest" />} aria-label={`Hesap menüsü — ${user.name}`}>
         <Avatar><AvatarImage src={avatarSource(user.image)} alt="" /><AvatarFallback>{firstName.charAt(0).toLocaleUpperCase("tr-TR")}</AvatarFallback></Avatar>
         {!compact && <><span>{firstName}</span><ChevronDown className="size-3" /></>}
       </DropdownMenuTrigger>
