@@ -1,0 +1,4 @@
+ALTER TYPE "public"."event_status" ADD VALUE 'processing' BEFORE 'processed';--> statement-breakpoint
+ALTER TABLE "provider_events" ADD COLUMN "lease_id" uuid;--> statement-breakpoint
+ALTER TABLE "provider_events" ADD COLUMN "lease_expires_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "provider_events" ADD CONSTRAINT "provider_event_lease_state_valid" CHECK (("provider_events"."status" = 'processing' AND "provider_events"."lease_id" IS NOT NULL AND "provider_events"."lease_expires_at" IS NOT NULL) OR ("provider_events"."status" <> 'processing' AND "provider_events"."lease_id" IS NULL AND "provider_events"."lease_expires_at" IS NULL));

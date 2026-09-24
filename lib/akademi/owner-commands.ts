@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { adminAuditLog, courses } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
+import type { ShopierClient } from "../shopier/api.ts";
 
 // Owner Commands: every owner change runs with its audit entry in one transaction, and only when something changed.
 // Callers authorize the owner (verified session and owner row) before calling.
@@ -33,6 +34,32 @@ export async function setAccessDuration(db: Database, actorId: string, courseId:
     const changed = await tx.update(courses).set({ accessDurationDays: days }).where(eq(courses.id, courseId)).returning({ id: courses.id });
     return changed.length > 0;
   });
+}
+
+/** Shopier cannot share a transaction with Postgres, so record an intent before the external write and its outcome after. */
+export async function updateCoursePrice(db: Database, actorId: string, courseId: string, priceKurus: number, shopier: Pick<ShopierClient, "getProduct" | "updateProductPrice">) {
+  if (!Number.isSafeInteger(priceKurus) || priceKurus < 100 || priceKurus > 1_000_000_000) throw new Error("Eğitim fiyatı geçersiz.");
+  const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
+  if (!course) throw new Error("Eğitim bulunamadı.");
+  const product = await shopier.getProduct(course.productId);
+  if (!product || product.type !== "digital" || product.priceData.currency !== "TRY") throw new Error("Shopier ürünü güncellenemiyor.");
+  if (product.priceData.discount) throw new Error("İndirimli fiyatı Shopier mağazasında düzenleyin.");
+
+  const entry = (action: string, reason: string) => db.insert(adminAuditLog).values({
+    actorId, action, resourceType: "course", resourceId: courseId, reason,
+  });
+  await entry("course.price_change_requested", `Shopier fiyatı ${priceKurus} kuruş olarak istendi`);
+  try {
+    await shopier.updateProductPrice(course.productId, priceKurus);
+  } catch (error) {
+    await entry("course.price_change_failed", `Shopier fiyatı ${priceKurus} kuruşa çevrilemedi`);
+    throw error;
+  }
+  try {
+    await entry("course.price_changed", `Shopier fiyatı ${priceKurus} kuruşa çevrildi`);
+  } catch {
+    throw new Error("Shopier fiyatı değişti, ancak sonuç audit kaydı tamamlanamadı. Yeniden eşitleyip kayıtları kontrol edin.");
+  }
 }
 
 /** Runs the catalog sync, then records who asked for it. */
