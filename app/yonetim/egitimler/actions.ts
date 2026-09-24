@@ -1,12 +1,8 @@
 "use server";
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
 import { akademi, catalogChangedByOwner } from "@/lib/akademi/server";
-import { getDatabase } from "@/lib/db";
-import { courses } from "@/lib/db/schema";
-import { getShopier } from "@/lib/shopier";
 
 const statusSchema = z.object({ courseId: z.uuid(), status: z.enum(["draft", "published", "archived"]) });
 
@@ -36,15 +32,9 @@ export async function syncCatalogNow() {
 const priceSchema = z.object({ courseId: z.uuid(), price: z.coerce.number().min(1).max(10_000_000) });
 
 export async function updateCoursePrice(formData: FormData) {
-  await requireOwner();
+  const viewer = await requireOwner();
   const { courseId, price } = priceSchema.parse({ courseId: formData.get("courseId"), price: formData.get("price") });
-  const [course] = await getDatabase().select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
-  if (!course) throw new Error("Eğitim bulunamadı.");
-  const shopier = getShopier();
-  const product = await shopier.getProduct(course.productId);
-  if (!product || product.type !== "digital" || product.priceData.currency !== "TRY") throw new Error("Shopier ürünü güncellenemiyor.");
-  if (product.priceData.discount) throw new Error("İndirimli fiyatı Shopier mağazasında düzenleyin.");
-  await shopier.updateProductPrice(course.productId, Math.round(price * 100));
+  await akademi().owner.updateCoursePrice(viewer.user.id, courseId, Math.round(price * 100));
   catalogChangedByOwner();
   refresh();
 }

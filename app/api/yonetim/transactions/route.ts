@@ -1,4 +1,4 @@
-import { dashboardRange, recentShopierTransactions } from "@/lib/akademi/dashboard";
+import { akademi } from "@/lib/akademi/server";
 import { ownerRouteDenied, privateNoStore } from "@/lib/auth/viewer";
 
 export async function GET(request: Request) {
@@ -6,6 +6,6 @@ export async function GET(request: Request) {
   if (denied) return denied;
 
   const params = new URL(request.url).searchParams;
-  const range = dashboardRange({ period: "custom", from: params.get("from") ?? undefined, to: params.get("to") ?? undefined });
-  return Response.json(await recentShopierTransactions(range), { headers: privateNoStore });
+  const transactions = await akademi().owner.overview.transactions({ period: "custom", from: params.get("from") ?? undefined, to: params.get("to") ?? undefined });
+  return Response.json(transactions, { headers: privateNoStore });
 }
