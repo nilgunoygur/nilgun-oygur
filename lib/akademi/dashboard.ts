@@ -1,8 +1,8 @@
 import { and, count, countDistinct, eq, gte, lt, sql } from "drizzle-orm";
-import { shopierPurchases, user } from "@/lib/db/schema";
-import type { Database } from "@/lib/db/types";
-import { buyerEmail, parsePriceKurus, type ShopierClient } from "@/lib/shopier/api";
-import { istanbulDay } from "./format";
+import { shopierPurchases, user } from "../db/schema.ts";
+import type { Database } from "../db/types.ts";
+import { buyerEmail, parsePriceKurus, type ShopierClient } from "../shopier/api.ts";
+import { istanbulDay } from "./format.ts";
 
 export type Period = "week" | "month" | "year" | "custom";
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
