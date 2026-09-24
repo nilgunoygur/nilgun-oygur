@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight, BookOpen, FileText, Megaphone, ShoppingBag, Users } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
-import { chartSeries, dashboardRange, ownerDashboard } from "@/lib/akademi/dashboard";
+import { akademi } from "@/lib/akademi/server";
 import { DashboardDatePicker } from "@/components/dashboard-date-picker";
 import { OwnerRecentTransactions } from "@/components/owner-recent-transactions";
 import { Spinner } from "@/components/ui/spinner";
@@ -25,9 +25,7 @@ export default function OwnerPage({ searchParams }: { searchParams: Search }) {
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
   await ownerPage();
-  const range = dashboardRange(await searchParams);
-  const data = await ownerDashboard(range);
-  const chart = chartSeries(range, data.activity);
+  const { range, data, chart } = await akademi().owner.overview.read(await searchParams);
   const primaryRevenue = data.revenue.find(item => item.currency === "TRY");
   const otherRevenue = data.revenue.filter(item => item.currency !== "TRY");
   const max = Math.max(1, ...chart.points.map(item => item.amount));

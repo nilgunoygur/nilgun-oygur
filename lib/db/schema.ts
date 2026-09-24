@@ -102,7 +102,7 @@ export const publicationStatus = pgEnum("publication_status", ["draft", "publish
 export const lessonKind = pgEnum("lesson_kind", ["video", "live"]);
 export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "cancelled", "completed"]);
 export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
-export const eventStatus = pgEnum("event_status", ["pending", "processed", "failed"]);
+export const eventStatus = pgEnum("event_status", ["pending", "processing", "processed", "failed"]);
 
 // Links a Shopier product to the site. Title, price and images are read live from the Shopier API.
 export const courses = pgTable("courses", {
@@ -233,11 +233,17 @@ export const providerEvents = pgTable("provider_events", {
   eventIdentity: text("event_identity").notNull(),
   verifiedPayloadHash: text("verified_payload_hash").notNull(),
   status: eventStatus("status").notNull().default("pending"),
+  leaseId: uuid("lease_id"),
+  leaseExpiresAt: time("lease_expires_at"),
   attemptCount: integer("attempt_count").notNull().default(0),
   errorDetails: text("error_details"),
   processedAt: time("processed_at"),
   ...timestamps(),
-}, (t) => [unique("provider_event_identity").on(t.provider, t.eventIdentity), check("provider_attempts_valid", sql`${t.attemptCount} >= 0`)]);
+}, (t) => [
+  unique("provider_event_identity").on(t.provider, t.eventIdentity),
+  check("provider_attempts_valid", sql`${t.attemptCount} >= 0`),
+  check("provider_event_lease_state_valid", sql`(${t.status} = 'processing' AND ${t.leaseId} IS NOT NULL AND ${t.leaseExpiresAt} IS NOT NULL) OR (${t.status} <> 'processing' AND ${t.leaseId} IS NULL AND ${t.leaseExpiresAt} IS NULL)`),
+]);
 export const adminAuditLog = pgTable("admin_audit_log", {
   id: id(),
   actorId: text("actor_id").notNull().references(() => user.id),

@@ -3,14 +3,15 @@ import type { Database } from "../db/types.ts";
 import type { ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
 import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalogFromShopier } from "./catalog.ts";
-import { setAccessDuration, setCourseStatus, syncCatalogAsOwner, type CourseStatus } from "./owner-commands.ts";
+import { setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCoursePrice, type CourseStatus } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
+import { createOwnerOverview } from "./dashboard.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 
 type Dependencies = {
   db: Database;
-  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince">;
+  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "updateProductPrice">;
   config: Pick<Config, "shopier">;
   now?: () => Date;
 };
@@ -21,6 +22,7 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
   const options = { includeHidden: config.shopier.includeHidden };
   const syncCatalog = () => syncCatalogFromShopier(db, shopier, options);
   const products = async () => (await shopier.listProducts()).products;
+  const ownerOverview = createOwnerOverview({ db, shopier, now });
 
   return {
     catalog: {
@@ -50,10 +52,12 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
       },
     },
     owner: {
+      overview: ownerOverview,
       catalog: async () => ownerCatalog(db, await products()),
       needsAttention: () => failedEvents(db),
       setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
+      updateCoursePrice: (actorId: string, courseId: string, priceKurus: number) => updateCoursePrice(db, actorId, courseId, priceKurus, shopier),
       syncCatalog: (actorId: string) => syncCatalogAsOwner(db, actorId, syncCatalog),
     },
     webhooks: {
