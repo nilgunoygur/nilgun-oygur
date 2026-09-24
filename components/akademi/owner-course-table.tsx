@@ -24,7 +24,7 @@ type Filter = "published" | "inactive" | "all";
 type Edit = { kind: "price" | "access"; course: Course } | null;
 const perPage = 6;
 const statusLabel = { published: "Yayında", draft: "Taslak", archived: "Arşivde" } as const;
-const queryKey = ["owner", "courses"] as const;
+const queryKey = ["owner", "courses", "catalog"] as const;
 
 function formData(fields: Record<string, string>) {
   const data = new FormData();
@@ -48,11 +48,22 @@ export function OwnerCourseTable({ initialCourses }: { initialCourses: Course[] 
     initialData: { courses: initialCourses },
   });
   const refresh = () => client.invalidateQueries({ queryKey });
-  const status = useMutation({ mutationFn: async ({ id, next }: { id: string; next: Course["status"] }) => setCourseStatus(formData({ courseId: id, status: next })), onSuccess: () => { toast.success("Eğitim durumu güncellendi."); void refresh(); }, onError: () => toast.error("Eğitim durumu güncellenemedi.") });
-  const sync = useMutation({ mutationFn: syncCatalogNow, onSuccess: () => { toast.success("Shopier ürünleri eşitlendi."); void refresh(); }, onError: () => toast.error("Shopier eşitlemesi başarısız oldu.") });
+  const status = useMutation({
+    mutationFn: async ({ id, next }: { id: string; next: Course["status"] }) => setCourseStatus(formData({ courseId: id, status: next })),
+    onMutate: async ({ id, next }) => {
+      await client.cancelQueries({ queryKey });
+      const previous = client.getQueryData<{ courses: Course[] }>(queryKey);
+      client.setQueryData<{ courses: Course[] }>(queryKey, current => current && ({ ...current, courses: current.courses.map(course => course.id === id ? { ...course, status: next } : course) }));
+      return { previous };
+    },
+    onError: (_error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error("Eğitim durumu güncellenemedi."); },
+    onSuccess: () => toast.success("Eğitim durumu güncellendi."),
+    onSettled: refresh,
+  });
+  const sync = useMutation({ mutationFn: syncCatalogNow, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onSettled: refresh, onError: () => toast.error("Shopier eşitlemesi başarısız oldu.") });
   const edit = useMutation({ mutationFn: ({ kind, course, value }: { kind: "price" | "access"; course: Course; value: string }) =>
     kind === "price" ? updateCoursePrice(formData({ courseId: course.id, price: value })) : setAccessDuration(formData({ courseId: course.id, accessDays: value })),
-  onSuccess: () => { setEditing(null); toast.success("Değişiklik kaydedildi."); void refresh(); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Değişiklik kaydedilemedi.") });
+  onSuccess: () => { setEditing(null); toast.success("Değişiklik kaydedildi."); }, onSettled: refresh, onError: (error) => toast.error(error instanceof Error ? error.message : "Değişiklik kaydedilemedi.") });
 
   const courses = data.courses;
   const published = courses.filter(item => item.status === "published").length;
