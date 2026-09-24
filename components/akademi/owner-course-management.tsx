@@ -32,7 +32,7 @@ function formData(fields: Record<string, string>) {
   return data;
 }
 
-export function OwnerCourseTable({ initialData }: { initialData: OwnerCatalogSnapshot }) {
+export function OwnerCourseManagement({ initialData }: { initialData: OwnerCatalogSnapshot }) {
   const client = useQueryClient();
   const [tab, setTab] = useState<Filter>("published");
   const [search, setSearch] = useState("");
