@@ -26,6 +26,7 @@ export async function handleShopierWebhook(db: Database, rawBody: string, header
   switch (received.status) {
     case "processed": return { status: 200, ...received.result };
     case "retry": return { status: 500, outcome: "failed", catalogChanged: false };
+    case "in_progress": return { status: 500, outcome: "in_progress", catalogChanged: false };
     default: return { status: 200, outcome: received.status, catalogChanged: false };
   }
 }

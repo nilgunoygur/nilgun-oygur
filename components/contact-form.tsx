@@ -12,9 +12,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { FormStatus, idleForm } from "@/components/akademi/form-status";
 import { sendContactMessage, type ContactState } from "@/app/iletisim/actions";
+import { track } from "@/lib/analytics";
 const unavailable: ContactState = { status: "error", message: "İletişim formu şu anda kullanılamıyor. Lütfen bize e-posta ile ulaşın." };
 export function ContactForm({ enabled }: { enabled: boolean }) {
-  const [state, action, pending] = useActionState<ContactState, FormData>(sendContactMessage, idleForm);
+  const [state, action, pending] = useActionState<ContactState, FormData>(async (previous, formData) => {
+    const next = await sendContactMessage(previous, formData);
+    if (next.status === "success") track("generate_lead", { method: "contact_form" });
+    return next;
+  }, idleForm);
   const errors = state.errors ?? {};
   const disabled = pending || !enabled;
   return (

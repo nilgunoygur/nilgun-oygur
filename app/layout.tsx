@@ -4,6 +4,7 @@ import { Header } from "@/components/header";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { getPublishedBanner } from "@/lib/banner";
 import { Footer } from "@/components/site";
+import { ConsentManager } from "@/components/consent-manager";
 import { MotionProvider } from "@/components/motion-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { config } from "@/lib/config";
@@ -44,6 +45,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const banner = await getPublishedBanner();
+  const { analyticsId } = config();
+  const site = (
+    <MotionProvider>
+      {banner && <AnnouncementBar config={banner} />}
+      <Header />
+      <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
+      <Footer consentSettings={Boolean(analyticsId)} />
+      <Toaster position="top-right" richColors />
+    </MotionProvider>
+  );
   return (
     <html
       data-scroll-behavior="smooth"
@@ -54,13 +65,7 @@ export default async function RootLayout({
         <a className="fixed top-0 left-5 z-100 -translate-y-[150%] rounded-[10px] bg-white p-3 focus:translate-y-0" href="#main">
           İçeriğe geç
         </a>
-        <MotionProvider>
-          {banner && <AnnouncementBar config={banner} />}
-          <Header />
-          <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
-          <Footer />
-          <Toaster position="top-right" richColors />
-        </MotionProvider>
+        {analyticsId ? <ConsentManager analyticsId={analyticsId}>{site}</ConsentManager> : site}
       </body>
     </html>
   );

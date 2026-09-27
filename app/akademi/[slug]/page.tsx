@@ -6,6 +6,8 @@ import { ArrowLeft, ArrowUpRight, Check } from "lucide-react";
 import { formatAccess } from "@/lib/akademi/format";
 import { catalogStaticParams, getCatalogCourse } from "@/lib/akademi/server";
 import { CoursePrice } from "@/components/akademi/course-price";
+import { TrackOnView } from "@/components/analytics";
+import { courseEcommerce } from "@/lib/analytics";
 import { buttonVariants } from "@/components/ui/button";
 import { kicker, pageWidth, textLink } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -37,6 +39,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const course = await getCatalogCourse((await params).slug);
   if (!course) notFound();
   return <div className={cn(pageWidth, "pt-[140px] pb-[90px]")}>
+    <TrackOnView event="view_item" params={courseEcommerce(course)} />
     <Link href="/akademi#egitimler" className={textLink}><ArrowLeft size={16} /> Tüm eğitimler</Link>
     <div className="mt-[45px] grid grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] items-start gap-[65px] max-tablet:mt-[25px] max-tablet:grid-cols-1 max-tablet:gap-[30px]">
       <div>

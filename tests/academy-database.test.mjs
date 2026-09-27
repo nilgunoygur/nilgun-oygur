@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as schema from "../lib/db/schema.ts";
 
 const client = new PGlite();
@@ -88,4 +91,22 @@ test("provider event deduplication is scoped by provider", async () => {
   await db.insert(schema.providerEvents).values(event);
   await rejectsConstraint(() => db.insert(schema.providerEvents).values(event), "23505");
   await db.insert(schema.providerEvents).values({ ...event, provider: "mux" });
+});
+
+test("the newest migration applies to a database that already has every earlier one", async () => {
+  // A fresh database runs every migration in one transaction, which hides upgrade-only failures.
+  const source = new URL("../drizzle", import.meta.url).pathname;
+  const previous = await mkdtemp(join(tmpdir(), "akademi-migrations-"));
+  await cp(source, previous, { recursive: true });
+  const journal = JSON.parse(await readFile(join(previous, "meta/_journal.json"), "utf8"));
+  journal.entries.pop();
+  await writeFile(join(previous, "meta/_journal.json"), JSON.stringify(journal));
+  const upgraded = new PGlite();
+  try {
+    await migrate(drizzle(upgraded), { migrationsFolder: previous });
+    await migrate(drizzle(upgraded), { migrationsFolder: source });
+  } finally {
+    await upgraded.close();
+    await rm(previous, { recursive: true, force: true });
+  }
 });

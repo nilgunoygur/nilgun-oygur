@@ -1,10 +1,8 @@
-import "server-only";
 import { and, count, countDistinct, eq, gte, lt, sql } from "drizzle-orm";
-import { getDatabase } from "@/lib/db";
-import { shopierPurchases, user } from "@/lib/db/schema";
-import { getShopier } from "@/lib/shopier";
-import { buyerEmail, parsePriceKurus } from "@/lib/shopier/api";
-import { istanbulDay } from "./format";
+import { shopierPurchases, user } from "../db/schema.ts";
+import type { Database } from "../db/types.ts";
+import { buyerEmail, parsePriceKurus, type ShopierClient } from "../shopier/api.ts";
+import { istanbulDay } from "./format.ts";
 
 export type Period = "week" | "month" | "year" | "custom";
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -14,8 +12,10 @@ const purchaseDay = sql<string>`to_char(${shopierPurchases.purchasedAt} AT TIME 
 const purchaseTotal = sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::float8`;
 export type DashboardRange = ReturnType<typeof dashboardRange>;
 
-export function dashboardRange(params: { period?: string; from?: string; to?: string }) {
-  const today = istanbulDay(new Date());
+export type DashboardParams = { period?: string; from?: string; to?: string };
+
+export function dashboardRange(params: DashboardParams, now = new Date()) {
+  const today = istanbulDay(now);
   const period: Period = params.period === "week" || params.period === "year" || params.period === "custom" ? params.period : "month";
   const [year, month, day] = today.split("-").map(Number);
   const dayOfWeek = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
@@ -27,8 +27,7 @@ export function dashboardRange(params: { period?: string; from?: string; to?: st
   return { period, from, to, today, start: toInstant(from), end: toInstant(dayAfter(to)) };
 }
 
-export async function ownerDashboard(range: DashboardRange) {
-  const db = getDatabase();
+export async function ownerDashboard(db: Database, range: DashboardRange) {
   const purchasePeriod = and(gte(shopierPurchases.purchasedAt, range.start), lt(shopierPurchases.purchasedAt, range.end));
   const [allUsers, newUsers, sales, revenue, activity] = await Promise.all([
     db.select({ value: count() }).from(user),
@@ -40,9 +39,9 @@ export async function ownerDashboard(range: DashboardRange) {
   return { totalUsers: allUsers[0].value, newUsers: newUsers[0].value, orders: sales[0].orders, items: sales[0].items, revenue, activity };
 }
 
-export async function recentShopierTransactions(range: DashboardRange) {
+export async function recentShopierTransactions(shopier: Pick<ShopierClient, "listRecentTransactions">, range: DashboardRange) {
   try {
-    const { orders, refunds, unavailable: refundsUnavailable } = await getShopier().listRecentTransactions(range.start, range.end);
+    const { orders, refunds, unavailable: refundsUnavailable } = await shopier.listRecentTransactions(range.start, range.end);
     const sales = orders.filter(order => order.paymentStatus === "paid").map(order => ({
       id: `order-${order.id}`, order: order.id, kind: "sale" as const, at: order.dateCreated,
       amount: parsePriceKurus(order.totals?.total ?? "") ?? order.lineItems.reduce((sum, item) => sum + (parsePriceKurus(item.total) ?? 0), 0),
@@ -84,4 +83,23 @@ export function chartSeries(range: DashboardRange, activity: Awaited<ReturnType<
     else cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return { unit, points };
+}
+
+/** Owner overview read model. Database, Shopier, and time enter once at this seam. */
+export function createOwnerOverview({ db, shopier, now = () => new Date() }: {
+  db: Database;
+  shopier: Pick<ShopierClient, "listRecentTransactions">;
+  now?: () => Date;
+}) {
+  return {
+    async read(params: DashboardParams) {
+      const range = dashboardRange(params, now());
+      const data = await ownerDashboard(db, range);
+      return { range, data, chart: chartSeries(range, data.activity) };
+    },
+    transactions(params: DashboardParams) {
+      const range = dashboardRange(params, now());
+      return recentShopierTransactions(shopier, range);
+    },
+  };
 }

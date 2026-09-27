@@ -3,6 +3,9 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import { useRouter } from "next/navigation";
 import { createUpload, type UpChunk } from "@mux/upchunk";
 import { CalendarDays, CirclePlay, Plus, Upload } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, checkUpload, saveLesson, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm } from "./form-status";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
@@ -14,10 +17,15 @@ const localDate = (date: Date | null | undefined) => date ? new Date(new Date(da
 
 export function CourseEditor({ courseId, rows, uploadsEnabled }: { courseId: string; rows: Row[]; uploadsEnabled: boolean }) {
   const [state, action, pending] = useActionState(addLessons, idleForm);
+  const [filter, setFilter] = useState<"all" | "video" | "live" | "draft">("all");
+  const publishedCount = rows.filter(row => row.lesson.status === "published").length;
+  const draftCount = rows.length - publishedCount;
+  const visibleRows = rows.filter(row => filter === "all" || filter === "draft" ? filter !== "draft" || row.lesson.status === "draft" : row.lesson.kind === filter);
   return <div className="grid gap-6">
-    <form action={action} className="rounded-[24px] bg-mist p-6 sm:p-8"><input type="hidden" name="courseId" value={courseId} /><h2 className="text-2xl">Eğitim programınız</h2><p className="mt-2 mb-6 text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve hazır olduklarında yayınlayın. Taslakları yalnızca siz görürsünüz.</p><div className="flex flex-wrap gap-3">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />4 video + 1 canlı ders ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div><div className="mt-4" role="status"><FormStatus state={state} /></div></form>
+    <Card className="border-forest/10 shadow-sm"><CardContent className="p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-5"><div><h2 className="text-xl font-semibold text-forest">Eğitim programı</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve yayınlayın. Taslaklarınızı öğrenciler görmez.</p></div><div className="flex gap-2"><Badge variant="secondary">{publishedCount} yayında</Badge><Badge variant="outline">{draftCount} taslak</Badge></div></div><form action={action} className="mt-5 border-t border-border pt-5"><input type="hidden" name="courseId" value={courseId} /><div className="flex flex-wrap gap-2">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />Örnek program ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div><div className="mt-3" role="status"><FormStatus state={state} /></div></form></CardContent></Card>
     {!uploadsEnabled && <p className="rounded-2xl border border-[#e7d7bc] bg-[#fbf6ed] p-5 text-sm leading-relaxed">Video yükleme henüz bağlanmadı. Ders başlıklarını, açıklamalarını ve canlı buluşmaları hazırlayabilirsiniz. Kayıtlı videoları yükleyip yayınlamak için Mux bağlantısını tamamlayın.</p>}
-    {rows.map(row => <EditorCard key={row.lesson.id} row={row} uploadsEnabled={uploadsEnabled} />)}
+    <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={filter} onValueChange={value => { if (value === "all" || value === "video" || value === "live" || value === "draft") setFilter(value); }}><TabsList className="h-auto flex-wrap"><TabsTrigger value="all">Tüm dersler <span className="ml-1 text-xs text-muted-foreground">{rows.length}</span></TabsTrigger><TabsTrigger value="video">Video <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "video").length}</span></TabsTrigger><TabsTrigger value="live">Canlı ders <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "live").length}</span></TabsTrigger><TabsTrigger value="draft">Taslaklar <span className="ml-1 text-xs text-muted-foreground">{draftCount}</span></TabsTrigger></TabsList></Tabs><p className="text-xs text-muted-foreground">Sıra numarası en küçük ders önce gösterilir.</p></div>
+    {visibleRows.length ? visibleRows.map(row => <EditorCard key={row.lesson.id} row={row} uploadsEnabled={uploadsEnabled} />) : <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">{rows.length === 0 ? "Programınız henüz boş. İlk dersinizi ekleyerek başlayın." : "Bu grupta gösterilecek ders yok."}</div>}
   </div>;
 }
 function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean }) {

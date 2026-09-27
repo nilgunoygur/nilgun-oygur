@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight, BookOpen, FileText, Megaphone, ShoppingBag, Users } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
-import { chartSeries, dashboardRange, ownerDashboard } from "@/lib/akademi/dashboard";
+import { akademi } from "@/lib/akademi/server";
 import { DashboardDatePicker } from "@/components/dashboard-date-picker";
 import { OwnerRecentTransactions } from "@/components/owner-recent-transactions";
 import { Spinner } from "@/components/ui/spinner";
@@ -25,9 +25,7 @@ export default function OwnerPage({ searchParams }: { searchParams: Search }) {
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
   await ownerPage();
-  const range = dashboardRange(await searchParams);
-  const data = await ownerDashboard(range);
-  const chart = chartSeries(range, data.activity);
+  const { range, data, chart } = await akademi().owner.overview.read(await searchParams);
   const primaryRevenue = data.revenue.find(item => item.currency === "TRY");
   const otherRevenue = data.revenue.filter(item => item.currency !== "TRY");
   const max = Math.max(1, ...chart.points.map(item => item.amount));
@@ -53,7 +51,7 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
         <p className="mt-8 text-[12px] text-stone">Grafik, kaydedilmiş TRY Shopier eğitim satın alımlarını gösterir.</p>
         </CardContent>
       </Card>
-      <Card className="rounded-[26px] bg-forest py-6 text-white sm:py-8"><CardHeader><p className="text-[12px] font-semibold tracking-[0.14em] text-lime">YÖNETİM</p><CardTitle className="mt-2 text-[26px] text-white">Hızlı erişim</CardTitle></CardHeader><CardContent className="mt-5 grid gap-3"><QuickLink href="/yonetim/egitimler" icon={<BookOpen />} title="Eğitimler ve satışlar" subtitle="Kursları ve siparişleri yönetin" /><QuickLink href="/yonetim/yazilar" icon={<FileText />} title="Yazılarım" subtitle="Yazıları düzenleyin ve yayınlayın" /><QuickLink href="/yonetim/banner" icon={<Megaphone />} title="Banner yönetimi" subtitle="Duyuruları düzenleyin ve yayınlayın" /></CardContent></Card>
+      <Card className="rounded-[26px] bg-forest py-6 text-white sm:py-8"><CardHeader><p className="text-[12px] font-semibold tracking-[0.14em] text-lime">YÖNETİM</p><CardTitle className="mt-2 text-[26px] text-white">Hızlı erişim</CardTitle></CardHeader><CardContent className="mt-5 grid gap-3"><QuickLink href="/yonetim/egitimler" icon={<BookOpen />} title="Eğitimler ve satışlar" subtitle="Kursları ve siparişleri yönetin" /><QuickLink href="/yonetim/kullanicilar" icon={<Users />} title="Kullanıcılar" subtitle="Yöneticileri ve öğrencileri görün" /><QuickLink href="/yonetim/yazilar" icon={<FileText />} title="Yazılarım" subtitle="Yazıları düzenleyin ve yayınlayın" /><QuickLink href="/yonetim/banner" icon={<Megaphone />} title="Banner yönetimi" subtitle="Duyuruları düzenleyin ve yayınlayın" /></CardContent></Card>
     </div>
 
     <Card className={cn(ownerPanel, "mt-5")}><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3"><div><p className="text-[12px] font-semibold tracking-[0.14em] text-primary">SON İŞLEMLER</p><CardTitle className="mt-2 text-[26px]">Son satışlar ve iadeler</CardTitle></div><Link href="/yonetim/egitimler" className="inline-flex items-center gap-2 text-[13px] font-semibold text-forest hover:underline">Eğitimleri yönet <ArrowRight className="size-4" /></Link></CardHeader>

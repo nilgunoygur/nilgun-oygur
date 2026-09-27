@@ -30,6 +30,8 @@ export function parseConfig(env: Env) {
     consoleEmail,
     cronSecret: value(env, "CRON_SECRET"),
     siteUrl: value(env, "NEXT_PUBLIC_SITE_URL") ?? "http://localhost:3000",
+    /** GA4 ID; production falls back to the site's stream, other environments need it set. */
+    analyticsId: value(env, "NEXT_PUBLIC_GA_MEASUREMENT_ID") ?? (env.VERCEL_ENV === "production" ? "G-YQGTYEX7ZH" : undefined),
     /** Which Akademi features have everything they need. */
     enabled: {
       catalog: !!databaseUrl && !!shopierToken,
