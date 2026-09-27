@@ -29,7 +29,7 @@ pnpm start
 
 ## Contact and external services
 
-Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form validates input and prepares an email for the visitor to review and send in their email application; it does not claim delivery or store messages. Newsletter requests also use an email handoff. Live email remains unconfigured; Akademi has a separate development/preview Neon database.
+Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form's server action (`app/iletisim/actions.ts`) queues the message for the `RESEND_REPLY_TO` inbox with the visitor as Reply-To (success means queued, not delivered). Verification, reset and contact emails are React Email templates in `emails/`; preview them with `pnpm email:dev` while `pnpm dev` serves `public/email/`. Newsletter requests still use an email handoff. Configure the three `RESEND_*` variables and the existing database/authentication secrets before enabling delivery.
 
 Set `NEXT_PUBLIC_SITE_URL` to the deployed origin before a production build to generate the correct sitemap and Open Graph URLs.
 
@@ -44,7 +44,7 @@ node tests/check-routes.mjs
 
 ## Akademi development
 
-The database/access-policy foundation, migrated development/preview Neon database, Better Auth/email backend, Turkish authentication forms, and protected account/MFA entry pages are implemented. Resend/DNS are deferred and registration stays disabled. Scheduled retries, payment fulfillment, course learning pages, and the full owner panel remain pending. See [development plan](AKADEMI_DEVELOPMENT_PLAN.md) and [implementation status and database setup](docs/akademi/IMPLEMENTATION.md).
+The database/access-policy foundation, migrated development/preview Neon database, Better Auth/email backend, Turkish authentication forms, and protected account/MFA entry pages are implemented. Registration requires a verified Resend domain and complete email/authentication configuration. Scheduled retries, payment fulfillment, course learning pages, and the full owner panel remain pending. See [development plan](AKADEMI_DEVELOPMENT_PLAN.md) and [implementation status and database setup](docs/akademi/IMPLEMENTATION.md).
 
 The owner dashboard at `/yonetim` reports registered accounts and recorded Shopier purchases for week, month, year, or a custom date range. Revenue is grouped by currency. `/yonetim/yazilar` lets owners edit the imported articles, create new articles, and save drafts or publish them. Published changes appear on the public blog and homepage; draft overrides hide an imported article. Article covers can be chosen from the existing local images. `/yonetim/banner` manages the public announcement strip, including its messages, colors, animation, speed, looping, and draft/publication state. Apply the latest Drizzle migration before using these management pages in another environment.
 

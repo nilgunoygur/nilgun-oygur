@@ -2,21 +2,27 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { emailDeliveries } from "../db/schema.ts";
-import type { AuthEmail } from "../auth/create-auth.ts";
 import type { Database } from "../db/types.ts";
 
-export type DeliverEmail = (message: Pick<AuthEmail, "to" | "subject" | "text">, key: string) => Promise<string>;
+/** Encrypted at rest and erased after delivery or expiry. */
+export type EmailMessage = { to: string; subject: string; text: string; html?: string; replyTo?: string; expiresAt?: Date };
+export type DeliverEmail = (message: Omit<EmailMessage, "expiresAt">, key: string) => Promise<string>;
+/** Thrown for outages and throttling: the rest of the batch waits for the next run. */
+export class ProviderUnavailableError extends Error {}
+// Retries must stay inside Resend's 24-hour idempotency window.
+const maxLifetime = 23 * 3_600_000;
 
 export function createEmailOutbox(db: Database, encryptionKey: string) {
   if (encryptionKey.length < 32) throw new Error("EMAIL_ENCRYPTION_KEY must contain at least 32 characters.");
   return {
-    async enqueue(message: AuthEmail) {
-      const payload = JSON.stringify({ to: message.to, subject: message.subject, text: message.text });
+    async enqueue(message: EmailMessage) {
+      const { expiresAt, ...content } = message;
+      const payload = JSON.stringify(content);
       const deduplicationKey = createHash("sha256").update(payload).digest("hex");
       await db.insert(emailDeliveries).values({
         deduplicationKey,
         encryptedMessage: await symmetricEncrypt({ key: encryptionKey, data: payload }),
-        expiresAt: message.expiresAt,
+        expiresAt: new Date(Math.min(expiresAt?.getTime() ?? Infinity, Date.now() + maxLifetime)),
       }).onConflictDoNothing({ target: emailDeliveries.deduplicationKey });
     },
     async deliverBatch(deliver: DeliverEmail, limit = 10) {
@@ -47,10 +53,11 @@ export function createEmailOutbox(db: Database, encryptionKey: string) {
           await db.update(emailDeliveries).set({ status: "sent", providerMessageId, encryptedMessage: null, lastError: null, leaseId: null, leaseExpiresAt: null })
             .where(and(eq(emailDeliveries.id, claimed.id), eq(emailDeliveries.leaseId, leaseId)));
           sent++;
-        } catch {
+        } catch (error) {
           // Provider exceptions may contain recipient addresses or reset URLs: do not persist them.
           await db.update(emailDeliveries).set({ status: "failed", lastError: "delivery_failed", leaseId: null, leaseExpiresAt: null, availableAt: new Date(Date.now() + Math.min(2 ** claimed.attemptCount * 60_000, 900_000)) })
             .where(and(eq(emailDeliveries.id, claimed.id), eq(emailDeliveries.leaseId, leaseId)));
+          if (error instanceof ProviderUnavailableError) break;
         }
       }
       return { sent };

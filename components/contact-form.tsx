@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useActionState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -9,33 +9,16 @@ import {
   FieldError,
   FieldDescription,
 } from "@/components/ui/field";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { contactSchema } from "@/lib/contact-schema";
-export function ContactForm() {
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [draft, setDraft] = useState("");
-  function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const result = contactSchema.safeParse(
-      Object.fromEntries(new FormData(e.currentTarget)),
-    );
-    if (!result.success) {
-      setErrors(
-        Object.fromEntries(
-          result.error.issues.map((i) => [i.path[0], i.message]),
-        ),
-      );
-      setDraft("");
-      return;
-    }
-    setErrors({});
-    const d = result.data;
-    setDraft(
-      `mailto:butunselsifaakademi@gmail.com?subject=${encodeURIComponent("İletişim — " + d.name)}&body=${encodeURIComponent(`${d.message}\n\n${d.name}\n${d.email}`)}`,
-    );
-  }
+import { Button } from "@/components/ui/button";
+import { FormStatus, idleForm } from "@/components/akademi/form-status";
+import { sendContactMessage, type ContactState } from "@/app/iletisim/actions";
+const unavailable: ContactState = { status: "error", message: "İletişim formu şu anda kullanılamıyor. Lütfen bize e-posta ile ulaşın." };
+export function ContactForm({ enabled }: { enabled: boolean }) {
+  const [state, action, pending] = useActionState<ContactState, FormData>(sendContactMessage, idleForm);
+  const errors = state.errors ?? {};
+  const disabled = pending || !enabled;
   return (
-    <form onSubmit={submit} noValidate onChange={() => setDraft("")}>
+    <form action={action} noValidate aria-busy={pending}>
       <FieldGroup>
         {(["name", "email", "message"] as const).map((key) => (
           <Field key={key} data-invalid={!!errors[key]}>
@@ -50,6 +33,8 @@ export function ContactForm() {
               <Textarea
                 id={key}
                 name={key}
+                disabled={disabled}
+                defaultValue={state.values?.[key]}
                 rows={6}
                 aria-invalid={!!errors[key]}
                 aria-describedby={errors[key] ? `${key}-error` : undefined}
@@ -59,6 +44,8 @@ export function ContactForm() {
               <Input
                 id={key}
                 name={key}
+                disabled={disabled}
+                defaultValue={state.values?.[key]}
                 type={key === "email" ? "email" : "text"}
                 autoComplete={key === "email" ? "email" : "name"}
                 aria-invalid={!!errors[key]}
@@ -74,27 +61,14 @@ export function ContactForm() {
           </Field>
         ))}
         <Field>
-          <Button type="submit" size="pill">
-            Mesajı Hazırla
+          <Button type="submit" size="pill" disabled={disabled}>
+            {pending ? "Gönderiliyor…" : "Mesajı Gönder"}
           </Button>
           <FieldDescription>
-            Mesajınız e-posta uygulamanızda açılır. Göndermeden önce gözden
-            geçirebilirsiniz.
+            Mesajınız doğrudan ekibimize iletilir. Yanıtımız formda yazdığınız e-posta adresine gönderilir.
           </FieldDescription>
         </Field>
-        {draft && (
-          <Field>
-            <p role="status">
-              Mesajınız hazır. Göndermek için e-posta uygulamanızı açın.
-            </p>
-            <a
-              className={buttonVariants({ variant: "secondary", size: "pill" })}
-              href={draft}
-            >
-              E-posta Uygulamasında Aç
-            </a>
-          </Field>
-        )}
+        <FormStatus state={enabled ? state : unavailable} />
       </FieldGroup>
     </form>
   );

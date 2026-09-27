@@ -286,7 +286,7 @@ export function Footer() {
             <a href={socials[1].href} aria-label="Instagram">
               <Camera size={20} />
             </a>
-            <a href={socials[2].href} aria-label="Youtube">
+            <a href={socials[2].href} aria-label="YouTube">
               <Video size={20} />
             </a>
             <a href={`mailto:${email}`} aria-label="E-posta">
@@ -344,7 +344,7 @@ export function SocialIcon({ name, className }: { name: string; className?: stri
           <circle cx="12" cy="12" r="4" />
           <circle cx="17.5" cy="6.5" r=".7" fill="currentColor" />
         </>
-      ) : name === "Youtube" ? (
+      ) : name === "YouTube" ? (
         <>
           <rect x="2" y="5" width="20" height="14" rx="4" />
           <path d="m10 9 6 3-6 3Z" />

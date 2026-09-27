@@ -1,8 +1,10 @@
 import "server-only";
+import { after } from "next/server";
 import { Resend } from "resend";
 import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { createEmailOutbox } from "./outbox";
+import { createResendDelivery } from "./transport";
 
 export function getEmailOutbox() {
   return createEmailOutbox(getDatabase(), config().auth.emailKey ?? "");
@@ -19,9 +21,13 @@ export async function deliverPendingEmails() {
   const { apiKey, from, replyTo } = settings;
   if (!apiKey || !from || !replyTo) throw new Error("Resend API key, sender and Reply-To must be configured.");
   const resend = new Resend(apiKey);
-  return getEmailOutbox().deliverBatch(async (message, key) => {
-    const { data, error } = await resend.emails.send({ ...message, from, replyTo }, { idempotencyKey: key });
-    if (error || !data) throw new Error("Email provider rejected delivery.");
-    return data.id;
-  });
+  return getEmailOutbox().deliverBatch(createResendDelivery(resend, { from, replyTo }));
+}
+
+export async function tryDeliverPendingEmails() {
+  try { await deliverPendingEmails(); } catch { console.error("Email delivery could not run; queued messages require retry."); }
+}
+
+export function deliverPendingEmailsAfterResponse() {
+  after(tryDeliverPendingEmails);
 }

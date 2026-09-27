@@ -1,9 +1,10 @@
 import "server-only";
+import { after } from "next/server";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { getEmailOutbox } from "@/lib/email";
+import { getEmailOutbox, tryDeliverPendingEmails } from "@/lib/email";
 import { claimPurchasesByEmail } from "@/lib/akademi/course-access";
 import { createAcademyAuth } from "./create-auth";
 import { revokeUserSessions } from "./owner-access";
@@ -18,7 +19,9 @@ export function getAuth() {
     database: drizzleAdapter(db, { provider: "pg", schema, transaction: true }),
     baseURL: settings.url!,
     secret: settings.secret!,
-    enqueueEmail: getEmailOutbox().enqueue,
+    // Runs inside the background task, so delivery follows the enqueue.
+    enqueueEmail: async (message) => { await getEmailOutbox().enqueue(message); await tryDeliverPendingEmails(); },
+    runInBackground: after,
     revokeUserSessions: userId => revokeUserSessions(db, userId),
     claimPurchases: async (userId, email) => { await claimPurchasesByEmail(db, userId, email); },
   });

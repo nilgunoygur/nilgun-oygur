@@ -9,6 +9,8 @@ import { createHmac } from "node:crypto";
 import { createAcademyAuth } from "../lib/auth/create-auth.ts";
 import { isOwner, revokeUserSessions } from "../lib/auth/owner-access.ts";
 import * as schema from "../lib/db/schema.ts";
+import { verifyCopy } from "../emails/verify-email.tsx";
+import { resetCopy } from "../emails/reset-password.tsx";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -43,6 +45,10 @@ test("registration is neutral and cannot set ownership or MFA fields", async () 
   assert.equal(response.status, 200);
   assert.equal((await response.json()).token, null);
   assert.equal(messages.length, 1);
+  assert.equal(messages[0].to, account.email);
+  assert.equal(messages[0].subject, verifyCopy.subject);
+  assert.ok(messages[0].html.includes(`href="${messageUrl(messages[0]).replaceAll("&", "&amp;")}"`), "HTML button uses the same verification link");
+  assert.ok(Math.abs(messages[0].expiresAt - Date.now() - 3_600_000) < 60_000, "queued only as long as the link lives");
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
   assert.equal(user.twoFactorEnabled, false);
   assert.equal((await db.select().from(schema.owners)).length, 0);
@@ -74,6 +80,7 @@ test("password reset is neutral, one-use, and revokes existing sessions", async 
   const unknown = await request("/request-password-reset", { email: "unknown@example.com", redirectTo: `${origin}/akademi/sifre-yenile` });
   assert.equal(known.status, unknown.status);
   assert.deepEqual(await known.json(), await unknown.json());
+  assert.equal(messages.at(-1).subject, resetCopy.subject);
   const resetUrl = new URL(messageUrl(messages.at(-1)));
   const token = resetUrl.pathname.split("/").at(-1);
   const reset = { token, newPassword: "new-password-456" };

@@ -13,7 +13,12 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   images: { remotePatterns: [new URL("https://cdn.shopier.app/**")] },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    const emailAssetCache = [{ key: "Cache-Control", value: "public, max-age=604800" }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: "/email/:path*", headers: emailAssetCache },
+      { source: "/fonts/:path*", headers: emailAssetCache },
+    ];
   },
 };
 
