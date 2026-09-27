@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { ArticleJsonLd, BreadcrumbJsonLd } from "next-seo";
+import { absoluteUrl } from "@/lib/seo";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -54,6 +56,21 @@ async function ArticleContent({ params }: { params: Promise<{ slug: string }> })
   if (!a) notFound();
   return (
     <>
+      <ArticleJsonLd
+        type="BlogPosting"
+        headline={a.title}
+        description={articlePlainText(articleBodyText(a)).slice(0, 160)}
+        url={absoluteUrl(a.href)}
+        mainEntityOfPage={absoluteUrl(a.href)}
+        image={absoluteUrl(a.image)}
+        author={{ name: "Nilgün Oygur", url: absoluteUrl("/nilgun-oygur") }}
+        isAccessibleForFree
+      />
+      <BreadcrumbJsonLd items={[
+        { name: "Ana Sayfa", item: absoluteUrl("/") },
+        { name: "Blog", item: absoluteUrl("/blog") },
+        { name: a.title, item: absoluteUrl(a.href) },
+      ]} />
       <article className={cn(pageWidth, "max-w-[1180px] pt-[165px] max-tablet:pt-[140px]")}>
         <Link href="/blog" className="mb-16 block text-[20px] text-primary max-tablet:mb-[42px]">
           ‹ &nbsp; Blog

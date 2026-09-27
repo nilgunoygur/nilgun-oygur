@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { Phone, Mail } from "lucide-react";
 import { Hero, SectionHeading } from "@/components/site";
 import { ContactForm } from "@/components/contact-form";
@@ -8,7 +8,7 @@ import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 const contactLine = "mb-[18px] flex items-center gap-3 text-[15px] [overflow-wrap:anywhere] max-tablet:text-[13px]";
 
-export const metadata: Metadata = { title: "İletişim" };
+export const metadata = pageMetadata("İletişim", "Eğitimler, kitaplar ve bireysel seanslar hakkında Nilgün Oygur ile iletişime geçin. Sorularınızı iletin veya tanışma görüşmesi planlayın.", "/iletisim");
 export default function Contact() {
   return (
     <>

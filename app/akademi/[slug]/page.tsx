@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { CourseJsonLd, BreadcrumbJsonLd } from "next-seo";
+import { absoluteUrl } from "@/lib/seo";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -39,6 +41,12 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const course = await getCatalogCourse((await params).slug);
   if (!course) notFound();
   return <div className={cn(pageWidth, "pt-[140px] pb-[90px]")}>
+    <CourseJsonLd name={course.title} description={course.summary} url={absoluteUrl(`/akademi/${course.slug}`)} provider={{ name: "Nilgün Oygur Akademi", url: absoluteUrl("/akademi") }} />
+    <BreadcrumbJsonLd items={[
+      { name: "Ana Sayfa", item: absoluteUrl("/") },
+      { name: "Akademi", item: absoluteUrl("/akademi") },
+      { name: course.title, item: absoluteUrl(`/akademi/${course.slug}`) },
+    ]} />
     <TrackOnView event="view_item" params={courseEcommerce(course)} />
     <Link href="/akademi#egitimler" className={textLink}><ArrowLeft size={16} /> Tüm eğitimler</Link>
     <div className="mt-[45px] grid grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] items-start gap-[65px] max-tablet:mt-[25px] max-tablet:grid-cols-1 max-tablet:gap-[30px]">

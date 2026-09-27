@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { Reveal } from "@/components/reveal";
 import { SectionHeading, Journey, BlogSection } from "@/components/site";
 import { courses } from "@/lib/content";
 import { centeredHero, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-export const metadata: Metadata = { title: "Eğitimlerim" };
+export const metadata = pageMetadata("Eğitimlerim", "Nilgün Oygur’un kuantum, bioenerji, doğal taş ve regresyon eğitimlerini keşfedin. Eğitim programlarını inceleyin ve görüşme planlayın.", "/egitimlerim");
 export default function Trainings() {
   return (
     <>

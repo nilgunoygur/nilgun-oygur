@@ -1,3 +1,4 @@
+import { pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import { IntroVideo } from "@/components/intro-video";
 import Link from "next/link";
@@ -43,6 +44,8 @@ const steps = [
   },
 ];
 const focusTitle = "mb-[25px] text-[44px] max-tablet:text-[34px]";
+
+export const metadata = { ...pageMetadata("Nilgün Oygur - Kişisel Yolculuğunuza Başlayın", "Nilgün Oygur ile kendinizi keşfetme yolculuğuna çıkın. Kitaplar, eğitimler, bireysel seanslar ve kişisel gelişim yazıları.", "/"), title: { absolute: "Nilgün Oygur - Kişisel Yolculuğunuza Başlayın" } };
 
 export default function Home() {
   return (

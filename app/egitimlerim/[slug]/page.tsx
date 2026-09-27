@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { CourseJsonLd, BreadcrumbJsonLd } from "next-seo";
+import { absoluteUrl, pageMetadata } from "@/lib/seo";
 import { Atom } from "lucide-react";
 import { courses } from "@/lib/content";
 import {
@@ -23,7 +25,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const c = courses.find((c) => c.slug === slug);
-  return { title: c?.title, description: c?.description };
+  return c ? pageMetadata(c.title, c.description, c.href, c.image) : { robots: { index: false } };
 }
 export default async function Course({
   params,
@@ -35,6 +37,12 @@ export default async function Course({
   if (!c) notFound();
   return (
     <>
+      <CourseJsonLd name={c.title} description={c.description} url={absoluteUrl(c.href)} provider={{ name: "Nilgün Oygur", url: absoluteUrl("/") }} />
+      <BreadcrumbJsonLd items={[
+        { name: "Ana Sayfa", item: absoluteUrl("/") },
+        { name: "Eğitimlerim", item: absoluteUrl("/egitimlerim") },
+        { name: c.title, item: absoluteUrl(c.href) },
+      ]} />
       <Hero
         eyebrow="Mucizevi değişimlerin kapısını aralayın"
         title={c.title}

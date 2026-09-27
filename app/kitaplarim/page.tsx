@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import { pages, asset } from "@/lib/content";
 import { buttonVariants } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { PhotoCarousel } from "@/components/sliders";
 import { SectionHeading } from "@/components/site";
 import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-export const metadata: Metadata = { title: "Kitaplarım — Bütüncül Şifa" };
+export const metadata = pageMetadata("Kitaplarım — Bütüncül Şifa", "Nilgün Oygur’un Bütüncül Şifa kitaplarını keşfedin. Kitap içeriklerini inceleyin ve kişisel gelişim yolculuğunuz için yeni kaynaklar bulun.", "/kitaplarim");
 export default function Books() {
   const page = pages["/kitaplarim"];
   const stores = page.links.filter((l) =>
