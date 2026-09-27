@@ -2,16 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { emailDeliveries } from "../db/schema.ts";
-import type { AuthEmail } from "../auth/create-auth.ts";
+import type { EmailMessage } from "./message.ts";
 import type { Database } from "../db/types.ts";
 
-export type DeliverEmail = (message: Pick<AuthEmail, "to" | "subject" | "text">, key: string) => Promise<string>;
+export type DeliverEmail = (message: Omit<EmailMessage, "expiresAt">, key: string) => Promise<string>;
 
 export function createEmailOutbox(db: Database, encryptionKey: string) {
   if (encryptionKey.length < 32) throw new Error("EMAIL_ENCRYPTION_KEY must contain at least 32 characters.");
   return {
-    async enqueue(message: AuthEmail) {
-      const payload = JSON.stringify({ to: message.to, subject: message.subject, text: message.text });
+    async enqueue(message: EmailMessage) {
+      const payload = JSON.stringify({ to: message.to, subject: message.subject, text: message.text, html: message.html, replyTo: message.replyTo });
       const deduplicationKey = createHash("sha256").update(payload).digest("hex");
       await db.insert(emailDeliveries).values({
         deduplicationKey,

@@ -4,6 +4,7 @@ import { initBotId } from "botid/client/core";
 // and on "Siparişimi ekle", which queries Shopier. The server side calls checkBotId() for the same requests.
 initBotId({
   protect: [
+    { path: "/api/contact", method: "POST" },
     { path: "/api/auth/sign-up/email", method: "POST" },
     { path: "/api/auth/sign-in/email", method: "POST" },
     { path: "/api/auth/request-password-reset", method: "POST" },

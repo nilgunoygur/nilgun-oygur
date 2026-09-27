@@ -7,13 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test": "node --import tsx --test tests/*.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "drizzle-kit migrate",
     "test:routes": "node tests/check-routes.mjs",
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
-    "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs"
+    "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
+    "email:dev": "email dev --dir emails --port 3001"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -26,6 +27,7 @@
     "@mux/mux-player-react": "^3.13.4",
     "@mux/upchunk": "^3.5.0",
     "@next/env": "16.3.6",
+    "@react-email/render": "2.1.0",
     "@tanstack/react-query": "^5.103.2",
     "@vercel/functions": "^3.9.9",
     "better-auth": "1.7.5",
@@ -42,6 +44,7 @@
     "react": "19.2.8",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.8",
+    "react-email": "6.11.0",
     "resend": "6.28.0",
     "sanitize-html": "^2.17.7",
     "server-only": "^0.0.1",
@@ -52,6 +55,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@react-email/ui": "6.11.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
@@ -63,6 +67,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "packageManager": "pnpm@10.17.1"

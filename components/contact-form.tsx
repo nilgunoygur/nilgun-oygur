@@ -9,13 +9,17 @@ import {
   FieldError,
   FieldDescription,
 } from "@/components/ui/field";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { contactSchema } from "@/lib/contact-schema";
 export function ContactForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [draft, setDraft] = useState("");
-  function submit(e: FormEvent<HTMLFormElement>) {
+  const [status, setStatus] = useState("");
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pending) return;
+    const form = e.currentTarget;
     const result = contactSchema.safeParse(
       Object.fromEntries(new FormData(e.currentTarget)),
     );
@@ -25,17 +29,28 @@ export function ContactForm() {
           result.error.issues.map((i) => [i.path[0], i.message]),
         ),
       );
-      setDraft("");
+      setStatus("");
       return;
     }
     setErrors({});
-    const d = result.data;
-    setDraft(
-      `mailto:butunselsifaakademi@gmail.com?subject=${encodeURIComponent("İletişim — " + d.name)}&body=${encodeURIComponent(`${d.message}\n\n${d.name}\n${d.email}`)}`,
-    );
+    setPending(true);
+    setStatus("");
+    setFailed(false);
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result.data),
+      });
+      const body = await response.json();
+      setFailed(!response.ok);
+      setStatus(body.message);
+      if (response.ok) form.reset();
+    } catch {
+      setFailed(true);
+      setStatus("Mesajınız alınamadı. Lütfen tekrar deneyin veya bize e-posta gönderin.");
+    } finally { setPending(false); }
   }
   return (
-    <form onSubmit={submit} noValidate onChange={() => setDraft("")}>
+    <form onSubmit={submit} noValidate aria-busy={pending}>
       <FieldGroup>
         {(["name", "email", "message"] as const).map((key) => (
           <Field key={key} data-invalid={!!errors[key]}>
@@ -50,6 +65,7 @@ export function ContactForm() {
               <Textarea
                 id={key}
                 name={key}
+                disabled={pending}
                 rows={6}
                 aria-invalid={!!errors[key]}
                 aria-describedby={errors[key] ? `${key}-error` : undefined}
@@ -59,6 +75,7 @@ export function ContactForm() {
               <Input
                 id={key}
                 name={key}
+                disabled={pending}
                 type={key === "email" ? "email" : "text"}
                 autoComplete={key === "email" ? "email" : "name"}
                 aria-invalid={!!errors[key]}
@@ -74,27 +91,15 @@ export function ContactForm() {
           </Field>
         ))}
         <Field>
-          <Button type="submit" size="pill">
-            Mesajı Hazırla
+          <Button type="submit" size="pill" disabled={pending}>
+            {pending ? "Gönderiliyor…" : "Mesajı Gönder"}
           </Button>
           <FieldDescription>
-            Mesajınız e-posta uygulamanızda açılır. Göndermeden önce gözden
-            geçirebilirsiniz.
+            Mesajınız doğrudan ekibimize iletilir. Yanıtımız formda yazdığınız e-posta adresine gönderilir.
           </FieldDescription>
         </Field>
-        {draft && (
-          <Field>
-            <p role="status">
-              Mesajınız hazır. Göndermek için e-posta uygulamanızı açın.
-            </p>
-            <a
-              className={buttonVariants({ variant: "secondary", size: "pill" })}
-              href={draft}
-            >
-              E-posta Uygulamasında Aç
-            </a>
-          </Field>
-        )}
+        {status && <p role={failed ? "alert" : "status"}>{status}</p>}
+        <a href="mailto:butunselsifaakademi@gmail.com" className="text-sm underline">E-posta ile ulaşın</a>
       </FieldGroup>
     </form>
   );

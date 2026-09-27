@@ -180,3 +180,13 @@ Provider account ownership, content, legal documents, and production acceptance 
 - [Drizzle migrations](https://orm.drizzle.team/docs/migrations)
 - [Better Auth database model](https://better-auth.com/docs/concepts/database)
 - [Better Auth two-factor storage](https://better-auth.com/docs/plugins/2fa)
+
+## Resend email integration — 27 September 2026
+
+- Verification, password-reset and contact messages use React Email templates in `emails/` (shared layout in `emails/_components/`), rendered to HTML by `lib/email/templates.tsx` alongside hand-written plain text. Links are valid for one hour; React escapes all interpolated values. The sign-up name is never echoed to an unverified address. Authentication remains verified-email only.
+- `pnpm email:dev` opens the React Email preview (port 3001), including its client-compatibility, lint and spam checks. Tests run through `tsx` so Node can load the `.tsx` templates.
+- The encrypted outbox supports HTML and per-message Reply-To. Resend uses a stable delivery ID as its idempotency key; temporary provider failures/429s get up to three immediate attempts. Longer failures remain queued with the existing backoff.
+- `/api/contact` validates input, checks the request origin and BotID, and applies a database-backed limit of three messages per IP per hour (only a keyed IP hash is stored). It queues mail to the configured `RESEND_REPLY_TO` inbox and sets the visitor's address as Reply-To. The UI reports queue acceptance, retains form data on failure, and offers a direct email fallback.
+- Sending domain: `mail.nilgunoygur.com`, Resend region Ireland (`eu-west-1`). Intended sender: `Nilgün Oygur Akademi <akademi@mail.nilgunoygur.com>`; replies/contact submissions: `butunselsifaakademi@gmail.com`. DNS verification and API-key/environment configuration must be completed before live acceptance testing.
+- Vercel Hobby's daily-only cron cannot reliably retry one-hour authentication links. The authenticated `/api/internal/email-delivery` worker is ready for an external scheduler every 2–5 minutes; no frequent scheduler is currently provisioned. Subsequent auth/contact requests also drain eligible pending messages. Do not claim scheduled retry coverage until a scheduler is configured.
+- Newsletter subscriptions still use the existing email handoff; no marketing audience or automatic enrollment is introduced.

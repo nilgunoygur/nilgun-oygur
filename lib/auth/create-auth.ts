@@ -4,12 +4,10 @@ import { twoFactor } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import type { drizzleAdapter } from "better-auth/adapters/drizzle";
 
-export type AuthEmail = {
-  to: string;
-  subject: string;
-  text: string;
-  expiresAt: Date;
-};
+import { authenticationEmail } from "../email/templates.tsx";
+import type { EmailMessage } from "../email/message.ts";
+
+export type AuthEmail = EmailMessage;
 
 type Dependencies = {
   database: ReturnType<typeof drizzleAdapter>;
@@ -50,12 +48,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
         ...coreFields, twoFactorEnabled: false, ...additionalFields, id,
       }),
       sendResetPassword: async ({ user, url }) => {
-        await dependencies.enqueueEmail({
-          to: user.email,
-          subject: "Akademi şifrenizi yenileyin",
-          text: `Şifrenizi yenilemek için aşağıdaki bağlantıyı açın. Bağlantı bir saat geçerlidir.\n\n${url}\n\nBu isteği siz yapmadıysanız bu e-postayı dikkate almayın.`,
-          expiresAt: new Date(Date.now() + 3600_000),
-        });
+        await dependencies.enqueueEmail(await authenticationEmail("reset", user.email, url));
       },
     },
     emailVerification: {
@@ -67,12 +60,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
         await claimSafely(user.id, user.email);
       },
       sendVerificationEmail: async ({ user, url }) => {
-        await dependencies.enqueueEmail({
-          to: user.email,
-          subject: "Akademi e-posta adresinizi doğrulayın",
-          text: `E-posta adresinizi doğrulamak için aşağıdaki bağlantıyı açın. Bağlantı bir saat geçerlidir.\n\n${url}`,
-          expiresAt: new Date(Date.now() + 3600_000),
-        });
+        await dependencies.enqueueEmail(await authenticationEmail("verification", user.email, url));
       },
     },
     verification: { storeIdentifier: "hashed" },

@@ -55,3 +55,12 @@ test("expired messages are erased and crashed workers can be recovered", async (
   await db.update(schema.emailDeliveries).set({ status: "sending", leaseExpiresAt: new Date(0), attemptCount: 1 }).where(eq(schema.emailDeliveries.status, "pending"));
   assert.equal((await outbox.deliverBatch(async () => "resend-3")).sent, 1);
 });
+
+test("HTML and per-message Reply-To survive encrypted queue delivery", async () => {
+  const message = { ...makeMessage("contact payload"), html: "<p>Safe HTML</p>", replyTo: "visitor@example.com" };
+  await outbox.enqueue(message);
+  let delivered;
+  await outbox.deliverBatch(async value => { delivered = value; return "resend-html"; });
+  assert.equal(delivered.html, message.html);
+  assert.equal(delivered.replyTo, message.replyTo);
+});

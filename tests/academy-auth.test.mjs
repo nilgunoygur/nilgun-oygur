@@ -43,6 +43,9 @@ test("registration is neutral and cannot set ownership or MFA fields", async () 
   assert.equal(response.status, 200);
   assert.equal((await response.json()).token, null);
   assert.equal(messages.length, 1);
+  assert.equal(messages[0].to, account.email);
+  assert.equal(messages[0].subject, "Akademi e-posta adresinizi doğrulayın");
+  assert.ok(messages[0].html.includes(`href="${messageUrl(messages[0]).replaceAll("&", "&amp;")}"`), "HTML button uses the same verification link");
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
   assert.equal(user.twoFactorEnabled, false);
   assert.equal((await db.select().from(schema.owners)).length, 0);
@@ -74,6 +77,8 @@ test("password reset is neutral, one-use, and revokes existing sessions", async 
   const unknown = await request("/request-password-reset", { email: "unknown@example.com", redirectTo: `${origin}/akademi/sifre-yenile` });
   assert.equal(known.status, unknown.status);
   assert.deepEqual(await known.json(), await unknown.json());
+  assert.equal(messages.at(-1).subject, "Akademi şifrenizi yenileyin");
+  assert.ok(messages.at(-1).html.includes("Şifremi yenile"));
   const resetUrl = new URL(messageUrl(messages.at(-1)));
   const token = resetUrl.pathname.split("/").at(-1);
   const reset = { token, newPassword: "new-password-456" };
