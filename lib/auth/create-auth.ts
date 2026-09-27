@@ -3,17 +3,15 @@ import { createAuthMiddleware } from "better-auth/api";
 import { twoFactor } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import type { drizzleAdapter } from "better-auth/adapters/drizzle";
+import type { EmailMessage } from "../email/outbox.ts";
 
-import { authenticationEmail } from "../email/templates.tsx";
-import type { EmailMessage } from "../email/message.ts";
-
-export type AuthEmail = EmailMessage;
+const linkLifetime = 3600;
 
 type Dependencies = {
   database: ReturnType<typeof drizzleAdapter>;
   baseURL: string;
   secret: string;
-  enqueueEmail: (email: AuthEmail) => Promise<void>;
+  enqueueEmail: (email: EmailMessage) => Promise<void>;
   revokeUserSessions: (userId: string) => Promise<void>;
   /** Grants Shopier purchases waiting for this verified email. Failures must never block authentication. */
   claimPurchases: (userId: string, email: string) => Promise<void>;
@@ -26,6 +24,11 @@ export function createAcademyAuth(dependencies: Dependencies) {
   }
   if (dependencies.secret.length < 32) throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters.");
 
+  const sendAuthEmail = async (kind: "verification" | "reset", to: string, url: string) => {
+    // Lazy: the renderer is heavy and every lib/auth importer would load it.
+    const { authenticationEmail } = await import("../email/templates.tsx");
+    await dependencies.enqueueEmail({ ...await authenticationEmail(kind, to, url), expiresAt: new Date(Date.now() + linkLifetime * 1000) });
+  };
   const claimSafely = async (userId: string, email: string) => {
     try { await dependencies.claimPurchases(userId, email); } catch { console.error("Akademi purchase claim failed; the next sign-in retries it."); }
   };
@@ -42,26 +45,22 @@ export function createAcademyAuth(dependencies: Dependencies) {
       maxPasswordLength: 128,
       requireEmailVerification: true,
       autoSignIn: false,
-      resetPasswordTokenExpiresIn: 3600,
+      resetPasswordTokenExpiresIn: linkLifetime,
       revokeSessionsOnPasswordReset: true,
       customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
         ...coreFields, twoFactorEnabled: false, ...additionalFields, id,
       }),
-      sendResetPassword: async ({ user, url }) => {
-        await dependencies.enqueueEmail(await authenticationEmail("reset", user.email, url));
-      },
+      sendResetPassword: ({ user, url }) => sendAuthEmail("reset", user.email, url),
     },
     emailVerification: {
       sendOnSignUp: true,
       sendOnSignIn: false,
       autoSignInAfterVerification: false,
-      expiresIn: 3600,
+      expiresIn: linkLifetime,
       afterEmailVerification: async (user) => {
         await claimSafely(user.id, user.email);
       },
-      sendVerificationEmail: async ({ user, url }) => {
-        await dependencies.enqueueEmail(await authenticationEmail("verification", user.email, url));
-      },
+      sendVerificationEmail: ({ user, url }) => sendAuthEmail("verification", user.email, url),
     },
     verification: { storeIdentifier: "hashed" },
     session: { cookieCache: { enabled: false } },

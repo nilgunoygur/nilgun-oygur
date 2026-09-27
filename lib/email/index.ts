@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { Resend } from "resend";
 import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
@@ -21,4 +22,10 @@ export async function deliverPendingEmails() {
   if (!apiKey || !from || !replyTo) throw new Error("Resend API key, sender and Reply-To must be configured.");
   const resend = new Resend(apiKey);
   return getEmailOutbox().deliverBatch(createResendDelivery(resend, { from, replyTo }));
+}
+
+export function deliverPendingEmailsAfterResponse() {
+  after(async () => {
+    try { await deliverPendingEmails(); } catch { console.error("Email delivery could not run; queued messages require retry."); }
+  });
 }

@@ -2,7 +2,7 @@ import { setTimeout } from "node:timers/promises";
 import type { Resend } from "resend";
 import type { DeliverEmail } from "./outbox.ts";
 
-/** Retry short provider outages inside the request lifetime; the outbox handles longer failures. */
+// Brief in-request retries; the outbox backs off for longer outages.
 export function createResendDelivery(
   resend: Pick<Resend, "emails">,
   settings: { from: string; replyTo: string },
@@ -19,7 +19,6 @@ export function createResendDelivery(
       if (status && status !== 429 && status < 500) break;
       if (attempt < 2) await wait(1000 * (attempt + 1));
     }
-    // Never expose provider details, which can contain addresses and token URLs.
     throw new Error("Email provider rejected delivery.");
   };
 }

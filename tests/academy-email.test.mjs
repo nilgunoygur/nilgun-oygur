@@ -64,3 +64,9 @@ test("HTML and per-message Reply-To survive encrypted queue delivery", async () 
   assert.equal(delivered.html, message.html);
   assert.equal(delivered.replyTo, message.replyTo);
 });
+
+test("messages without an expiry stay inside Resend's idempotency window", async () => {
+  await outbox.enqueue({ to: "owner@example.com", subject: "Contact", text: "no expiry" });
+  const latest = Math.max(...(await db.select().from(schema.emailDeliveries)).map(row => row.expiresAt.getTime()));
+  assert.ok(latest > Date.now() + 22 * 3_600_000 && latest <= Date.now() + 23 * 3_600_000);
+});

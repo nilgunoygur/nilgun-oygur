@@ -1,5 +1,6 @@
 import { z } from "zod";
 import reference from "./reference.json";
+export { bookingUrl, email, nav, socials } from "./site.ts";
 
 const pageSchema = z.object({
   title: z.string(),
@@ -8,24 +9,10 @@ const pageSchema = z.object({
   links: z.array(z.object({ text: z.string(), href: z.string() })),
 });
 export const pages = z.record(z.string(), pageSchema).parse(reference);
-export const bookingUrl = "https://calendly.com/butunselsifaakademi/meetings";
-export const email = "butunselsifaakademi@gmail.com";
 export const asset = (url: string) =>
   `/images/${url.split("/").pop()?.split("?")[0]}`;
 export const portrait = asset(pages["/"].images[1]);
 export const logo = asset(pages["/"].images[0]);
-export const socials = [
-  { label: "Tiktok", href: "https://www.tiktok.com/@nilgun_oygur" },
-  { label: "Instagram", href: "https://www.instagram.com/nilgun_oygur/" },
-  { label: "Youtube", href: "https://www.youtube.com/@nilgunoygur4942" },
-];
-export const nav = [
-  { label: "Kitaplarım", href: "/kitaplarim" },
-  { label: "Eğitimlerim", href: "/egitimlerim" },
-  { label: "Yazılarım", href: "/blog" },
-  { label: "İletişim", href: "/iletisim" },
-  { label: "Akademi", href: "/akademi" },
-];
 export const courses = [
   "kuatum-egitimi",
   "bioenerji-egitimi",

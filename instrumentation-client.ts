@@ -1,7 +1,6 @@
 import { initBotId } from "botid/client/core";
 
-// Invisible bot check (Vercel BotID, Basic mode) on the account endpoints that send email or accept passwords,
-// and on "Siparişimi ekle", which queries Shopier. The server side calls checkBotId() for the same requests.
+// Vercel BotID (Basic mode); the matching server handlers call checkBotId().
 initBotId({
   protect: [
     { path: "/api/contact", method: "POST" },

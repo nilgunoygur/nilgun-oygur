@@ -1,8 +1,7 @@
-import { after } from "next/server";
 import { checkBotId } from "botid/server";
 import { config } from "@/lib/config";
 import { getAuth } from "@/lib/auth";
-import { deliverPendingEmails } from "@/lib/email";
+import { deliverPendingEmailsAfterResponse } from "@/lib/email";
 
 const authHeaders = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 // Also listed in instrumentation-client.ts, which attaches the BotID challenge to these requests.
@@ -17,11 +16,7 @@ async function handle(request: Request) {
   }
   const response = await getAuth().handler(request);
   for (const [key, value] of Object.entries(authHeaders)) response.headers.set(key, value);
-  if (request.method === "POST" && sendsEmail.test(path)) {
-    after(async () => {
-      try { await deliverPendingEmails(); } catch { console.error("Akademi email delivery could not run; queued messages require retry."); }
-    });
-  }
+  if (request.method === "POST" && sendsEmail.test(path)) deliverPendingEmailsAfterResponse();
   return response;
 }
 export const GET = handle;

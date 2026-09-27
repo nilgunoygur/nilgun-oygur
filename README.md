@@ -29,7 +29,7 @@ pnpm start
 
 ## Contact and external services
 
-Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form validates input on the client and server, checks BotID and a persistent rate limit, and queues an encrypted message for the configured `RESEND_REPLY_TO` inbox. The visitor’s address is used as Reply-To. Success means the message was accepted into the queue, not confirmed inbox delivery. Newsletter requests also use an email handoff. Resend sends verification and password-reset emails with Turkish HTML and plain-text templates built with [React Email](https://react.email) in `emails/`, styled like the site with light/dark and mobile variants. Their images live in `public/email/` and load from the site origin, so they appear once deployed. Preview them with `pnpm email:dev` (http://localhost:3001) while `pnpm dev` serves the images. Configure the three `RESEND_*` variables and the existing database/authentication secrets before enabling delivery.
+Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form posts to `/api/contact`, which queues the message for the `RESEND_REPLY_TO` inbox with the visitor as Reply-To (success means queued, not delivered). Verification, reset and contact emails are React Email templates in `emails/`; preview them with `pnpm email:dev` while `pnpm dev` serves `public/email/`. Newsletter requests still use an email handoff. Configure the three `RESEND_*` variables and the existing database/authentication secrets before enabling delivery.
 
 Set `NEXT_PUBLIC_SITE_URL` to the deployed origin before a production build to generate the correct sitemap and Open Graph URLs.
 

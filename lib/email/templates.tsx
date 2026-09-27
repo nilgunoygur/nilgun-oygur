@@ -1,30 +1,20 @@
-import { render } from "@react-email/render";
-import VerifyEmail, { verifyEmailSubject, verifyEmailText } from "../../emails/verify-email.tsx";
-import ResetPassword, { resetPasswordSubject, resetPasswordText } from "../../emails/reset-password.tsx";
-import ContactMessage, { contactMessageSubject, contactMessageText } from "../../emails/contact-message.tsx";
-import type { EmailMessage } from "./message.ts";
+import { render } from "react-email";
+import type { z } from "zod";
+import { AuthEmail, authEmailText } from "../../emails/_components/auth-email.tsx";
+import { verifyCopy } from "../../emails/verify-email.tsx";
+import { resetCopy } from "../../emails/reset-password.tsx";
+import ContactMessage, { contactSubject, contactText } from "../../emails/contact-message.tsx";
+import type { contactSchema } from "../contact-schema.ts";
+import type { EmailMessage } from "./outbox.ts";
 
-export async function authenticationEmail(kind: "verification" | "reset", to: string, url: string): Promise<EmailMessage> {
-  const reset = kind === "reset";
-  return {
-    to,
-    subject: reset ? resetPasswordSubject : verifyEmailSubject,
-    text: reset ? resetPasswordText({ url }) : verifyEmailText({ url }),
-    html: await render(reset ? <ResetPassword url={url} /> : <VerifyEmail url={url} />),
-    // Matches Better Auth's one-hour token lifetime; an expired link is not worth delivering.
-    expiresAt: new Date(Date.now() + 3_600_000),
-  };
+const authCopy = { verification: verifyCopy, reset: resetCopy };
+
+export async function authenticationEmail(kind: keyof typeof authCopy, to: string, url: string): Promise<EmailMessage> {
+  const copy = authCopy[kind];
+  return { to, subject: copy.subject, text: authEmailText(copy, url), html: await render(<AuthEmail copy={copy} url={url} />) };
 }
 
-export async function contactEmail(input: { name: string; email: string; message: string }, recipient: string, siteUrl: string): Promise<EmailMessage> {
+export async function contactEmail(input: z.infer<typeof contactSchema>, recipient: string, siteUrl: string): Promise<EmailMessage> {
   const props = { ...input, siteUrl };
-  return {
-    to: recipient,
-    replyTo: input.email,
-    subject: contactMessageSubject,
-    text: contactMessageText(props),
-    html: await render(<ContactMessage {...props} />),
-    // Keep retries within Resend's 24-hour idempotency window.
-    expiresAt: new Date(Date.now() + 23 * 3_600_000),
-  };
+  return { to: recipient, replyTo: input.email, subject: contactSubject, text: contactText(props), html: await render(<ContactMessage {...props} />) };
 }

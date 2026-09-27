@@ -10,43 +10,38 @@ import {
   FieldDescription,
 } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { FormStatus, idleForm, type FormState } from "@/components/akademi/form-status";
 import { contactSchema } from "@/lib/contact-schema";
 export function ContactForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [status, setStatus] = useState("");
+  const [state, setState] = useState<FormState>(idleForm);
   const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (pending) return;
     const form = e.currentTarget;
     const result = contactSchema.safeParse(
-      Object.fromEntries(new FormData(e.currentTarget)),
+      Object.fromEntries(new FormData(form)),
     );
+    setState(idleForm);
     if (!result.success) {
       setErrors(
         Object.fromEntries(
           result.error.issues.map((i) => [i.path[0], i.message]),
         ),
       );
-      setStatus("");
       return;
     }
     setErrors({});
     setPending(true);
-    setStatus("");
-    setFailed(false);
     try {
       const response = await fetch("/api/contact", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result.data),
       });
-      const body = await response.json();
-      setFailed(!response.ok);
-      setStatus(body.message);
+      const { message } = await response.json();
+      setState({ status: response.ok ? "success" : "error", message });
       if (response.ok) form.reset();
     } catch {
-      setFailed(true);
-      setStatus("Mesajınız alınamadı. Lütfen tekrar deneyin veya bize e-posta gönderin.");
+      setState({ status: "error", message: "Mesajınız alınamadı. Lütfen tekrar deneyin veya bize e-posta gönderin." });
     } finally { setPending(false); }
   }
   return (
@@ -98,8 +93,7 @@ export function ContactForm() {
             Mesajınız doğrudan ekibimize iletilir. Yanıtımız formda yazdığınız e-posta adresine gönderilir.
           </FieldDescription>
         </Field>
-        {status && <p role={failed ? "alert" : "status"}>{status}</p>}
-        <a href="mailto:butunselsifaakademi@gmail.com" className="text-sm underline">E-posta ile ulaşın</a>
+        <FormStatus state={state} />
       </FieldGroup>
     </form>
   );

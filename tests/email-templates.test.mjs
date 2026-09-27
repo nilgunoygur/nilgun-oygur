@@ -10,7 +10,6 @@ test("authentication templates keep text links and escape HTML attributes", asyn
     assert.ok(message.html.includes('lang="tr"'));
     assert.ok(message.html.includes("&amp;callbackURL=&quot;&lt;script&gt;"));
     assert.ok(!message.html.includes("<script>"));
-    assert.ok(message.expiresAt.getTime() > Date.now() + 3_590_000);
   }
 });
 
@@ -40,5 +39,4 @@ test("contact messages go only to the configured inbox, with the visitor as Repl
   assert.ok(message.text.includes("Hello from the website"));
   assert.ok(message.html.includes("mailto:visitor@example.com"));
   assert.ok(!message.html.includes("<img src=x") && !message.html.includes("<b>"), "visitor input is escaped");
-  assert.ok(message.expiresAt.getTime() < Date.now() + 24 * 3_600_000);
 });

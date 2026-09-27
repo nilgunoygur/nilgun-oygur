@@ -1,11 +1,10 @@
 import { createHmac } from "node:crypto";
-import { after } from "next/server";
 import { checkBotId } from "botid/server";
 import { config } from "@/lib/config";
 import { contactSchema } from "@/lib/contact-schema";
 import { getDatabase } from "@/lib/db";
 import { consumeAttempt } from "@/lib/akademi/rate-limit";
-import { deliverPendingEmails, getEmailOutbox } from "@/lib/email";
+import { deliverPendingEmailsAfterResponse, getEmailOutbox } from "@/lib/email";
 import { contactEmail } from "@/lib/email/templates";
 
 const headers = { "Cache-Control": "no-store" };
@@ -31,9 +30,7 @@ export async function POST(request: Request) {
       return response("Çok fazla mesaj gönderdiniz. Lütfen bir saat sonra tekrar deneyin.", 429);
     }
     await getEmailOutbox().enqueue(await contactEmail(input.data, settings.resend.replyTo, settings.siteUrl));
-    after(async () => {
-      try { await deliverPendingEmails(); } catch { console.error("Contact email delivery could not run; queued messages require retry."); }
-    });
+    deliverPendingEmailsAfterResponse();
     return response("Mesajınız alındı. En kısa sürede size dönüş yapacağız.", 202);
   } catch {
     return response("Mesajınız alınamadı. Lütfen biraz sonra tekrar deneyin veya bize e-posta gönderin.", 503);

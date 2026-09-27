@@ -2,21 +2,25 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { emailDeliveries } from "../db/schema.ts";
-import type { EmailMessage } from "./message.ts";
 import type { Database } from "../db/types.ts";
 
+/** Encrypted at rest and erased after delivery or expiry. */
+export type EmailMessage = { to: string; subject: string; text: string; html?: string; replyTo?: string; expiresAt?: Date };
 export type DeliverEmail = (message: Omit<EmailMessage, "expiresAt">, key: string) => Promise<string>;
+// Retries must stay inside Resend's 24-hour idempotency window.
+const maxLifetime = 23 * 3_600_000;
 
 export function createEmailOutbox(db: Database, encryptionKey: string) {
   if (encryptionKey.length < 32) throw new Error("EMAIL_ENCRYPTION_KEY must contain at least 32 characters.");
   return {
     async enqueue(message: EmailMessage) {
-      const payload = JSON.stringify({ to: message.to, subject: message.subject, text: message.text, html: message.html, replyTo: message.replyTo });
+      const { expiresAt, ...content } = message;
+      const payload = JSON.stringify(content);
       const deduplicationKey = createHash("sha256").update(payload).digest("hex");
       await db.insert(emailDeliveries).values({
         deduplicationKey,
         encryptedMessage: await symmetricEncrypt({ key: encryptionKey, data: payload }),
-        expiresAt: message.expiresAt,
+        expiresAt: new Date(Math.min(expiresAt?.getTime() ?? Infinity, Date.now() + maxLifetime)),
       }).onConflictDoNothing({ target: emailDeliveries.deduplicationKey });
     },
     async deliverBatch(deliver: DeliverEmail, limit = 10) {
