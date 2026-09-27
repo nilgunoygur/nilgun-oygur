@@ -1,6 +1,6 @@
 import { setTimeout } from "node:timers/promises";
 import type { Resend } from "resend";
-import type { DeliverEmail } from "./outbox.ts";
+import { ProviderUnavailableError, type DeliverEmail } from "./outbox.ts";
 
 // Brief in-request retries; the outbox backs off for longer outages.
 export function createResendDelivery(
@@ -16,9 +16,9 @@ export function createResendDelivery(
       );
       if (result.data && !result.error) return result.data.id;
       const status = result.error?.statusCode;
-      if (status && status !== 429 && status < 500) break;
+      if (status && status !== 429 && status < 500) throw new Error("Email provider rejected delivery.");
       if (attempt < 2) await wait(1000 * (attempt + 1));
     }
-    throw new Error("Email provider rejected delivery.");
+    throw new ProviderUnavailableError("Email provider is unavailable.");
   };
 }

@@ -24,8 +24,10 @@ export async function deliverPendingEmails() {
   return getEmailOutbox().deliverBatch(createResendDelivery(resend, { from, replyTo }));
 }
 
+export async function tryDeliverPendingEmails() {
+  try { await deliverPendingEmails(); } catch { console.error("Email delivery could not run; queued messages require retry."); }
+}
+
 export function deliverPendingEmailsAfterResponse() {
-  after(async () => {
-    try { await deliverPendingEmails(); } catch { console.error("Email delivery could not run; queued messages require retry."); }
-  });
+  after(tryDeliverPendingEmails);
 }

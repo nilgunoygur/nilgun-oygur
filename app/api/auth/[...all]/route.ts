@@ -1,12 +1,10 @@
 import { checkBotId } from "botid/server";
 import { config } from "@/lib/config";
 import { getAuth } from "@/lib/auth";
-import { deliverPendingEmailsAfterResponse } from "@/lib/email";
 
 const authHeaders = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 // Also listed in instrumentation-client.ts, which attaches the BotID challenge to these requests.
 const botChecked = /\/(sign-up\/email|sign-in\/email|request-password-reset|send-verification-email)$/;
-const sendsEmail = /\/(sign-up\/email|request-password-reset|send-verification-email)$/;
 
 async function handle(request: Request) {
   if (!config().enabled.auth) return Response.json({ error: "Akademi hesap işlemleri henüz kullanıma açılmadı." }, { status: 503, headers: authHeaders });
@@ -16,7 +14,6 @@ async function handle(request: Request) {
   }
   const response = await getAuth().handler(request);
   for (const [key, value] of Object.entries(authHeaders)) response.headers.set(key, value);
-  if (request.method === "POST" && sendsEmail.test(path)) deliverPendingEmailsAfterResponse();
   return response;
 }
 export const GET = handle;

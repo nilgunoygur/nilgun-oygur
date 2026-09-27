@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Phone, Mail } from "lucide-react";
 import { Hero, SectionHeading } from "@/components/site";
 import { ContactForm } from "@/components/contact-form";
+import { config } from "@/lib/config";
 import { asset, pages, email, socials } from "@/lib/content";
 import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -50,7 +51,7 @@ export default function Contact() {
               ))}
             </div>
           </div>
-          <ContactForm />
+          <ContactForm enabled={config().enabled.contact} />
         </div>
       </section>
     </>

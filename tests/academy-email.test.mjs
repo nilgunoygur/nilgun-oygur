@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
-import { createEmailOutbox } from "../lib/email/outbox.ts";
+import { createEmailOutbox, ProviderUnavailableError } from "../lib/email/outbox.ts";
 import * as schema from "../lib/db/schema.ts";
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -69,4 +69,13 @@ test("messages without an expiry stay inside Resend's idempotency window", async
   await outbox.enqueue({ to: "owner@example.com", subject: "Contact", text: "no expiry" });
   const latest = Math.max(...(await db.select().from(schema.emailDeliveries)).map(row => row.expiresAt.getTime()));
   assert.ok(latest > Date.now() + 22 * 3_600_000 && latest <= Date.now() + 23 * 3_600_000);
+});
+
+test("a provider outage stops the batch instead of retrying every message", async () => {
+  await db.delete(schema.emailDeliveries);
+  for (const text of ["one", "two", "three"]) await outbox.enqueue(makeMessage(text));
+  let attempts = 0;
+  const result = await outbox.deliverBatch(async () => { attempts++; throw new ProviderUnavailableError(); });
+  assert.deepEqual([result.sent, attempts], [0, 1]);
+  assert.equal((await db.select().from(schema.emailDeliveries).where(eq(schema.emailDeliveries.status, "pending"))).length, 2);
 });

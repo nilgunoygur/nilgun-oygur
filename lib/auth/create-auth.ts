@@ -12,6 +12,8 @@ type Dependencies = {
   baseURL: string;
   secret: string;
   enqueueEmail: (email: EmailMessage) => Promise<void>;
+  /** Runs email rendering and delivery after the response (Next `after`). */
+  runInBackground?: (promise: Promise<unknown>) => void;
   revokeUserSessions: (userId: string) => Promise<void>;
   /** Grants Shopier purchases waiting for this verified email. Failures must never block authentication. */
   claimPurchases: (userId: string, email: string) => Promise<void>;
@@ -64,7 +66,10 @@ export function createAcademyAuth(dependencies: Dependencies) {
     },
     verification: { storeIdentifier: "hashed" },
     session: { cookieCache: { enabled: false } },
-    advanced: { ipAddress: { ipAddressHeaders: ["x-vercel-forwarded-for"] } },
+    advanced: {
+      ipAddress: { ipAddressHeaders: ["x-vercel-forwarded-for"] },
+      ...(dependencies.runInBackground && { backgroundTasks: { handler: dependencies.runInBackground } }),
+    },
     rateLimit: {
       enabled: true,
       storage: "database",

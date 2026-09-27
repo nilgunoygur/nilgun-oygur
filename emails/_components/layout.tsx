@@ -16,7 +16,7 @@ const small: CSSProperties = { ...text, fontSize: 13, lineHeight: "20px", color:
 export const kicker: CSSProperties = { margin: 0, fontFamily: sans, fontSize: 11, lineHeight: "18px", fontWeight: 600, letterSpacing: "1.8px", color: colors.ink };
 
 const styles = (siteUrl: string) => `
-@font-face { font-family: Recoleta; font-weight: 400; src: url(${siteUrl}/fonts/recoleta.ttf) format("truetype"); }
+@font-face { font-family: Recoleta; font-weight: 400; src: url(${siteUrl}/email/recoleta.woff2) format("woff2"); }
 @font-face { font-family: "General Sans"; font-weight: 400; src: url(${siteUrl}/fonts/general-400.woff2) format("woff2"); }
 @font-face { font-family: "General Sans"; font-weight: 600; src: url(${siteUrl}/fonts/general-600.woff2) format("woff2"); }
 :root { color-scheme: light dark; supported-color-schemes: light dark; }

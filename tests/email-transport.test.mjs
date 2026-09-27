@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createResendDelivery } from "../lib/email/transport.ts";
+import { ProviderUnavailableError } from "../lib/email/outbox.ts";
 const message = { to: "owner@example.com", subject: "Contact", text: "Hello", replyTo: "visitor@example.com" };
 const settings = { from: "Site <site@example.com>", replyTo: "support@example.com" };
 
@@ -36,6 +37,6 @@ test("temporary outages have bounded retries and auth emails use the default rep
     return { data: null, error: { statusCode: 503 } };
   } } }, settings, async () => {});
   const authMessage = { to: message.to, subject: message.subject, text: message.text };
-  await assert.rejects(delivery(authMessage, "key"));
+  await assert.rejects(delivery(authMessage, "key"), ProviderUnavailableError);
   assert.equal(calls, 3);
 });

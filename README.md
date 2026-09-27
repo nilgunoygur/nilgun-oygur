@@ -29,7 +29,7 @@ pnpm start
 
 ## Contact and external services
 
-Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form posts to `/api/contact`, which queues the message for the `RESEND_REPLY_TO` inbox with the visitor as Reply-To (success means queued, not delivered). Verification, reset and contact emails are React Email templates in `emails/`; preview them with `pnpm email:dev` while `pnpm dev` serves `public/email/`. Newsletter requests still use an email handoff. Configure the three `RESEND_*` variables and the existing database/authentication secrets before enabling delivery.
+Booking buttons open the owner's Calendly page. Book purchase buttons retain their original retailer destinations. The contact form's server action (`app/iletisim/actions.ts`) queues the message for the `RESEND_REPLY_TO` inbox with the visitor as Reply-To (success means queued, not delivered). Verification, reset and contact emails are React Email templates in `emails/`; preview them with `pnpm email:dev` while `pnpm dev` serves `public/email/`. Newsletter requests still use an email handoff. Configure the three `RESEND_*` variables and the existing database/authentication secrets before enabling delivery.
 
 Set `NEXT_PUBLIC_SITE_URL` to the deployed origin before a production build to generate the correct sitemap and Open Graph URLs.
 

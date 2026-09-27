@@ -35,6 +35,8 @@ export function parseConfig(env: Env) {
       catalog: !!databaseUrl && !!shopierToken,
       webhooks: !!databaseUrl && webhookTokens.length > 0,
       email: !!databaseUrl && !!auth.emailKey && (consoleEmail || resendReady),
+      /** Contact mail goes to the Reply-To inbox, so it needs that address even in local dev. */
+      contact: !!databaseUrl && !!auth.emailKey && !!resend.replyTo && (consoleEmail || resendReady),
       auth: !!databaseUrl && !!auth.url && !!auth.secret && !!auth.emailKey && (consoleEmail || resendReady),
     },
   };
