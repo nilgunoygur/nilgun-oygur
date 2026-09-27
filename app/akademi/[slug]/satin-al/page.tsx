@@ -8,6 +8,8 @@ import { formatAccess } from "@/lib/akademi/format";
 import { catalogStaticParams, getCatalogCourse } from "@/lib/akademi/server";
 import type { CatalogCourse } from "@/lib/akademi/catalog";
 import { CoursePrice } from "@/components/akademi/course-price";
+import { TrackedLink } from "@/components/analytics";
+import { courseEcommerce } from "@/lib/analytics";
 import { buttonVariants } from "@/components/ui/button";
 import { kicker, pageWidth, textLink } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -39,7 +41,7 @@ async function CheckoutSteps({ course }: { course: CatalogCourse }) {
   return email ? <div className={steps}>
     <p><MailCheck size={20} aria-hidden="true" className="mr-[6px] inline align-[-4px]" /> Shopier ödeme sayfasında bu e-posta adresini kullanın: <strong>{email}</strong></p>
     <p>Ödemeniz onaylandığında eğitiminiz hesabınıza otomatik olarak eklenir. Farklı bir e-posta kullanırsanız, sipariş numaranızla hesabınızdan ekleyebilirsiniz.</p>
-    <a className={buttonVariants({ size: "hero" })} href={course.shopierUrl} rel="noopener">Shopier ile öde <ArrowUpRight size={18} aria-hidden="true" /></a>
+    <TrackedLink event="begin_checkout" params={{ ...courseEcommerce(course), signed_in: true }} className={buttonVariants({ size: "hero" })} href={course.shopierUrl} rel="noopener">Shopier ile öde <ArrowUpRight size={18} aria-hidden="true" /></TrackedLink>
     <Link href="/akademi/hesabim" className={textLink}>Hesabıma git</Link>
   </div> : <div className={steps}>
     <p>Eğitiminize ödemeden sonra hesabınızdan ulaşırsınız. Önce giriş yapın ya da ücretsiz hesap oluşturun; Shopier’de aynı e-posta adresini kullanın.</p>
@@ -48,6 +50,6 @@ async function CheckoutSteps({ course }: { course: CatalogCourse }) {
       <Link className={buttonVariants({ size: "hero", variant: "outline" })} href="/akademi/kayit">Hesap oluştur</Link>
     </div>
     <p>Hesabınız yoksa da ödeme yapabilirsiniz. Daha sonra aynı e-posta adresiyle kayıt olduğunuzda eğitiminiz hesabınızda görünür.</p>
-    <a className={textLink} href={course.shopierUrl} rel="noopener">Hesapsız devam et ve Shopier ile öde</a>
+    <TrackedLink event="begin_checkout" params={{ ...courseEcommerce(course), signed_in: false }} className={textLink} href={course.shopierUrl} rel="noopener">Hesapsız devam et ve Shopier ile öde</TrackedLink>
   </div>;
 }

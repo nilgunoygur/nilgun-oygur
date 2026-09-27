@@ -4,8 +4,8 @@ import Link from "next/link";
 import { ArrowLeft, Search, ShieldCheck } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
-import { dayLabel } from "@/lib/akademi/format";
-import type { UserListParams, UserRole } from "@/lib/akademi/owner-users";
+import { dateTimeLabel, dayLabel } from "@/lib/akademi/format";
+import type { UserListParams, userListFilter } from "@/lib/akademi/owner-users";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,8 +17,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Kullanıcılar" };
 type SearchParams = Promise<UserListParams>;
-type Filter = { role: UserRole | null; q: string; page: number };
-const dateTime = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" });
+type Filter = ReturnType<typeof userListFilter>;
 
 function usersHref(filter: Filter, changes: Partial<Filter>) {
   const next = { ...filter, ...changes };
@@ -80,18 +79,23 @@ async function Users({ searchParams }: { searchParams: SearchParams }) {
           <TableCell><Badge variant={item.emailVerified ? "secondary" : "outline"}>{item.emailVerified ? "Doğrulandı" : "Doğrulanmadı"}</Badge>{item.twoFactorEnabled && <span className="mt-1 block text-xs text-muted-foreground">Doğrulayıcı açık</span>}</TableCell>
           <TableCell>{item.activeCourses ? <span className="font-medium">{item.activeCourses}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
           <TableCell className="whitespace-nowrap text-stone">{dayLabel.format(item.createdAt)}</TableCell>
-          <TableCell className="whitespace-nowrap pr-5 text-stone">{item.lastSeenAt ? dateTime.format(item.lastSeenAt) : "—"}</TableCell>
+          <TableCell className="whitespace-nowrap pr-5 text-stone">{item.lastSeenAt ? dateTimeLabel.format(item.lastSeenAt) : "—"}</TableCell>
         </TableRow>)}</TableBody>
       </Table></div>}
 
       {pages > 1 && <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">{matching.toLocaleString("tr-TR")} kullanıcı · Sayfa {filter.page}/{pages}</p>
         <div className="flex gap-2">
-          {filter.page > 1 ? <Link href={usersHref(filter, { page: filter.page - 1 })} className={buttonVariants({ variant: "outline", size: "sm" })}>Önceki</Link> : <span aria-disabled className={cn(buttonVariants({ variant: "outline", size: "sm" }), "pointer-events-none opacity-50")}>Önceki</span>}
-          {filter.page < pages ? <Link href={usersHref(filter, { page: filter.page + 1 })} className={buttonVariants({ variant: "outline", size: "sm" })}>Sonraki</Link> : <span aria-disabled className={cn(buttonVariants({ variant: "outline", size: "sm" }), "pointer-events-none opacity-50")}>Sonraki</span>}
+          <PageLink filter={filter} page={filter.page - 1} disabled={filter.page <= 1}>Önceki</PageLink>
+          <PageLink filter={filter} page={filter.page + 1} disabled={filter.page >= pages}>Sonraki</PageLink>
         </div>
       </div>}
       <p className="mt-5 text-[12px] text-stone">Yönetici yetkisi yalnızca veritabanındaki yönetici listesinden gelir; bu sayfadan değiştirilemez.</p>
     </CardContent></Card>
   </>;
+}
+
+function PageLink({ filter, page, disabled, children }: { filter: Filter; page: number; disabled: boolean; children: React.ReactNode }) {
+  const className = buttonVariants({ variant: "outline", size: "sm" });
+  return disabled ? <span aria-disabled className={cn(className, "pointer-events-none opacity-50")}>{children}</span> : <Link href={usersHref(filter, { page })} className={className}>{children}</Link>;
 }

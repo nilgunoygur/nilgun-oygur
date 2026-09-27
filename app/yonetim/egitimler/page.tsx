@@ -2,13 +2,13 @@ import { Suspense } from "react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { OwnerCourseManagement } from "@/components/akademi/owner-course-management";
-import { pageWidth, accountPage, accountTitle, kicker } from "@/lib/styles";
+import { pageWidth, ownerSection, accountTitle, kicker } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Eğitim yönetimi" };
 
 export default function OwnerCourses() {
-  return <section className={cn(pageWidth, accountPage)}><Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Eğitimler yükleniyor…</div>}><Courses /></Suspense></section>;
+  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Eğitimler yükleniyor…</div>}><Courses /></Suspense></section>;
 }
 
 async function Courses() {

@@ -1,3 +1,4 @@
+import { ConsentSettingsLink } from "@/components/consent-manager";
 import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -257,7 +258,7 @@ async function BlogSectionContent() {
     </section>
   );
 }
-export function Footer() {
+export function Footer({ consentSettings = false }: { consentSettings?: boolean }) {
   return (
     <footer className={cn(pageWidth, "pt-[60px] pb-[25px] max-tablet:pt-[30px]")}>
       <div className="mb-[65px] grid grid-cols-[1.4fr_0.8fr_1fr_1fr] items-start gap-[50px] max-laptop:gap-[25px] max-tablet:mb-10 max-tablet:grid-cols-2 max-tablet:gap-x-6 max-tablet:gap-y-10">
@@ -296,7 +297,7 @@ export function Footer() {
         </div>
       </div>
       <Separator />
-      <p className="pt-[26px] text-center text-[13px]">Nilgün Oygur © 2024.</p>
+      <p className="pt-[26px] text-center text-[13px]">Nilgün Oygur © 2024.{consentSettings && <> · <ConsentSettingsLink className="underline-offset-4 hover:text-primary hover:underline" /></>}</p>
     </footer>
   );
 }

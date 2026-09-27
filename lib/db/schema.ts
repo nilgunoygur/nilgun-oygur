@@ -242,7 +242,7 @@ export const providerEvents = pgTable("provider_events", {
 }, (t) => [
   unique("provider_event_identity").on(t.provider, t.eventIdentity),
   check("provider_attempts_valid", sql`${t.attemptCount} >= 0`),
-  // Compared as text: 'processing' is added in the same migration, and Postgres rejects casting a new enum value before commit.
+  // ::text because 'processing' is added in the same migration, and a new enum value can't be cast before commit.
   check("provider_event_lease_state_valid", sql`(${t.status}::text = 'processing' AND ${t.leaseId} IS NOT NULL AND ${t.leaseExpiresAt} IS NOT NULL) OR (${t.status}::text <> 'processing' AND ${t.leaseId} IS NULL AND ${t.leaseExpiresAt} IS NULL)`),
 ]);
 export const adminAuditLog = pgTable("admin_audit_log", {

@@ -11,6 +11,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.8.0
         version: 1.8.0(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@c15t/nextjs':
+        specifier: ^2.2.1
+        version: 2.2.1(@types/react@19.3.0)(next@16.3.6(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))
       '@lexical/html':
         specifier: ^0.51.0
         version: 0.51.0(typescript@5.9.3)
@@ -20,6 +23,9 @@ importers:
       '@lexical/list':
         specifier: ^0.51.0
         version: 0.51.0(typescript@5.9.3)
+      '@lexical/markdown':
+        specifier: 0.51.0
+        version: 0.51.0(typescript@5.9.3)
       '@lexical/react':
         specifier: ^0.51.0
         version: 0.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)(yjs@13.6.32)
@@ -28,6 +34,9 @@ importers:
         version: 0.51.0(typescript@5.9.3)
       '@lexical/selection':
         specifier: ^0.51.0
+        version: 0.51.0(typescript@5.9.3)
+      '@lexical/utils':
+        specifier: 0.51.0
         version: 0.51.0(typescript@5.9.3)
       '@mux/mux-player-react':
         specifier: ^3.13.4
@@ -410,6 +419,28 @@ packages:
 
   '@better-fetch/fetch@1.3.2':
     resolution: {integrity: sha512-Gs7n99b5tqUC6cQAPbV0uED3IraHB6xQbHLQ/C3l7ZFafHScOx9pQ+DYmP5blbLFShVWLqxNUlI9wi4xU/X+ow==}
+
+  '@c15t/nextjs@2.2.1':
+    resolution: {integrity: sha512-rQx1PbeI0Yh+dUp8h5LdhjWtDFllsSnYzQU6QDtR3MDen2D2y/oxz4px9h2HTk8RLC7WkLIRN0qy5mHoqmLx9g==}
+    peerDependencies:
+      next: ^16.0.0 || ^15.0.0 || ^14.0.0 || ^13.0.0
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+
+  '@c15t/react@2.2.1':
+    resolution: {integrity: sha512-Xl/KPHGBDekRwH+k09fAyNXUI2GirDAWz/R87Yr+htsp+b66A51yMN2hzJCcH1gxm4MLjOzDqHP1nAE/fRJ09Q==}
+    peerDependencies:
+      react: ^19.0.0 || ^19.0.0-rc || ^18.0.0 || ^17.0.0 || ^16.8.0
+      react-dom: ^19.0.0 || ^19.0.0-rc || ^18.0.0 || ^17.0.0 || ^16.8.0
+
+  '@c15t/schema@2.2.0':
+    resolution: {integrity: sha512-rj6H1AlbbSnioNaw9Cvoc3vCchVAV/55Jd/6wrzhzW+2z2ByUyf+pDvZXQnAm0KMfsuQ8oDgqNqmPdqD1aJNFw==}
+
+  '@c15t/translations@2.2.1':
+    resolution: {integrity: sha512-JgYXn+bTyys/7e7SMfu19zVBlW1cED6/CqJ5mbOmmfMr9MSkaAq0/UK/6/29FhcfCJKmHq+kQqKa0igX86mJeA==}
+
+  '@c15t/ui@2.2.1':
+    resolution: {integrity: sha512-OlmEhScePX3xF+sPNWemLZaiJv80KuxsuxTf+Ip0ImREGeXdaOIG7Hp6IBU+8IOeJ723Q4LlD74gyV2NgTbXIQ==}
 
   '@date-fns/tz@1.5.0':
     resolution: {integrity: sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg==}
@@ -1816,6 +1847,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  '@types/google.maps@3.65.3':
+    resolution: {integrity: sha512-tqbbx7MUtoDk+RwpZMymPDj6Skez0FhqDZNhLhS5UDmCx4D1dgP+BJOHTebiO/rhjJLa1f8te2p6mJJeFKVFOQ==}
+
   '@types/google_interactive_media_ads_types@3.697.1':
     resolution: {integrity: sha512-gRjJoPKQRjjTuySHqZe8Pnu6a5B0bKbTUD2ioDLPSWlEuBaAc2p1mzUzy42SCeWkyYffo2Mnv+blUGuvVvx3dQ==}
 
@@ -2291,6 +2325,9 @@ packages:
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
     engines: {node: '>= 0.8'}
+
+  c15t@2.2.1:
+    resolution: {integrity: sha512-6/yePflfCveo6Q1qMsX3DaKyE2OEuy41PBIl61Z7wScvJkIos3fky2RvBe8p+cScIGM0AbGoXvSEkOxbBda75g==}
 
   call-bind-apply-helpers@1.0.2:
     resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
@@ -4705,6 +4742,14 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
+  valibot@1.4.2:
+    resolution: {integrity: sha512-gjdCvJ6d3RyHAneqxMYMW9QMCwYMb3jpOO0IyHZV1bnRHFBHrX3VkIILt5XYR0WhwHiH7Mty8ovuPZ/O3gamrg==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   validate-npm-package-name@7.0.2:
     resolution: {integrity: sha512-hVDIBwsRruT73PbK7uP5ebUt+ezEtCmzZz3F59BSr2F6OVFnJ/6h8liuvdLrQ88Xmnk6/+xGGuq+pG9WwTuy3A==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -4818,6 +4863,24 @@ packages:
 
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+
+  zustand@5.0.14:
+    resolution: {integrity: sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
 snapshots:
 
@@ -5108,6 +5171,52 @@ snapshots:
       '@noble/hashes': 2.4.0
 
   '@better-fetch/fetch@1.3.2': {}
+
+  '@c15t/nextjs@2.2.1(@types/react@19.3.0)(next@16.3.6(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))':
+    dependencies:
+      '@c15t/react': 2.2.1(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))
+      '@c15t/translations': 2.2.1
+      c15t: 2.2.1(@types/react@19.3.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))
+      next: 16.3.6(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - typescript
+      - use-sync-external-store
+
+  '@c15t/react@2.2.1(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))':
+    dependencies:
+      '@c15t/ui': 2.2.1(@types/react@19.3.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))
+      '@types/google.maps': 3.65.3
+      c15t: 2.2.1(@types/react@19.3.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - typescript
+      - use-sync-external-store
+
+  '@c15t/schema@2.2.0(typescript@5.9.3)':
+    dependencies:
+      valibot: 1.4.2(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@c15t/translations@2.2.1': {}
+
+  '@c15t/ui@2.2.1(@types/react@19.3.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))':
+    dependencies:
+      '@c15t/translations': 2.2.1
+      c15t: 2.2.1(@types/react@19.3.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8))
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - react
+      - typescript
+      - use-sync-external-store
 
   '@date-fns/tz@1.5.0': {}
 
@@ -6213,6 +6322,8 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  '@types/google.maps@3.65.3': {}
+
   '@types/google_interactive_media_ads_types@3.697.1': {}
 
   '@types/json-schema@7.0.15': {}
@@ -6668,6 +6779,18 @@ snapshots:
       run-applescript: 7.1.0
 
   bytes@3.1.2: {}
+
+  c15t@2.2.1(@types/react@19.3.0)(react@19.2.8)(typescript@5.9.3)(use-sync-external-store@1.7.0(react@19.2.8)):
+    dependencies:
+      '@c15t/schema': 2.2.0(typescript@5.9.3)
+      '@c15t/translations': 2.2.1
+      zustand: 5.0.14(@types/react@19.3.0)(react@19.2.8)(use-sync-external-store@1.7.0(react@19.2.8))
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - react
+      - typescript
+      - use-sync-external-store
 
   call-bind-apply-helpers@1.0.2:
     dependencies:
@@ -9341,6 +9464,10 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
+  valibot@1.4.2(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
+
   validate-npm-package-name@7.0.2: {}
 
   vary@1.1.2: {}
@@ -9452,3 +9579,9 @@ snapshots:
   zod@4.1.11: {}
 
   zod@4.6.5: {}
+
+  zustand@5.0.14(@types/react@19.3.0)(react@19.2.8)(use-sync-external-store@1.7.0(react@19.2.8)):
+    optionalDependencies:
+      '@types/react': 19.3.0
+      react: 19.2.8
+      use-sync-external-store: 1.7.0(react@19.2.8)

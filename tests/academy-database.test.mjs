@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as schema from "../lib/db/schema.ts";
 
 const client = new PGlite();
@@ -91,11 +94,7 @@ test("provider event deduplication is scoped by provider", async () => {
 });
 
 test("the newest migration applies to a database that already has every earlier one", async () => {
-  // Drizzle applies all pending migrations in one transaction, so a fresh database cannot catch statements
-  // that only fail on an upgrade (for example, using an enum value added earlier in the same transaction).
-  const { mkdtemp, cp, readFile, writeFile, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
+  // A fresh database runs every migration in one transaction, which hides upgrade-only failures.
   const source = new URL("../drizzle", import.meta.url).pathname;
   const previous = await mkdtemp(join(tmpdir(), "akademi-migrations-"));
   await cp(source, previous, { recursive: true });

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, FileText, LayoutDashboard, Megaphone, Users } from "lucide-react";
+import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -15,8 +16,8 @@ const links = [
 
 export function OwnerNavigation() {
   const pathname = usePathname();
-  return <nav aria-label="Yönetim bölümleri" className="border-b border-forest/10 bg-white/90 backdrop-blur">
-    <div className="mx-auto flex max-w-7xl items-center gap-1 overflow-x-auto px-4 py-2 sm:px-6 lg:px-8">
+  return <nav aria-label="Yönetim bölümleri" className="border-y border-forest/10 bg-white/90 backdrop-blur">
+    <div className={cn(pageWidth, "flex items-center gap-1 overflow-x-auto py-2")}>
       {links.map(({ href, label, icon: Icon, exact }) => {
         const active = exact ? pathname === href : pathname.startsWith(href);
         return <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn("inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors", active ? "bg-mist text-forest" : "text-stone hover:bg-mist/70 hover:text-forest")}>

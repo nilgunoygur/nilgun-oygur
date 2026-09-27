@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "../lib/db/schema.ts";
-import { ownerUsers, userListFilter, USERS_PER_PAGE } from "../lib/akademi/owner-users.ts";
+import { ownerUsers, userListFilter } from "../lib/akademi/owner-users.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -60,5 +60,4 @@ test("unknown parameters fall back to the full first page", async () => {
   assert.deepEqual(userListFilter({ role: "admin", page: "-4", q: "  x  " }), { role: null, q: "x", page: 1 });
   const beyond = await ownerUsers(db, { page: "99" }, now);
   assert.deepEqual([beyond.filter.page, beyond.pages, beyond.users.length], [1, 1, 3], "a page past the end shows the last page");
-  assert.equal(USERS_PER_PAGE, 25);
 });

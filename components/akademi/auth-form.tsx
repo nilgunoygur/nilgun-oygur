@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
 import { authDestination, authErrorMessage } from "@/lib/auth/navigation";
 import { Button } from "@/components/ui/button";
@@ -48,15 +49,18 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
         const code = String(data.get("code") ?? "").trim();
         const result = backup ? await authClient.twoFactor.verifyBackupCode({ code }) : await authClient.twoFactor.verifyTotp({ code, trustDevice: false });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
+        track("login", { method: "email" });
         router.replace(authDestination(destination)); router.refresh();
       } else if (mode === "login") {
         const result = await authClient.signIn.email({ email, password, rememberMe: remember });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
         if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) { setMfa(true); return; }
+        track("login", { method: "email" });
         router.replace(authDestination(destination)); router.refresh();
       } else if (mode === "register") {
         const result = await authClient.signUp.email({ name: String(data.get("name")).trim(), email, password, callbackURL });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
+        track("sign_up", { method: "email" });
         sent("doğrulama", "Adresinizle hesap oluşturulabiliyorsa doğrulama bağlantısı gönderilecektir."); setDone(true);
       } else if (mode === "forgot") {
         const result = await authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" });
