@@ -26,7 +26,7 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
   const updateItem = (index: number, key: keyof Announcement, value: string) => setBanner(current => ({ ...current, items: current.items.map((item, position) => position === index ? { ...item, [key]: value } : item) }));
   const published = result.isPublished;
 
-  return <form action={action} className="grid grid-cols-1 gap-6">
+  return <form action={action} className="grid gap-6">
     <input type="hidden" name="items" value={JSON.stringify(banner.items)} />
     <input type="hidden" name="loop" value={String(banner.loop)} />
     <input type="hidden" name="pauseOnHover" value={String(banner.pauseOnHover)} />

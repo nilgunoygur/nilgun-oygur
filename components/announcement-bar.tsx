@@ -43,7 +43,7 @@ export function AnnouncementBar({ config, preview = false }: { config: BannerCon
   return <aside
     aria-label="Duyurular"
     aria-hidden={preview || undefined}
-    className={cn("group h-[38px] overflow-hidden text-[13px]", preview ? "relative w-full rounded-xl" : "fixed inset-x-0 top-0 z-41", moving && "[mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)]")}
+    className={cn("group h-[38px] overflow-hidden text-[13px]", preview ? "relative w-full rounded-xl contain-inline-size" : "fixed inset-x-0 top-0 z-41", moving && "[mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)]")}
     style={{ backgroundColor: config.backgroundColor, color: config.textColor }}
     onMouseEnter={() => config.pauseOnHover && setPaused(true)}
     onMouseLeave={() => setPaused(false)}

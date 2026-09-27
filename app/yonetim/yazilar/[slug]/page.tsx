@@ -18,7 +18,7 @@ export default function ArticleEditor({ params }: Props) {
 async function Editor({ params }: Props) {
   await ownerPage();
   const slug = normalizeSlug((await params).slug);
-  if (slug === null) notFound();
+  if (!slug) notFound();
   const isNew = slug === "yeni";
   const [managed, imageChoices] = await Promise.all([isNew ? null : getManagedArticle(slug), getArticleImageLibrary()]);
   if (!isNew && !managed) notFound();
