@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { articleBodyText, getArticleImageLibrary, getManagedArticle, slugOf } from "@/lib/articles";
+import { normalizeSlug } from "@/lib/route-slug";
 import { pageWidth, backLink, ownerKicker, ownerPanel, ownerSection, ownerTitle } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,7 +17,8 @@ export default function ArticleEditor({ params }: Props) {
 }
 async function Editor({ params }: Props) {
   await ownerPage();
-  const { slug } = await params;
+  const slug = normalizeSlug((await params).slug);
+  if (!slug) notFound();
   const isNew = slug === "yeni";
   const [managed, imageChoices] = await Promise.all([isNew ? null : getManagedArticle(slug), getArticleImageLibrary()]);
   if (!isNew && !managed) notFound();

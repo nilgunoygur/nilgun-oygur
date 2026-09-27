@@ -66,7 +66,7 @@ export function ConsentManager({ analyticsId, children }: { analyticsId: string;
   }}>
     <ConsentBanner hideBranding />
     <ConsentDialog hideBranding />
-    {/* usePathname() blocks prerendering of dynamic routes unless it sits under Suspense. */}
+    {/* usePathname() needs Suspense to keep dynamic routes prerenderable. */}
     <Suspense fallback={null}><PageViews /></Suspense>
     {children}
   </ConsentManagerProvider>;

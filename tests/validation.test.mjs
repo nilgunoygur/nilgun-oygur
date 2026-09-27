@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeSlug } from "../lib/route-slug.ts";
 import { contactSchema } from "../lib/contact-schema.ts";
+import { articles } from "../lib/content.ts";
 
 test("Turkish article slugs match whether URL-encoded or decoded", () => {
   const slug = "doğal-taşların-psikolojik-etkileri-bilimsel-bir-bakış";
@@ -9,6 +10,10 @@ test("Turkish article slugs match whether URL-encoded or decoded", () => {
   assert.equal(normalizeSlug(slug), slug);
   assert.equal(normalizeSlug(slug.normalize("NFD")), slug);
   assert.equal(normalizeSlug("%broken"), null);
+  for (const { href } of articles) {
+    const articleSlug = href.slice("/blog/".length);
+    assert.equal(normalizeSlug(encodeURIComponent(articleSlug)), articleSlug, href);
+  }
 });
 
 test("contact validation rejects incomplete submissions and trims valid input", () => {
