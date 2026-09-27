@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ComponentProps, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, type ComponentProps, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { ConsentBanner, ConsentDialog, ConsentDialogLink, ConsentManagerProvider, useConsentManager, type Translations } from "@c15t/nextjs";
 import { sendPageView, setAnalyticsConsent, startAnalytics } from "@/lib/analytics";
@@ -66,7 +66,8 @@ export function ConsentManager({ analyticsId, children }: { analyticsId: string;
   }}>
     <ConsentBanner hideBranding />
     <ConsentDialog hideBranding />
-    <PageViews />
+    {/* usePathname() blocks prerendering of dynamic routes unless it sits under Suspense. */}
+    <Suspense fallback={null}><PageViews /></Suspense>
     {children}
   </ConsentManagerProvider>;
 }
