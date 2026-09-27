@@ -89,3 +89,25 @@ test("provider event deduplication is scoped by provider", async () => {
   await rejectsConstraint(() => db.insert(schema.providerEvents).values(event), "23505");
   await db.insert(schema.providerEvents).values({ ...event, provider: "mux" });
 });
+
+test("the newest migration applies to a database that already has every earlier one", async () => {
+  // Drizzle applies all pending migrations in one transaction, so a fresh database cannot catch statements
+  // that only fail on an upgrade (for example, using an enum value added earlier in the same transaction).
+  const { mkdtemp, cp, readFile, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const source = new URL("../drizzle", import.meta.url).pathname;
+  const previous = await mkdtemp(join(tmpdir(), "akademi-migrations-"));
+  await cp(source, previous, { recursive: true });
+  const journal = JSON.parse(await readFile(join(previous, "meta/_journal.json"), "utf8"));
+  journal.entries.pop();
+  await writeFile(join(previous, "meta/_journal.json"), JSON.stringify(journal));
+  const upgraded = new PGlite();
+  try {
+    await migrate(drizzle(upgraded), { migrationsFolder: previous });
+    await migrate(drizzle(upgraded), { migrationsFolder: source });
+  } finally {
+    await upgraded.close();
+    await rm(previous, { recursive: true, force: true });
+  }
+});

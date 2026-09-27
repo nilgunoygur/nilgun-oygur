@@ -1542,7 +1542,7 @@
         },
         "provider_event_lease_state_valid": {
           "name": "provider_event_lease_state_valid",
-          "value": "(\"provider_events\".\"status\" = 'processing' AND \"provider_events\".\"lease_id\" IS NOT NULL AND \"provider_events\".\"lease_expires_at\" IS NOT NULL) OR (\"provider_events\".\"status\" <> 'processing' AND \"provider_events\".\"lease_id\" IS NULL AND \"provider_events\".\"lease_expires_at\" IS NULL)"
+          "value": "(\"provider_events\".\"status\"::text = 'processing' AND \"provider_events\".\"lease_id\" IS NOT NULL AND \"provider_events\".\"lease_expires_at\" IS NOT NULL) OR (\"provider_events\".\"status\"::text <> 'processing' AND \"provider_events\".\"lease_id\" IS NULL AND \"provider_events\".\"lease_expires_at\" IS NULL)"
         }
       },
       "isRLSEnabled": false

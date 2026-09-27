@@ -6,6 +6,7 @@ import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalog
 import { setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCoursePrice, type CourseStatus } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
 import { createOwnerOverview } from "./dashboard.ts";
+import { ownerUsers, type UserListParams } from "./owner-users.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 
@@ -55,6 +56,7 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
       overview: ownerOverview,
       catalog: async () => ownerCatalog(db, await products()),
       needsAttention: () => failedEvents(db),
+      users: (params: UserListParams) => ownerUsers(db, params, now()),
       setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
       updateCoursePrice: (actorId: string, courseId: string, priceKurus: number) => updateCoursePrice(db, actorId, courseId, priceKurus, shopier),

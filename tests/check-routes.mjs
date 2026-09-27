@@ -26,7 +26,7 @@ for (const route of authRoutes) {
   assert.match(html, /<h1[ >]/, `${route} should have a heading`);
   assert.match(html, /name="robots" content="noindex, nofollow"/, `${route} must not be indexed`);
 }
-for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler"]) {
+for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
   const location = new URL(response.headers.get("location"), origin);
