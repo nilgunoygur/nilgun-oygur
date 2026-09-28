@@ -14,7 +14,8 @@ const digitCount = (text: string) => text.replace(/\D/g, "").length;
 // Inline SVGs: nothing more loads when the picker opens.
 function Flag({ code }: { code: CountryCode }) {
   const Svg = flags[code];
-  return <Svg aria-hidden className="h-3.5 w-[21px] shrink-0 rounded-[3px] ring-1 ring-black/10" />;
+  // Wrapped: the trigger and rows force un-sized child SVGs to 16px (icon size); `size-full` opts out.
+  return <span aria-hidden className="flex h-3.5 w-[21px] shrink-0 overflow-hidden rounded-[3px] ring-1 ring-black/10"><Svg className="size-full" /></span>;
 }
 
 // Digits search the dial code ("49" → Almanya); letters search Turkish names or ISO codes.
