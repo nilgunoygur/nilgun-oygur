@@ -84,22 +84,14 @@ const data = [
   ["Düzce", ["Akçakoca","Cumayeri","Çilimli","Gölyaka","Gümüşova","Kaynaşlı","Merkez","Yığılca"]], // 81
 ] as const;
 
-export type Province = (typeof data)[number][0];
+type Province = (typeof data)[number][0];
 export const provinces: readonly Province[] = data.map(([name]) => name);
 
 export const provinceOptions = [...provinces].sort(new Intl.Collator("tr-TR").compare);
 
-// Folds case, accents and ı/i: "IGDIR" → "igdir".
-const fold = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "").replaceAll("ı", "i").replace(/[^a-z]/g, "");
-// Only list names (provinces, districts, countries) are cached; user input never is.
-const foldedNames = new Map<string, string>();
-const foldName = (name: string) => foldedNames.get(name) ?? foldedNames.set(name, fold(name)).get(name)!;
-let lastQuery = { raw: "", folded: "" };
-/** Picker search: `name` must come from a fixed list. */
-export function matchesTurkish(name: string, query: string) {
-  if (lastQuery.raw !== query) lastQuery = { raw: query, folded: fold(query) };
-  return foldName(name).includes(lastQuery.folded);
-}
+// Folds case, accents and ı/i: "IGDIR" → "igdir"; digits stay ("19 Mayıs").
+const fold = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "").replaceAll("ı", "i").replace(/[^a-z0-9]/g, "");
+export const matchesTurkish = (name: string, query: string) => fold(name).includes(fold(query));
 const aliases: Record<string, Province> = { icel: "Mersin", afyon: "Afyonkarahisar", maras: "Kahramanmaraş", kmaras: "Kahramanmaraş", urfa: "Şanlıurfa", antep: "Gaziantep" };
 const byFolded = new Map<string, Province>([...provinces.map(name => [fold(name), name] as const), ...Object.entries(aliases)]);
 
@@ -116,11 +108,11 @@ export function districtsOf(province: Province): readonly string[] {
   return data[provinces.indexOf(province)]?.[1] ?? [];
 }
 
-/** The canonical district for free text, or null; the province name matches its "Merkez". */
+/** Canonical district or null; "<İl>" and "<İl> Merkez" match "Merkez". */
 export function matchDistrict(province: Province, value: string | null | undefined): string | null {
   if (!value) return null;
   const folded = fold(value);
   const districts = districtsOf(province);
-  return districts.find(name => foldName(name) === folded)
-    ?? (folded === foldName(province) || folded === `${foldName(province)}merkez` ? districts.find(name => name === "Merkez") ?? null : null);
+  return districts.find(name => fold(name) === folded)
+    ?? (folded === fold(province) || folded === `${fold(province)}merkez` ? districts.find(name => name === "Merkez") ?? null : null);
 }

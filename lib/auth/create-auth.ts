@@ -107,7 +107,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
         if (!contactKeys.some(key => key in body)) return;
         const parsed = contactInput.safeParse({ ...Object.fromEntries(contactKeys.map(key => [key, body[key]])), postcode: body.postcode ?? null });
         if (!parsed.success) throw new APIError("BAD_REQUEST", { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message });
-        // Assigned in place: a returned context is merged with defu, which drops a cleared (null) postcode.
+        // Mutate in place: a returned context is merged with defu, which drops a null postcode.
         Object.assign(body, parsed.data);
       }),
       after: createAuthMiddleware(async (ctx) => {

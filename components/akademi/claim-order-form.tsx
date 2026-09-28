@@ -6,7 +6,7 @@ import { claimOrder } from "@/app/akademi/hesabim/actions";
 import { claimSchema } from "@/lib/akademi/claim-schema";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FormMessage, FormShell, SubmitButton, submitAction, TextField } from "./form-fields";
+import { EmailField, FormMessage, FormShell, SubmitButton, submitAction, TextField } from "./form-fields";
 
 export function ClaimOrderForm() {
   const [granted, setGranted] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export function ClaimOrderForm() {
   return <FormShell form={form} onSubmit={submit} size="lg" fieldsClassName="gap-6">
     <TextField control={form.control} name="orderNumber" label="Shopier sipariş numarası" inputMode="numeric" autoComplete="off" placeholder="Sipariş numaranızı yazın" maxLength={20}
       description="Shopier’in gönderdiği sipariş onay e-postasında yer alır." />
-    <TextField control={form.control} name="email" label="Shopier’de kullandığınız e-posta" type="email" autoComplete="email" placeholder="ornek@eposta.com" maxLength={254} />
+    <EmailField control={form.control} name="email" label="Shopier’de kullandığınız e-posta" />
     <FormMessage />
     <div className="flex flex-wrap gap-3">
       <SubmitButton pendingLabel="Shopier’de kontrol ediliyor…">Siparişimi doğrula ve ekle</SubmitButton>

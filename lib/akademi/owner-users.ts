@@ -3,6 +3,7 @@ import { courseAccess, owners, session, user } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { hasActiveAccess } from "./access-policy.ts";
 import { contactColumns } from "./student-contact.ts";
+import { matchProvince } from "../turkiye.ts";
 
 // Read-only: owner rights come only from the protected owners table.
 
@@ -21,9 +22,11 @@ export async function ownerUsers(db: Database, params: UserListParams, now: Date
   const pattern = `%${filter.q.replace(/[\\%_]/g, "\\$&")}%`;
   // Phones (stored E.164) match by digits.
   const digits = filter.q.replace(/\D/g, "").replace(/^0+/, "");
+  // ILIKE never maps ı to i, so "igdir" also matches the recognized province.
+  const province = matchProvince(filter.q);
   const where = and(
     filter.role === "owner" ? isNotNull(owners.userId) : filter.role === "student" ? isNull(owners.userId) : undefined,
-    filter.q ? or(ilike(user.email, pattern), ilike(user.name, pattern), ilike(user.city, pattern), digits.length >= 3 ? ilike(user.phone, `%${digits}%`) : undefined) : undefined,
+    filter.q ? or(ilike(user.email, pattern), ilike(user.name, pattern), ilike(user.city, pattern), province ? eq(user.city, province) : undefined, digits.length >= 3 ? ilike(user.phone, `%${digits}%`) : undefined) : undefined,
   );
   const rowsOf = (page: number) => db.select({
     id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, twoFactorEnabled: user.twoFactorEnabled,

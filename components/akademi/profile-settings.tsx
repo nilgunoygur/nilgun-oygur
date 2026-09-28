@@ -78,7 +78,7 @@ function PersonalForm({ user }: { user: User }) {
     <TextField control={form.control} name="name" label="Adınız soyadınız" autoComplete="name" maxLength={100} />
     <Field><FieldLabel>E-posta adresiniz</FieldLabel><p className="rounded-lg bg-mist px-4 py-3 text-sm text-stone">{user.email}</p><FieldDescription>Bu adres hesap ayarlarından değiştirilemez.</FieldDescription></Field>
     <FormMessage status={status} />
-    <SubmitButton busy={processing}>Profili kaydet</SubmitButton>
+    <SubmitButton>Profili kaydet</SubmitButton>
   </FormShell>;
 }
 

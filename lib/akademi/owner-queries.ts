@@ -38,7 +38,6 @@ export const ownerQueryKeys = {
   transactions: (from: string, to: string) => [...ownerQueryKeys.all, "transactions", { from, to }] as const,
 };
 
-/** An /api/yonetim request; failures throw the route's { error } message, or `fallback`. */
 async function ownerFetch(url: string, init: RequestInit, fallback: string) {
   const response = await fetch(url, { ...init, cache: "no-store" });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? fallback);

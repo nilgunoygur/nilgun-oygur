@@ -3,7 +3,7 @@ import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromStr
 export type { CountryCode };
 const defaultCountry: CountryCode = "TR";
 
-/** A mobile number in any common form → E.164 (national forms read as Turkish); null otherwise. */
+/** Mobile number → E.164 (national forms read as Turkish), else null. */
 export function normalizePhone(value: string | null | undefined): string | null {
   const phone = value ? parsePhoneNumberFromString(value, defaultCountry) : undefined;
   return phone?.isValid() ? phone.number : null;
@@ -28,12 +28,10 @@ export function splitPhone(value: string | null | undefined, fallback: CountryCo
 }
 
 export type PhoneCountry = { code: CountryCode; name: string; dial: string };
-let countries: readonly PhoneCountry[] | undefined;
-/** Türkiye first, the rest by Turkish name; built on first use (only the phone input needs it). */
+/** Türkiye first, then by Turkish name. */
 export function phoneCountries(): readonly PhoneCountry[] {
-  if (countries) return countries;
   const names = new Intl.DisplayNames(["tr"], { type: "region" });
   const order = new Intl.Collator("tr-TR").compare;
-  return countries = getCountries().map(code => ({ code, name: names.of(code) ?? code, dial: callingCode(code) }))
+  return getCountries().map(code => ({ code, name: names.of(code) ?? code, dial: callingCode(code) }))
     .sort((a, b) => a.code === defaultCountry ? -1 : b.code === defaultCountry ? 1 : order(a.name, b.name));
 }

@@ -5,9 +5,8 @@ import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
 import { contactFormValues, registerSchema } from "@/lib/auth/contact";
 import { ContactFields } from "./contact-fields";
-import { ArrowRight } from "lucide-react";
 import { callbackURL } from "@/lib/auth/navigation";
-import { authAttempt, FormMessage, FormShell, PasswordField, SubmitButton, TextField } from "./form-fields";
+import { authAttempt, AuthSubmit, EmailField, FormMessage, FormShell, PasswordField, TextField } from "./form-fields";
 
 // Its own chunk: only the register page loads the phone and address code.
 export default function RegisterForm({ disabled, onSent }: { disabled: boolean; onSent: () => void }) {
@@ -22,11 +21,11 @@ export default function RegisterForm({ disabled, onSent }: { disabled: boolean; 
   });
   return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
     <TextField control={form.control} name="name" label="Adınız soyadınız" autoComplete="name" maxLength={100} />
-    <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
+    <EmailField control={form.control} name="email" />
     <ContactFields />
     <PasswordField control={form.control} name="password" label="Şifreniz" autoComplete="new-password" description="En az 8 karakter." />
     <PasswordField control={form.control} name="confirmPassword" label="Şifrenizi tekrar girin" autoComplete="new-password" />
     <FormMessage />
-    <SubmitButton size="pill" className="w-full min-h-12" pendingLabel="Lütfen bekleyin…">Hesap oluştur<ArrowRight data-icon="inline-end" /></SubmitButton>
+    <AuthSubmit>Hesap oluştur</AuthSubmit>
   </FormShell>;
 }

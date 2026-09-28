@@ -73,6 +73,7 @@ test("Turkish search ignores case, accents and dotted/dotless i", () => {
   assert.ok(matchesTurkish("İzmir", "IZM"));
   assert.ok(matchesTurkish("Iğdır", "igdir"));
   assert.ok(!matchesTurkish("Bornova", "kad"));
+  assert.ok(matchesTurkish("19 Mayıs", "19") && !matchesTurkish("Atakum", "19"), "digits narrow the search");
 });
 
 test("provinces match Shopier spellings and carry their postcode prefix", () => {

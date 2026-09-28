@@ -3,7 +3,6 @@ import { matchDistrict, matchProvince, plateCode } from "../turkiye.ts";
 import { normalizePhone } from "../phone.ts";
 import { emailField, matchingPasswords, mismatch, newPassword } from "./forms.ts";
 
-// Named after Shopier's buyer fields.
 export const contactFields = {
   phone: z.string().max(40).transform((value, ctx) => normalizePhone(value) ?? (ctx.addIssue({ code: "custom", message: value ? "Geçerli bir cep telefonu numarası girin." : "Cep telefonu numaranızı yazın." }), z.NEVER)),
   city: z.string().max(60, "İlinizi listeden seçin.").transform((value, ctx) => matchProvince(value) ?? (ctx.addIssue({ code: "custom", message: "İlinizi listeden seçin." }), z.NEVER)),
@@ -16,7 +15,6 @@ export type Contact = Record<keyof typeof contactFields, string | null>;
 export type ContactFormValues = Record<keyof Contact, string>;
 export const contactKeys = Object.keys(contactFields) as (keyof Contact)[];
 
-/** Used by the forms, saveContact and the Better Auth hook. */
 export const contactInput = z.object(contactFields).transform((value, ctx) => {
   const district = matchDistrict(value.city, value.district);
   if (!district) { ctx.addIssue({ code: "custom", path: ["district"], message: `${value.district} bir ${value.city} ilçesi değil. İlçenizi listeden seçin.` }); return z.NEVER; }

@@ -47,7 +47,7 @@ export function OwnerCourseManagement({ initialData }: { initialData: OwnerCatal
     },
     onError: (error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error(error.message); },
     onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : "Değişiklik kaydedildi."); },
-    // The patch is what the server writes; refetch only after a rollback or a price change (Shopier owns prices).
+    // Refetch only after a rollback or a price change (Shopier owns prices).
     onSettled: (_data, error, { change }) => error || change.kind === "price" ? invalidate() : undefined,
   });
   const savingId = update.isPending ? update.variables.course.id : null;

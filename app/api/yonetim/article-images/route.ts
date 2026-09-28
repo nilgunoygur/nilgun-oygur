@@ -1,4 +1,4 @@
-import { ownerRouteDenied, privateNoStore } from "@/lib/auth/viewer";
+import { ownerRoute, privateNoStore } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { articleAssets } from "@/lib/db/schema";
 import { uploadedImagePrefix } from "@/lib/articles";
@@ -13,8 +13,8 @@ function imageMime(bytes: Uint8Array) {
 }
 
 export async function POST(request: Request) {
-  const denied = await ownerRouteDenied();
-  if (denied) return denied;
+  const viewer = await ownerRoute();
+  if (viewer instanceof Response) return viewer;
 
   const file = (await request.formData()).get("file");
   if (!(file instanceof File) || file.size === 0 || file.size > maxBytes) return Response.json({ error: "1,5 MB altında bir JPG, PNG veya WebP seçin." }, { status: 400, headers: privateNoStore });

@@ -4,17 +4,14 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
-import { ArrowRight } from "lucide-react";
+import { useForm } from "react-hook-form";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
 import { authDestination, callbackURL } from "@/lib/auth/navigation";
 import { backupCodeSchema, emailLinkSchema, loginSchema, resetSchema, totpSchema } from "@/lib/auth/forms";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { authAttempt, FormMessage, FormShell, PasswordField, SubmitButton, TextField } from "./form-fields";
+import { authAttempt, AuthSubmit, CheckboxField, EmailField, FormMessage, FormShell, PasswordField, TextField } from "./form-fields";
 
 const RegisterForm = dynamic(() => import("./register-form"));
 
@@ -48,10 +45,6 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
   );
 }
 
-function AuthSubmit({ children }: { children: React.ReactNode }) {
-  return <SubmitButton size="pill" className="w-full min-h-12" pendingLabel="Lütfen bekleyin…">{children}<ArrowRight data-icon="inline-end" /></SubmitButton>;
-}
-
 function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean; destination?: string; onSubmitStart: () => void }) {
   const router = useRouter();
   const [mfa, setMfa] = useState<"totp" | "backup" | null>(null);
@@ -67,15 +60,10 @@ function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean
   });
   return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
     <FormMessage />
-    <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
+    <EmailField control={form.control} name="email" />
     <PasswordField control={form.control} name="password" label="Şifreniz" autoComplete="current-password" />
     <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap">
-      <Controller control={form.control} name="remember" render={({ field }) => (
-        <Field orientation="horizontal" className="w-auto">
-          <Checkbox id="remember" checked={field.value} onCheckedChange={field.onChange} />
-          <FieldLabel htmlFor="remember">Beni hatırla</FieldLabel>
-        </Field>
-      )} />
+      <CheckboxField control={form.control} name="remember" label="Beni hatırla" className="w-auto" />
       <Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link>
     </div>
     <AuthSubmit>Giriş yap</AuthSubmit>
@@ -107,7 +95,7 @@ function EmailLinkForm({ mode, disabled, onSent }: { mode: "forgot" | "verify"; 
   });
   return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
     <FormMessage />
-    <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
+    <EmailField control={form.control} name="email" />
     <AuthSubmit>{forgot ? "Yenileme bağlantısı gönder" : "Doğrulama bağlantısı gönder"}</AuthSubmit>
   </FormShell>;
 }

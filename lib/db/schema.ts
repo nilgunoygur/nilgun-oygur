@@ -20,7 +20,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
-  // Contact (Better Auth additional fields); null on older accounts.
+  // Better Auth additional fields; null on older accounts.
   phone: text("phone"),
   address: text("address"),
   district: text("district"),

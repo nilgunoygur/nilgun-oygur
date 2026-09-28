@@ -54,10 +54,10 @@ export const lessonFormSchema = z.object({
   description: z.string().trim().max(10000, "Açıklama en fazla 10.000 karakter olabilir."),
   position: number("Sıra", 0, 1000, "integer"),
   status: z.enum(["draft", "published"]),
-  startsAt: z.string().default(""),
-  durationMinutes: number("Süre", 1, 1440, "integer").default(60),
-  joinUrl: z.string().trim().max(2048, "Bağlantı çok uzun.").refine(value => !value || /^https:\/\/\S+$/.test(value), "Toplantı için geçerli bir https:// bağlantısı girin.").default(""),
-  passcode: z.string().trim().max(100, "Şifre en fazla 100 karakter olabilir.").default(""),
-  liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]).default("scheduled"),
+  startsAt: z.string(),
+  durationMinutes: number("Süre", 1, 1440, "integer"),
+  joinUrl: z.string().trim().max(2048, "Bağlantı çok uzun.").refine(value => !value || /^https:\/\/\S+$/.test(value), "Toplantı için geçerli bir https:// bağlantısı girin."),
+  passcode: z.string().trim().max(100, "Şifre en fazla 100 karakter olabilir."),
+  liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]),
 });
 export const lessonInput = lessonFormSchema.extend({ courseId: z.uuid(), lessonId: z.uuid() });

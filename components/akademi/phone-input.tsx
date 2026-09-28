@@ -1,21 +1,20 @@
 "use client";
 import { useLayoutEffect, useRef, useState, type Ref } from "react";
-import "flag-icons/css/flag-icons.min.css";
+import * as flags from "country-flag-icons/react/3x2";
 import { callingCode, groupNational, phoneCountries, splitPhone, type CountryCode, type PhoneCountry } from "@/lib/phone";
 import { matchesTurkish } from "@/lib/turkiye";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxList, ComboboxTrigger } from "@/components/ui/combobox";
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
 import { picker, PickerSearch } from "./searchable-select";
-import { cn } from "@/lib/utils";
 
 const countries = phoneCountries();
 const byCode = new Map(countries.map(country => [country.code, country]));
 const digitCount = (text: string) => text.replace(/\D/g, "").length;
 
-// flag-icons keeps Ascension and Tristan da Cunha under Saint Helena; each SVG loads only when shown.
-const flagClass: Partial<Record<CountryCode, string>> = { AC: "sh-ac", TA: "sh-ta" };
+// Inline SVGs: nothing more loads when the picker opens.
 function Flag({ code }: { code: CountryCode }) {
-  return <span aria-hidden className={cn("fi shrink-0 rounded-[3px] bg-cover text-[14px] ring-1 ring-black/10", `fi-${flagClass[code] ?? code.toLowerCase()}`)} />;
+  const Svg = flags[code];
+  return <Svg aria-hidden className="h-3.5 w-[21px] shrink-0 rounded-[3px] ring-1 ring-black/10" />;
 }
 
 // Digits search the dial code ("49" → Almanya); letters search Turkish names or ISO codes.
@@ -39,7 +38,7 @@ export function PhoneInput({ id, value, onChange, onBlur, ref, invalid, onZeroRe
   // Re-split when the form resets the value.
   if (value !== synced) { setSynced(value); setParts(splitPhone(value, country)); setDraft(null); }
 
-  // Grouping moves characters, so the caret goes back after the same number of digits.
+  // Restore the caret by digit count after regrouping.
   useLayoutEffect(() => {
     const element = input.current, target = caretDigits.current;
     if (!element || target === null) return;
@@ -56,7 +55,10 @@ export function PhoneInput({ id, value, onChange, onBlur, ref, invalid, onZeroRe
   };
   const type = (raw: string, caret: number) => {
     // "+49 …" or "0049 …" switches the country once its code is complete.
-    const international = raw.trim().replace(/^00/, "+");
+    const trimmed = raw.trim();
+    // A lone "0" or "00" may still become "00 49 …", so it stays on screen until the next digit decides.
+    if (/^0{1,2}$/.test(trimmed)) { setDraft(trimmed); emit(""); return; }
+    const international = trimmed.replace(/^00/, "+");
     if (international.startsWith("+")) {
       const parsed = splitPhone(international, country);
       if (parsed.digits) { onZeroRemoved?.(false); update(parsed.country, parsed.digits); return; }
@@ -83,7 +85,7 @@ export function PhoneInput({ id, value, onChange, onBlur, ref, invalid, onZeroRe
   // Plain wrapper, not InputGroupAddon: the addon's spacing misaligns the trigger.
   return <InputGroup className="overflow-hidden">
     <div className="flex self-stretch">
-      <Combobox items={countries} value={selected} onValueChange={next => { if (next) update(next.code, digits); }} filter={matchesCountry} itemToStringLabel={item => item.name} autoHighlight>
+      <Combobox items={countries} value={selected} onValueChange={next => { if (next) update(next.code, draft === null ? digits : ""); }} filter={matchesCountry} itemToStringLabel={item => item.name} autoHighlight>
         <ComboboxTrigger aria-label={`Ülke kodu: ${selected.name} ${selected.dial}`} className="flex h-full items-center gap-1.5 border-r border-input px-2.5 text-base font-medium text-foreground transition-colors outline-none hover:bg-muted/70 focus-visible:bg-muted/70 disabled:pointer-events-none data-popup-open:bg-muted/70 md:text-sm">
           <Flag code={selected.code} /><span className="tabular-nums">{selected.dial}</span>
         </ComboboxTrigger>

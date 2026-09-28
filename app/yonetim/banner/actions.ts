@@ -7,12 +7,11 @@ import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { bannerSettings } from "@/lib/db/schema";
 import { bannerSchema } from "@/lib/akademi/owner-forms";
+import type { FormState } from "@/components/akademi/form-status";
 
-export type BannerActionState = { message: string; error: boolean; isPublished: boolean };
-
-export async function saveBanner(intent: "save" | "publish" | "unpublish", values: z.input<typeof bannerSchema> | null, isPublished: boolean): Promise<BannerActionState> {
+export async function saveBanner(intent: "save" | "publish" | "unpublish", values: z.input<typeof bannerSchema> | null): Promise<FormState & { isPublished?: boolean }> {
   await requireOwner();
-  const fail = (message: string): BannerActionState => ({ message, error: true, isPublished });
+  const fail = (message: string) => ({ status: "error" as const, message });
   if (intent !== "save" && intent !== "publish" && intent !== "unpublish") return fail("Geçersiz işlem.");
   let draft: BannerConfig | undefined;
   if (intent !== "unpublish") {
@@ -23,7 +22,7 @@ export async function saveBanner(intent: "save" | "publish" | "unpublish", value
 
   try {
     const changes = !draft ? { isPublished: false } : intent === "publish" ? { draft, published: draft, isPublished: true } : { draft };
-    // No row yet means the default banner is live (see getPublishedBanner); the first save changes that state like any other.
+    // No row yet = default banner live; the first insert applies the changes over it.
     const [saved] = await getDatabase().insert(bannerSettings)
       .values({ id: 1, draft: defaultBanner, published: defaultBanner, isPublished: true, ...changes })
       .onConflictDoUpdate({ target: bannerSettings.id, set: { ...changes, updatedAt: new Date() } })
@@ -34,8 +33,8 @@ export async function saveBanner(intent: "save" | "publish" | "unpublish", value
     }
     revalidatePath("/yonetim/banner");
     return {
+      status: "success",
       message: intent === "save" ? "Taslak kaydedildi." : intent === "publish" ? "Banner yayınlandı." : "Banner yayından kaldırıldı.",
-      error: false,
       isPublished: saved.isPublished,
     };
   } catch (error) {

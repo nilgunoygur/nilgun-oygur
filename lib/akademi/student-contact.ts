@@ -6,8 +6,6 @@ import { matchDistrict, plateCode } from "../turkiye.ts";
 import type { ShopierOrder } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
 
-// A Shopier checkout only fills contact fields that are still empty.
-
 export const contactColumns = { phone: user.phone, address: user.address, district: user.district, city: user.city, postcode: user.postcode };
 const empty: Contact = { phone: null, address: null, district: null, city: null, postcode: null };
 

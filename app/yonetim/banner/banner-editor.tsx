@@ -1,20 +1,20 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
+import { useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import { AnnouncementBar } from "@/components/announcement-bar";
-import { FormShell, SelectField, TextField } from "@/components/akademi/form-fields";
+import { CheckboxField, ControlledField, FormMessage, FormShell, SelectField, submitAction, TextField } from "@/components/akademi/form-fields";
+import { idleForm, type FormState } from "@/components/akademi/form-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FieldError, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { BannerConfig } from "@/lib/announcements";
 import { bannerSchema, type BannerFormValues } from "@/lib/akademi/owner-forms";
-import { saveBanner, type BannerActionState } from "./actions";
+import { saveBanner } from "./actions";
 
 type Intent = "save" | "publish" | "unpublish";
 type BannerControl = Control<BannerFormValues, unknown, BannerConfig>;
@@ -32,18 +32,18 @@ const formValues = (banner: BannerConfig): BannerFormValues => ({
 });
 
 export function BannerEditor({ initial, initiallyPublished }: { initial: BannerConfig; initiallyPublished: boolean }) {
-  const [result, setResult] = useState<BannerActionState>({ message: "", error: false, isPublished: initiallyPublished });
+  const [published, setPublished] = useState(initiallyPublished);
+  const [status, setStatus] = useState<FormState>(idleForm);
   const [pending, startTransition] = useTransition();
   const form = useForm({ resolver: zodResolver(bannerSchema), mode: "onTouched", defaultValues: formValues(initial) });
   const items = useFieldArray({ control: form.control, name: "items" });
   const animation = useWatch({ control: form.control, name: "animation" });
-  const published = result.isPublished;
 
   const run = (intent: Intent, values: BannerFormValues | null) => startTransition(async () => {
-    try { setResult(await saveBanner(intent, values, published)); }
-    catch { setResult({ message: "Banner kaydedilemedi. Lütfen tekrar deneyin.", error: true, isPublished: published }); }
+    const result = await submitAction(form, () => saveBanner(intent, values), "Banner kaydedilemedi. Lütfen tekrar deneyin.");
+    setStatus(result ?? idleForm);
+    if (result?.isPublished !== undefined) setPublished(result.isPublished);
   });
-  // Saving and publishing validate the form; unpublishing ignores unsaved edits.
   const submit = (intent: Exclude<Intent, "unpublish">) => form.handleSubmit(values => run(intent, values));
 
   return <FormShell form={form} onSubmit={submit("save")} busy={pending} fieldsClassName="gap-6">
@@ -65,21 +65,16 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
       <TextField control={form.control} name="speedSeconds" label="Mesaj başına süre (sn)" type="number" inputMode="numeric" min={2} max={30} step={1} description="2–30 saniye." />
       <SelectField control={form.control} name="direction" label="Kayma yönü" options={directions} disabled={animation !== "scroll"} />
       <TextField control={form.control} name="separator" label="Ayraç" maxLength={3} />
-      {([["loop", "Sürekli tekrarla", "Kapalıysa animasyon son mesajda durur."], ["pauseOnHover", "Üzerine gelince duraklat", null]] as const).map(([name, label, description]) =>
-        <Controller key={name} control={form.control} name={name} render={({ field }) => (
-          <Field className="justify-end">
-            <FieldLabel className="items-center"><Checkbox ref={field.ref} checked={field.value} onCheckedChange={checked => field.onChange(checked === true)} /> {label}</FieldLabel>
-            {description && <FieldDescription>{description}</FieldDescription>}
-          </Field>
-        )} />)}
+      <CheckboxField control={form.control} name="loop" label="Sürekli tekrarla" description="Kapalıysa animasyon son mesajda durur." className="self-end" />
+      <CheckboxField control={form.control} name="pauseOnHover" label="Üzerine gelince duraklat" className="self-end" />
     </FieldGroup></CardContent></Card>
 
     <div className="flex flex-wrap items-center gap-3">
       <Button type="submit" variant="outline" size="pill">Taslağı kaydet</Button>
       <Button type="button" size="pill" onClick={submit("publish")}>{published ? "Değişiklikleri yayınla" : "Yayınla"}</Button>
       {published && <Button type="button" variant="destructive" size="pill" onClick={() => run("unpublish", null)}>Yayından kaldır</Button>}
-      {result.message && <p role="status" className={result.error ? "text-sm text-destructive" : "text-sm text-forest"}>{result.message}</p>}
     </div>
+    <div role="status"><FormMessage status={status} /></div>
   </FormShell>;
 }
 
@@ -94,15 +89,10 @@ function Preview({ control, fallback }: { control: BannerControl; fallback: Bann
 }
 
 function ColorField({ control, name, label }: { control: BannerControl; name: (typeof colorFields)[number]["key"]; label: string }) {
-  const id = useId();
-  return <Controller control={control} name={name} render={({ field, fieldState }) => (
-    <Field data-invalid={fieldState.invalid}>
-      <FieldLabel htmlFor={id}>{label} rengi</FieldLabel>
-      <div className="flex gap-2">
-        <Input type="color" className="w-12 shrink-0 cursor-pointer p-1" aria-label={`${label} rengini seç`} value={field.value} onChange={field.onChange} />
-        <Input {...field} id={id} aria-invalid={fieldState.invalid} />
-      </div>
-      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-    </Field>
-  )} />;
+  return <ControlledField control={control} name={name} label={`${label} rengi`}>
+    {(field, id, invalid) => <div className="flex gap-2">
+      <Input type="color" className="w-12 shrink-0 cursor-pointer p-1" aria-label={`${label} rengini seç`} value={field.value} onChange={field.onChange} />
+      <Input {...field} id={id} aria-invalid={invalid} />
+    </div>}
+  </ControlledField>;
 }

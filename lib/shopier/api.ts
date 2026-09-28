@@ -5,7 +5,7 @@ import { z } from "zod";
 const API = "https://api.shopier.com/v1";
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
-// Buyer contact is best effort: an odd value becomes undefined rather than rejecting a paid order.
+// Best effort: odd buyer values become undefined and never reject an order.
 const loose = z.unknown().transform(value => typeof value === "string" || typeof value === "number" ? String(value) : undefined);
 const party = z.object({
   email: z.string().optional().nullable(), phone: loose, address: loose, district: loose, city: loose, postcode: loose,

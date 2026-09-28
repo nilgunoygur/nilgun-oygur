@@ -20,6 +20,8 @@ export async function PATCH(request: Request, { params }: RouteContext<"/api/yon
     if (changed) catalogChangedByOwner();
     return new Response(null, { status: 204, headers: privateNoStore });
   } catch {
+    // A price can reach Shopier before a later step fails, so public pages re-read it either way.
+    if (edit.kind === "price") catalogChangedByOwner();
     return Response.json({ error: "Değişiklik kaydedilemedi." }, { status: 500, headers: privateNoStore });
   }
 }

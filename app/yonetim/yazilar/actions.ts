@@ -12,7 +12,6 @@ import { articlePlainText, cleanArticleHtml, slugOf, uploadedImagePrefix } from 
 import { articleMinLength, articleSchema, articleStatus } from "@/lib/akademi/owner-forms";
 import type { FormState } from "@/components/akademi/form-status";
 
-/** The client navigates to the article list on success. */
 export async function saveArticle(values: z.input<typeof articleSchema>, requestedStatus: z.input<typeof articleStatus>, originalSlug = ""): Promise<FormState> {
   await requireOwner();
   const parsed = articleSchema.safeParse(values);

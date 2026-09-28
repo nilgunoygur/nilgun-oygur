@@ -1,11 +1,12 @@
 "use client";
 import { useId, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { Controller, FormProvider, useFormState, type Control, type ControllerRenderProps, type FieldPath, type FieldValues, type UseFormReturn } from "react-hook-form";
-import { Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { authErrorMessage } from "@/lib/auth/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
@@ -13,44 +14,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { FormStatus, type FormState } from "./form-status";
 
-// shadcn's React Hook Form pattern: every form is a FormShell of Controller → Field fields.
-
 // Sets --control-h, which Input, InputGroup, Select and the pickers read.
 const controlHeights = { sm: "[--control-h:2rem]", md: "[--control-h:2.75rem]", lg: "[--control-h:3rem]" };
 
-/** Disables every field while submitting or `busy`. */
 export function FormShell<T extends FieldValues, C, U>({ form, onSubmit, size = "md", busy, disabled, id, className, fieldsClassName, children }: {
   form: UseFormReturn<T, C, U>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; size?: keyof typeof controlHeights;
   busy?: boolean; disabled?: boolean; id?: string; className?: string; fieldsClassName?: string; children: ReactNode;
 }) {
-  const pending = form.formState.isSubmitting || !!busy;
+  // Subscribed here: the compiler memoizes <FormShell> on the stable `form`, so reading form.formState would go stale.
+  const pending = useFormState({ control: form.control }).isSubmitting || !!busy;
   // stopPropagation: React bubbles a portaled form's submit into the form around it.
   return <FormProvider {...form}><form id={id} className={cn(controlHeights[size], className)} onSubmit={event => { event.stopPropagation(); onSubmit(event); }} noValidate aria-busy={pending}>
     <fieldset disabled={pending || disabled} className="contents"><FieldGroup className={fieldsClassName}>{children}</FieldGroup></fieldset>
   </form></FormProvider>;
 }
 
-/** Relabelled with a spinner while its form submits or `busy`. */
-export function SubmitButton({ children, pendingLabel = "Kaydediliyor…", busy, ...button }: ComponentProps<typeof Button> & { pendingLabel?: string; busy?: boolean }) {
+export function SubmitButton({ children, pendingLabel = "Kaydediliyor…", disabled, ...button }: ComponentProps<typeof Button> & { pendingLabel?: string }) {
   const { isSubmitting } = useFormState();
-  return <Button type="submit" {...button}>
-    {isSubmitting || busy ? <><LoaderCircle data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />{pendingLabel}</> : children}
+  return <Button type="submit" disabled={isSubmitting || disabled} {...button}>
+    {isSubmitting ? <><LoaderCircle data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />{pendingLabel}</> : children}
   </Button>;
 }
 
-/** The root error from submitAction or authAttempt, otherwise `status`. */
+export function AuthSubmit({ children }: { children: ReactNode }) {
+  return <SubmitButton size="pill" className="w-full min-h-12" pendingLabel="Lütfen bekleyin…">{children}<ArrowRight data-icon="inline-end" /></SubmitButton>;
+}
+
 export function FormMessage({ status }: { status?: FormState }) {
   const message = useFormState().errors.root?.message;
   if (message) return <Alert variant="destructive"><AlertDescription>{message}</AlertDescription></Alert>;
   return status ? <FormStatus state={status} /> : null;
 }
 
-type Controlled<T extends FieldValues, U> = { control: Control<T, unknown, U>; name: FieldPath<T>; label: ReactNode; description?: ReactNode };
+type Controlled<T extends FieldValues, U, N extends FieldPath<T> = FieldPath<T>> = { control: Control<T, unknown, U>; name: N; label: ReactNode; description?: ReactNode };
 type Managed = "name" | "value" | "defaultValue" | "onChange" | "onBlur";
 
-/** Controller → Field with label, description and error around any control. */
-export function ControlledField<T extends FieldValues, U = T>({ control, name, label, description, className, children }: Controlled<T, U> & {
-  className?: string; children: (field: ControllerRenderProps<T, FieldPath<T>>, id: string, invalid: boolean) => ReactNode;
+export function ControlledField<T extends FieldValues, N extends FieldPath<T>, U = T>({ control, name, label, description, className, children }: Controlled<T, U, N> & {
+  className?: string; children: (field: ControllerRenderProps<T, N>, id: string, invalid: boolean) => ReactNode;
 }) {
   const id = useId();
   return <Controller control={control} name={name} render={({ field, fieldState }) => (
@@ -69,6 +69,10 @@ export function TextField<T extends FieldValues, U = T>({ control, name, label, 
   </ControlledField>;
 }
 
+export function EmailField<T extends FieldValues, U = T>({ label = "E-posta adresiniz", ...field }: Omit<Controlled<T, U>, "label"> & { label?: ReactNode }) {
+  return <TextField {...field} label={label} type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />;
+}
+
 export function TextareaField<T extends FieldValues, U = T>({ control, name, label, description, ...input }: Controlled<T, U> & Omit<ComponentProps<typeof Textarea>, Managed>) {
   return <ControlledField control={control} name={name} label={label} description={description}>
     {(field, id, invalid) => <Textarea {...field} {...input} value={field.value ?? ""} id={id} aria-invalid={invalid} />}
@@ -82,6 +86,16 @@ export function SelectField<T extends FieldValues, U = T>({ options, disabled, c
       <SelectContent>{Object.entries(options).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
     </Select>}
   </ControlledField>;
+}
+
+export function CheckboxField<T extends FieldValues, U = T>({ control, name, label, description, className }: Controlled<T, U> & { className?: string }) {
+  const id = useId();
+  return <Controller control={control} name={name} render={({ field }) => (
+    <Field orientation="horizontal" className={className}>
+      <Checkbox id={id} ref={field.ref} checked={field.value} onCheckedChange={checked => field.onChange(checked === true)} />
+      <FieldContent><FieldLabel htmlFor={id}>{label}</FieldLabel>{description && <FieldDescription>{description}</FieldDescription>}</FieldContent>
+    </Field>
+  )} />;
 }
 
 export function PasswordField<T extends FieldValues, U = T>({ autoComplete, ...frame }: Controlled<T, U> & { autoComplete: "current-password" | "new-password" }) {
@@ -100,8 +114,8 @@ export function PasswordField<T extends FieldValues, U = T>({ autoComplete, ...f
 
 type RootErrors = { setError: (name: "root", error: { message: string }) => void };
 
-/** Error results and throws become the root error; returns the result, or null. */
-export async function submitAction(form: RootErrors, action: () => Promise<FormState>, fallback: string): Promise<FormState | null> {
+/** Sets the root error on failure; null if failed. */
+export async function submitAction<R extends FormState>(form: RootErrors, action: () => Promise<R>, fallback: string): Promise<R | null> {
   try {
     const result = await action();
     if (result.status !== "error") return result;
@@ -110,7 +124,6 @@ export async function submitAction(form: RootErrors, action: () => Promise<FormS
   return null;
 }
 
-/** Auth and network errors become the root error; returns { data }, or null. */
 export async function authAttempt<D>(form: RootErrors, call: () => Promise<{ data: D | null; error: { code?: string; status?: number } | null }>): Promise<{ data: D | null } | null> {
   try {
     const { data, error } = await call();

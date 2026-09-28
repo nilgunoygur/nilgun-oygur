@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -67,19 +67,24 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
     }
   }
 
+  // Locked after a save until the list page shows, so it cannot save twice. Next keeps this page alive
+  // when you leave it, so the lock is released as the page hides.
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => () => setLeaving(false), []);
   const save = (status: "draft" | "published") => form.handleSubmit(async (values) => {
-    if (await submitAction(form, () => saveArticle(values, status, article?.slug), "Yazı kaydedilemedi. Yönetim oturumunuzu kontrol edip tekrar deneyin.")) router.push("/yonetim/yazilar");
+    if (!await submitAction(form, () => saveArticle(values, status, article?.slug), "Yazı kaydedilemedi. Yönetim oturumunuzu kontrol edip tekrar deneyin.")) return;
+    setLeaving(true);
+    router.push("/yonetim/yazilar");
   });
 
-  // Stays disabled after a save while the list page loads, so a second click cannot save twice.
-  return <FormShell form={form} onSubmit={save("draft")} busy={form.formState.isSubmitSuccessful} fieldsClassName="grid gap-7 sm:grid-cols-2">
+  return <FormShell form={form} onSubmit={save("draft")} busy={leaving} fieldsClassName="grid gap-7 sm:grid-cols-2">
     <div className="sm:col-span-2"><TextField control={form.control} name="title" label="Başlık" maxLength={180} /></div>
     <Field><FieldLabel htmlFor="article-slug">URL adı</FieldLabel><Input id="article-slug" className="bg-muted/50" value={article?.slug ?? articleSlug(title)} readOnly tabIndex={-1} /><FieldDescription>Başlıktan otomatik oluşturulur.</FieldDescription></Field>
     <TextField control={form.control} name="category" label="Kategori" maxLength={70} />
     <ControlledField control={form.control} name="date" label="Tarih">
       {(field, id, invalid) => <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-        <PopoverTrigger render={<Button type="button" variant="outline" id={id} ref={field.ref} className="h-(--control-h) w-full justify-start font-normal" aria-invalid={invalid} />}><CalendarDays className="size-4" />{format(parseISO(String(field.value)), "d MMM yyyy", { locale: tr })}</PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={parseISO(String(field.value))} onSelect={selected => { if (selected) { field.onChange(iso(selected)); setCalendarOpen(false); } }} locale={tr} /></PopoverContent>
+        <PopoverTrigger render={<Button type="button" variant="outline" id={id} ref={field.ref} className="h-(--control-h) w-full justify-start font-normal" aria-invalid={invalid} />}><CalendarDays className="size-4" />{format(parseISO(field.value), "d MMM yyyy", { locale: tr })}</PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={parseISO(field.value)} onSelect={selected => { if (selected) { field.onChange(iso(selected)); setCalendarOpen(false); } }} locale={tr} /></PopoverContent>
       </Popover>}
     </ControlledField>
     <ControlledField control={form.control} name="durationAmount" label="Okuma süresi">
