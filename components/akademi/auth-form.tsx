@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formStack } from "@/lib/styles";
+import { ContactFields, readContact } from "./contact-fields";
 
 export type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 const inboxHint = "Gelen kutunuzu ve spam klasörünüzü kontrol edin.";
@@ -58,7 +59,9 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
         track("login", { method: "email" });
         router.replace(authDestination(destination)); router.refresh();
       } else if (mode === "register") {
-        const result = await authClient.signUp.email({ name: String(data.get("name")).trim(), email, password, callbackURL });
+        const { contact, error } = readContact(data);
+        if (!contact) { setError(error); return; }
+        const result = await authClient.signUp.email({ name: String(data.get("name")).trim(), email, password, callbackURL, ...contact });
         if (result.error) { setError(authErrorMessage(result.error)); return; }
         track("sign_up", { method: "email" });
         sent("doğrulama", "Adresinizle hesap oluşturulabiliyorsa doğrulama bağlantısı gönderilecektir."); setDone(true);
@@ -95,6 +98,7 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
           </Field> : <>
             {mode === "register" && <Field><FieldLabel htmlFor="name">Adınız soyadınız</FieldLabel><Input id="name" name="name" autoComplete="name" required maxLength={100} disabled={pending || !configured} /></Field>}
             {mode !== "reset" && <Field><FieldLabel htmlFor="email">E-posta adresiniz</FieldLabel><Input id="email" name="email" type="email" autoComplete="email" required maxLength={254} placeholder="ornek@eposta.com" disabled={pending || !configured} /></Field>}
+            {mode === "register" && <ContactFields disabled={pending || !configured} />}
             {(mode === "login" || mode === "register" || mode === "reset") && <Field><FieldLabel htmlFor="password">{mode === "reset" ? "Yeni şifreniz" : "Şifreniz"}</FieldLabel><div className="relative"><Input id="password" name="password" type={passwordVisible ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} maxLength={128} className="pr-11" disabled={pending || !configured || invalidReset} /><button type="button" className="absolute top-1/2 right-1 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-stone transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50" onClick={() => setPasswordVisible(value => !value)} disabled={pending || !configured || invalidReset} aria-label={passwordVisible ? "Şifreyi gizle" : "Şifreyi göster"} aria-pressed={passwordVisible}>{passwordVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button></div><FieldDescription>En az 8 karakter.</FieldDescription></Field>}
             {(mode === "register" || mode === "reset") && <Field data-invalid={error === "Şifreler eşleşmiyor."}><FieldLabel htmlFor="confirmPassword">Şifrenizi tekrar girin</FieldLabel><Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={128} aria-invalid={error === "Şifreler eşleşmiyor."} disabled={pending || !configured || invalidReset} /></Field>}
             {mode === "login" && <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap"><Field orientation="horizontal" className="w-auto"><Checkbox id="remember" checked={remember} onCheckedChange={setRemember} disabled={pending || !configured} /><FieldLabel htmlFor="remember">Beni hatırla</FieldLabel></Field><Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link></div>}

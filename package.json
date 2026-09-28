@@ -14,7 +14,8 @@
     "test:routes": "node tests/check-routes.mjs",
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
-    "email:dev": "email dev --dir emails --port 3001"
+    "email:dev": "email dev --dir emails --port 3001",
+    "turkiye:districts": "node scripts/generate-turkiye-districts.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -39,6 +40,7 @@
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
     "lexical": "^0.51.0",
+    "libphonenumber-js": "^1.13.14",
     "lucide-react": "^1.46.0",
     "motion": "^13.2.0",
     "next": "16.3.6",
@@ -71,6 +73,7 @@
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
+    "turkey-neighbourhoods": "4.0.3",
     "typescript": "^5"
   },
   "packageManager": "pnpm@10.17.1"

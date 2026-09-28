@@ -35,7 +35,8 @@ async function request(path, body, cookie = "", address = `192.0.2.${++ip}`) {
   }));
 }
 const cookies = response => response.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
-const account = { name: "Student", email: "student@example.com", password: "test-password-123" };
+const contact = { phone: "0532 123 45 67", city: "istanbul", district: "Kadıköy", address: "Caferağa Mah. Moda Cad. No: 12 D: 3", postcode: "34710" };
+const account = { name: "Student", email: "student@example.com", password: "test-password-123", ...contact };
 function messageUrl(message) { return message.text.match(/http[^\s]+/)[0]; }
 before(async () => { await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname }); });
 after(async () => { await client.close(); });
@@ -51,6 +52,7 @@ test("registration is neutral and cannot set ownership or MFA fields", async () 
   assert.ok(Math.abs(messages[0].expiresAt - Date.now() - 3_600_000) < 60_000, "queued only as long as the link lives");
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
   assert.equal(user.twoFactorEnabled, false);
+  assert.deepEqual([user.phone, user.city, user.district, user.postcode], ["+905321234567", "İstanbul", "Kadıköy", "34710"], "contact is stored normalized");
   assert.equal((await db.select().from(schema.owners)).length, 0);
   const duplicate = await request("/sign-up/email", account);
   assert.equal(duplicate.status, 200);
@@ -136,8 +138,13 @@ test("MFA sign-in requires a valid code; old sessions are revoked; ownership com
   assert.equal(await isOwner(db, user.id), true);
 });
 
-test("untrusted redirect origins and short passwords are rejected", async () => {
+test("untrusted redirect origins, short passwords and missing or invalid contact are rejected", async () => {
   assert.equal((await request("/sign-up/email", { ...account, email: "new@example.com", password: "short" })).status, 400);
+  assert.equal((await request("/sign-up/email", { ...account, email: "nophone@example.com", phone: undefined })).status, 400);
+  assert.equal((await request("/sign-up/email", { ...account, email: "foreign@example.com", phone: "+1 202 555 0100" })).status, 400);
+  assert.equal((await request("/sign-up/email", { ...account, email: "short-address@example.com", address: "Ev" })).status, 400);
+  assert.equal((await request("/sign-up/email", { ...account, email: "wrong-district@example.com", district: "Çankaya" })).status, 400);
+  assert.equal((await db.select().from(schema.user).where(eq(schema.user.email, "nophone@example.com"))).length, 0);
   assert.equal((await request("/request-password-reset", { email: account.email, redirectTo: "https://attacker.example/reset" })).status, 403);
 });
 
@@ -154,7 +161,7 @@ test("expired verification and password-reset tokens cannot authenticate", async
 });
 
 test("profile changes stay on the signed-in account and password changes require current password", async () => {
-  const account = { name: "Profile student", email: "profile@example.com", password: "profile-password-123" };
+  const account = { name: "Profile student", email: "profile@example.com", password: "profile-password-123", ...contact };
   await request("/sign-up/email", account);
   await auth.handler(new Request(messageUrl(messages.at(-1))));
   const login = await request("/sign-in/email", account);
@@ -165,6 +172,14 @@ test("profile changes stay on the signed-in account and password changes require
   assert.equal(updated.status, 200);
   const session = await (await request("/get-session", undefined, cookie)).json();
   assert.equal(session.user.name, "Updated student");
+  assert.equal(session.user.phone, undefined, "contact details stay out of session responses");
+  assert.equal((await request("/update-user", { phone: "0212 123 45 67" }, cookie)).status, 400, "landlines are rejected");
+  assert.equal((await request("/update-user", { city: "Atlantis" }, cookie)).status, 400);
+  assert.equal((await request("/update-user", { city: "Ankara" }, cookie)).status, 400, "a province change needs its district");
+  assert.equal((await request("/update-user", { city: "Ankara", district: "Kadıköy" }, cookie)).status, 400, "the district must belong to the province");
+  assert.equal((await request("/update-user", { phone: "+90 (505) 765 43 21", city: "IZMIR", district: "bornova", postcode: "" }, cookie)).status, 200);
+  const [profile] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
+  assert.deepEqual([profile.phone, profile.city, profile.district, profile.postcode], ["+905057654321", "İzmir", "Bornova", null], "updates are normalized and an empty postcode clears it");
   assert.equal((await request("/update-user", { name: "Anonymous" })).status, 401);
   const body = { currentPassword: "incorrect-password", newPassword: "profile-test-password-789", revokeOtherSessions: true };
   assert.equal((await request("/change-password", body, cookie)).status, 400);

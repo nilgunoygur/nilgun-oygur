@@ -8,7 +8,8 @@ export function AuthShell({ title, description, children }: {
 }) {
   return (
     <section className={cn(pageWidth, "grid grid-cols-2 items-start gap-[90px] pt-[150px] pb-[90px] max-[901px]:gap-[38px] max-[681px]:grid-cols-1 max-[681px]:gap-7 max-[681px]:pt-[116px] max-[681px]:pb-[60px]")}>
-      <aside className="flex min-h-[650px] flex-col justify-between gap-[60px] rounded-[28px] bg-accent p-11 max-[901px]:p-[30px] max-[681px]:min-h-0 max-[681px]:gap-6 max-[681px]:p-6">
+      {/* Beside the form the panel stays put under the fixed header while long forms (registration) scroll. */}
+      <aside className="flex flex-col justify-between gap-[60px] rounded-[28px] bg-accent p-11 max-[901px]:p-[30px] min-[682px]:sticky min-[682px]:top-[calc(112px+var(--announcement-offset,0px))] min-[682px]:h-[clamp(460px,calc(100svh-136px-var(--announcement-offset,0px)),650px)] max-[681px]:gap-6 max-[681px]:p-6">
         <span className="flex items-center gap-[10px] text-[17px] font-medium"><Leaf aria-hidden="true" className="text-primary" /> Nilgün Oygur Akademi</span>
         <div className="max-[681px]:hidden">
           <p className={kicker}>KENDİNİZE AYIRDIĞINIZ ZAMAN</p>

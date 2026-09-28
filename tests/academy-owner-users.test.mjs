@@ -15,7 +15,7 @@ before(async () => {
   await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
   await db.insert(schema.user).values([
     { id: "owner", name: "Nilgün", email: "owner@example.com", emailVerified: true, twoFactorEnabled: true, createdAt: new Date(now.getTime() - 30 * DAY) },
-    { id: "student", name: "Ayşe", email: "ayse@example.com", emailVerified: true, createdAt: new Date(now.getTime() - 2 * DAY) },
+    { id: "student", name: "Ayşe", email: "ayse@example.com", emailVerified: true, createdAt: new Date(now.getTime() - 2 * DAY), phone: "+905321234567", city: "İzmir", district: "Bornova", address: "Kazımdirik Mah. 372. Sk. No: 5" },
     { id: "pending", name: "Pending_Name", email: "late%user@example.com", createdAt: new Date(now.getTime() - DAY) },
   ]);
   await db.insert(schema.owners).values({ userId: "owner" });
@@ -52,6 +52,9 @@ test("role and search filters narrow the list; search treats % and _ as plain te
   assert.deepEqual((await ownerUsers(db, { q: "AYŞE" }, now)).users.map(u => u.id), ["student"]);
   assert.deepEqual((await ownerUsers(db, { q: "%" }, now)).users.map(u => u.id), ["pending"]);
   assert.deepEqual((await ownerUsers(db, { q: "_" }, now)).users.map(u => u.id), ["pending"]);
+  for (const q of ["0532 123", "+90 532-123-45", "5321234567", "izmir"]) assert.deepEqual((await ownerUsers(db, { q }, now)).users.map(u => u.id), ["student"], q);
+  assert.equal((await ownerUsers(db, { q: "05" }, now)).users.length, 0, "two digits are too short to match phones");
+  assert.equal((await ownerUsers(db, {}, now)).users.find(u => u.id === "student").district, "Bornova");
   const none = await ownerUsers(db, { role: "owner", q: "ayse" }, now);
   assert.deepEqual([none.matching, none.users.length, none.counts.all], [0, 0, 3], "counts stay unfiltered");
 });

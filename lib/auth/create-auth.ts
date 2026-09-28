@@ -1,9 +1,11 @@
 import { betterAuth } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { twoFactor } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import type { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { EmailMessage } from "../email/outbox.ts";
+import { checkDistrict, contactFields } from "./profile.ts";
+import { matchProvince } from "../turkiye.ts";
 
 const linkLifetime = 3600;
 
@@ -41,6 +43,16 @@ export function createAcademyAuth(dependencies: Dependencies) {
     secret: dependencies.secret,
     database: dependencies.database,
     trustedOrigins: [dependencies.baseURL],
+    user: {
+      // Required at sign-up, validated on every update. Not returned in sessions: only the profile page and owners read them.
+      additionalFields: {
+        phone: { type: "string", required: true, returned: false, validator: { input: contactFields.phone } },
+        address: { type: "string", required: true, returned: false, validator: { input: contactFields.address } },
+        district: { type: "string", required: true, returned: false, validator: { input: contactFields.district } },
+        city: { type: "string", required: true, returned: false, validator: { input: contactFields.city } },
+        postcode: { type: "string", required: false, returned: false, validator: { input: contactFields.postcode } },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
@@ -89,6 +101,16 @@ export function createAcademyAuth(dependencies: Dependencies) {
       } } },
     },
     hooks: {
+      // Field validators see one field at a time; the district must also belong to the province.
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== "/sign-up/email" && ctx.path !== "/update-user") return;
+        const body = ctx.body as Record<string, unknown> | undefined;
+        if (body?.city === undefined && body?.district === undefined) return;
+        const city = matchProvince(typeof body.city === "string" ? body.city : null);
+        const checked = city && typeof body.district === "string" ? checkDistrict(city, body.district) : null;
+        if (!checked?.district) throw new APIError("BAD_REQUEST", { code: "VALIDATION_ERROR", message: checked?.error ?? "İl ve ilçe birlikte seçilmelidir." });
+        return { context: { body: { ...body, district: checked.district } } };
+      }),
       after: createAuthMiddleware(async (ctx) => {
         // Purchases made before registration, or with the email before it was verified, arrive on sign-in.
         if (ctx.path === "/sign-in/email" && ctx.context.newSession?.user.emailVerified) {

@@ -9,6 +9,7 @@ import { createOwnerOverview } from "./dashboard.ts";
 import { ownerUsers, type UserListParams } from "./owner-users.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
+import { studentContact } from "./student-contact.ts";
 
 type Dependencies = {
   db: Database;
@@ -51,6 +52,10 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
         }
         return { orders: orders.length, purchases, granted, courses: await syncCatalog() };
       },
+    },
+    students: {
+      /** Phone and address of a verified student, for their own profile. */
+      contact: (userId: string) => studentContact(db, userId),
     },
     owner: {
       overview: ownerOverview,

@@ -2,15 +2,17 @@
 import { accountCard } from "@/lib/styles";
 import { useId, useState } from "react";
 import { authClient } from "@/lib/auth/client";
-import { avatarSource } from "@/lib/auth/profile";
-import { saveProfile } from "@/app/akademi/hesabim/profile-actions";
+import { avatarSource, hasCompleteContact, type Contact } from "@/lib/auth/profile";
+import { saveContact, saveProfile } from "@/app/akademi/hesabim/profile-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FormStatus, idleForm, type FormState } from "./form-status";
+import { ContactFields, readContact } from "./contact-fields";
 
-export function ProfileSettings({ user, localEmail }: { user: { name: string; email: string; image?: string | null }; localEmail: boolean }) {
+export function ProfileSettings({ user, contact, localEmail }: { user: { name: string; email: string; image?: string | null }; contact: Contact; localEmail: boolean }) {
   const { refetch } = authClient.useSession();
   const id = useId();
   const [name, setName] = useState(user.name);
@@ -19,6 +21,8 @@ export function ProfileSettings({ user, localEmail }: { user: { name: string; em
   const [password, setPassword] = useState<FormState>(idleForm);
   const [busy, setBusy] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [contactState, setContactState] = useState<FormState>(idleForm);
+  const [contactBusy, setContactBusy] = useState(false);
   const [show, setShow] = useState(false);
   return <div className="grid gap-8">
     <form className={accountCard} onSubmit={async (event) => { event.preventDefault(); setBusy(true); try { const result = await saveProfile({ name, image }); setProfile(result); if (result.status === "success") void refetch(); } catch { setProfile({ status: "error", message: "Profil kaydedilemedi. Lütfen tekrar deneyin." }); } finally { setBusy(false); } }}>
@@ -42,6 +46,22 @@ export function ProfileSettings({ user, localEmail }: { user: { name: string; em
         <Field><FieldLabel htmlFor={`${id}-name`}>Adınız soyadınız</FieldLabel><Input id={`${id}-name`} value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required autoComplete="name" /></Field>
         <Field><FieldLabel>E-posta adresiniz</FieldLabel><p className="rounded-lg bg-mist px-4 py-3 text-sm text-stone">{user.email}</p><FieldDescription>Bu adres hesap ayarlarından değiştirilemez.</FieldDescription></Field>
         <FormStatus state={profile} /><Button disabled={busy} type="submit">{busy ? "Kaydediliyor…" : "Profili kaydet"}</Button>
+      </FieldGroup>
+    </form>
+    <form id="iletisim" className={accountCard} onSubmit={async (event) => {
+      event.preventDefault();
+      const { contact: input, error } = readContact(new FormData(event.currentTarget));
+      if (!input) { setContactState({ status: "error", message: error }); return; }
+      setContactBusy(true);
+      try { setContactState(await saveContact(input)); }
+      catch { setContactState({ status: "error", message: "İletişim bilgileri kaydedilemedi. Lütfen tekrar deneyin." }); }
+      finally { setContactBusy(false); }
+    }}>
+      <FieldGroup>
+        <div className="mb-2"><h2 className="text-2xl font-semibold text-forest">İletişim bilgileri</h2><p className="mt-2 text-sm text-stone">Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi güncel tutun.</p></div>
+        {!hasCompleteContact(contact) && contactState.status !== "success" && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
+        <ContactFields defaults={contact} disabled={contactBusy} />
+        <FormStatus state={contactState} /><Button disabled={contactBusy} type="submit">{contactBusy ? "Kaydediliyor…" : "İletişim bilgilerini kaydet"}</Button>
       </FieldGroup>
     </form>
     <form className={accountCard} onSubmit={async (event) => {

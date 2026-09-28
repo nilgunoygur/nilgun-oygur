@@ -5,11 +5,13 @@ import { ArrowLeft, Search, ShieldCheck } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { dateTimeLabel, dayLabel } from "@/lib/akademi/format";
+import { formatPhone } from "@/lib/turkiye";
 import type { UserListParams, userListFilter } from "@/lib/akademi/owner-users";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { pageWidth, backLink, ownerKicker, ownerPanel, ownerSection, ownerTitle } from "@/lib/styles";
@@ -61,20 +63,30 @@ async function Users({ searchParams }: { searchParams: SearchParams }) {
         <Form action="/yonetim/kullanicilar" className="relative w-full sm:max-w-72">
           {filter.role && <input type="hidden" name="role" value={filter.role} />}
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input key={filter.q} type="search" name="q" defaultValue={filter.q} aria-label="Ad veya e-posta ara" placeholder="Ad veya e-posta ara…" className="pl-9" />
+          <Input key={filter.q} type="search" name="q" defaultValue={filter.q} aria-label="Ad, e-posta, telefon veya il ara" placeholder="Ad, e-posta, telefon veya il ara…" className="pl-9" />
         </Form>
       </div>
 
       {users.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
         {counts.all === 0 ? "Henüz kayıtlı kullanıcı yok." : "Bu filtreyle eşleşen kullanıcı bulunamadı."}
         {filter.q && <Link href={usersHref(filter, { q: "", page: 1 })} className="mt-3 block font-medium text-forest hover:underline">Aramayı temizle</Link>}
-      </div> : <div className="overflow-x-auto rounded-xl border"><Table className="min-w-[760px]">
-        <TableHeader><TableRow className="bg-muted/30"><TableHead className="pl-5">Kullanıcı</TableHead><TableHead>Rol</TableHead><TableHead>E-posta</TableHead><TableHead>Aktif eğitim</TableHead><TableHead>Kayıt</TableHead><TableHead className="pr-5">Son etkinlik</TableHead></TableRow></TableHeader>
+      </div> : <div className="overflow-x-auto rounded-xl border"><Table className="min-w-[940px]">
+        <TableHeader><TableRow className="bg-muted/30"><TableHead className="pl-5">Kullanıcı</TableHead><TableHead>İletişim</TableHead><TableHead>Rol</TableHead><TableHead>E-posta</TableHead><TableHead>Aktif eğitim</TableHead><TableHead>Kayıt</TableHead><TableHead className="pr-5">Son etkinlik</TableHead></TableRow></TableHeader>
         <TableBody>{users.map(item => <TableRow key={item.id} className="h-16">
           <TableCell className="pl-5"><div className="flex items-center gap-3">
             <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mist text-sm font-semibold text-forest">{(item.name || item.email).trim().charAt(0).toLocaleUpperCase("tr-TR")}</span>
             <div className="min-w-0"><span className="block max-w-[260px] truncate font-medium text-foreground">{item.name || item.email}{item.id === viewer.user.id && <span className="ml-1.5 text-xs font-normal text-primary">(siz)</span>}</span><span className="block max-w-[260px] truncate text-xs text-muted-foreground">{item.email}</span></div>
           </div></TableCell>
+          <TableCell>{item.phone || item.city ? <div className="min-w-0">
+            {item.phone ? <a href={`tel:${item.phone}`} className="block whitespace-nowrap font-medium text-foreground hover:text-forest hover:underline">{formatPhone(item.phone)}</a> : <span className="block text-muted-foreground">Telefon yok</span>}
+            {item.city && <Popover>
+              <PopoverTrigger className="block max-w-[200px] truncate text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-forest">{[item.district, item.city].filter(Boolean).join(", ")}</PopoverTrigger>
+              <PopoverContent align="start" className="w-72"><PopoverHeader><PopoverTitle>Adres</PopoverTitle><PopoverDescription className="text-foreground select-text">
+                {item.address && <span className="block">{item.address}</span>}
+                <span className="block">{[item.postcode, [item.district, item.city].filter(Boolean).join(" / ")].filter(Boolean).join(" ")}</span>
+              </PopoverDescription></PopoverHeader></PopoverContent>
+            </Popover>}
+          </div> : <span className="text-muted-foreground">—</span>}</TableCell>
           <TableCell>{item.owner ? <Badge><ShieldCheck />Yönetici</Badge> : <Badge variant="outline">Öğrenci</Badge>}</TableCell>
           <TableCell><Badge variant={item.emailVerified ? "secondary" : "outline"}>{item.emailVerified ? "Doğrulandı" : "Doğrulanmadı"}</Badge>{item.twoFactorEnabled && <span className="mt-1 block text-xs text-muted-foreground">Doğrulayıcı açık</span>}</TableCell>
           <TableCell>{item.activeCourses ? <span className="font-medium">{item.activeCourses}</span> : <span className="text-muted-foreground">—</span>}</TableCell>

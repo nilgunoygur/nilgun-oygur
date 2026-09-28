@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { courseAccess, courses, shopierPurchases, user } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
 import { accessExpiryFromPayment, hasActiveAccess, type AccessGrant } from "./access-policy.ts";
+import { adoptShopierContact } from "./student-contact.ts";
 import type { Database } from "../db/types.ts";
 
 // Course Access: the only module that grants course access or answers "can this student use this course now?".
@@ -31,8 +32,16 @@ export async function recordShopierOrder(db: Database, order: ShopierOrder): Pro
   const purchases = await db.select({ id: shopierPurchases.id }).from(shopierPurchases).where(eq(shopierPurchases.shopierOrderId, order.id));
   const [student] = await db.select({ id: user.id }).from(user).where(and(sql`lower(${user.email}) = ${email}`, eq(user.emailVerified, true))).limit(1);
   let granted = 0;
-  if (student) for (const purchase of purchases) if (await claimPurchase(db, purchase.id, student.id)) granted++;
+  if (student) {
+    for (const purchase of purchases) if (await claimPurchase(db, purchase.id, student.id)) granted++;
+    await adoptContactSafely(db, student.id, order);
+  }
   return { purchaseIds: purchases.map(p => p.id), granted };
+}
+
+// Contact is a convenience: it must never block or retry a paid grant.
+async function adoptContactSafely(db: Database, userId: string, order: ShopierOrder) {
+  try { await adoptShopierContact(db, userId, order); } catch { console.error("Shopier contact could not be copied to the student profile."); }
 }
 
 // Claims an unclaimed purchase and grants access in one transaction; active access is extended.
@@ -80,9 +89,10 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   if (purchaseIds.length === 0) return "not_academy";
   let granted = 0;
   for (const id of purchaseIds) if (await claimPurchase(db, id, userId)) granted++;
-  if (granted > 0) return "granted";
-  const owners = await db.select({ userId: shopierPurchases.userId }).from(shopierPurchases).where(inArray(shopierPurchases.id, purchaseIds));
-  return owners.every(p => p.userId === userId) ? "already_yours" : "claimed_by_other";
+  const owners = granted > 0 ? [] : await db.select({ userId: shopierPurchases.userId }).from(shopierPurchases).where(inArray(shopierPurchases.id, purchaseIds));
+  const outcome = granted > 0 ? "granted" : owners.every(p => p.userId === userId) ? "already_yours" : "claimed_by_other";
+  if (outcome !== "claimed_by_other") await adoptContactSafely(db, userId, order);
+  return outcome;
 }
 
 export type ActiveAccess = AccessGrant & { id: string; shopierProductId: string };

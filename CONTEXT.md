@@ -14,6 +14,8 @@
 
 **Viewer**: the verified student behind a request, with owner status.
 
+**Student contact**: a student's Turkish mobile phone (stored E.164) and address (il, ilçe, açık adres, optional posta kodu), named after Shopier's buyer fields. Required at registration, editable in profile settings; a Shopier order of the same student fills only fields that are still empty.
+
 **Owner**: the explicitly designated, verified account authorized to manage the academy’s courses, lessons, and sales. Authenticator enrollment is optional.
 
 **Owner command**: an owner change applied together with its audit entry.
