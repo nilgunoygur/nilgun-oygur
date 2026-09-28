@@ -14,8 +14,7 @@
     "test:routes": "node tests/check-routes.mjs",
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
-    "email:dev": "email dev --dir emails --port 3001",
-    "turkiye:districts": "node scripts/generate-turkiye-districts.mjs"
+    "email:dev": "email dev --dir emails --port 3001"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -76,7 +75,6 @@
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "turkey-neighbourhoods": "4.0.3",
     "typescript": "^5"
   },
   "packageManager": "pnpm@10.17.1"
