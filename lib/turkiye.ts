@@ -23,6 +23,8 @@ export const provinceOptions = [...provinces].sort((a, b) => a.localeCompare(b, 
 // "İSTANBUL", "Istanbul" and "istanbul" all fold to "istanbul".
 const fold = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "")
   .replaceAll("ı", "i").replace(/[^a-z]/g, "");
+/** Case-, accent- and dotted/dotless-i-insensitive search: "kadikoy" finds Kadıköy, "IGDIR" finds Iğdır. */
+export const matchesTurkish = (text: string, query: string) => fold(text).includes(fold(query));
 const aliases: Record<string, Province> = { icel: "Mersin", afyon: "Afyonkarahisar", maras: "Kahramanmaraş", kmaras: "Kahramanmaraş", urfa: "Şanlıurfa", antep: "Gaziantep" };
 const byFolded = new Map<string, Province>([...provinces.map(name => [fold(name), name] as const), ...Object.entries(aliases)]);
 

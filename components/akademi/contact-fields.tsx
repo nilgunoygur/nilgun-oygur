@@ -4,8 +4,8 @@ import { contactInput, type Contact } from "@/lib/auth/profile";
 import { districtsOf, formatPhone, matchDistrict, matchProvince, normalizePhone, provinceOptions, type Province } from "@/lib/turkiye";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SearchableSelect } from "./searchable-select";
 
 /** Reads the fields below from a submitted form: normalized values, or the first problem in Turkish. */
 export function readContact(data: FormData) {
@@ -13,9 +13,6 @@ export function readContact(data: FormData) {
   const parsed = contactInput.safeParse({ phone: text("phone"), city: text("city"), district: text("district"), address: text("address"), postcode: text("postcode") });
   return parsed.success ? { contact: parsed.data, error: null } : { contact: null, error: parsed.error.issues[0]?.message ?? "İletişim bilgilerinizi kontrol edin." };
 }
-
-// Long lists open downward with a scrollable popup instead of centring the selected item over the trigger.
-const listProps = { alignItemWithTrigger: false, className: "max-h-72" } as const;
 
 /** Phone and address inputs; submit them with the surrounding form (the selects post hidden inputs) and read them with readContact. */
 export function ContactFields({ defaults, disabled }: { defaults?: Contact; disabled?: boolean }) {
@@ -34,17 +31,15 @@ export function ContactFields({ defaults, disabled }: { defaults?: Contact; disa
     <div className="grid gap-5 sm:grid-cols-2">
       <Field>
         <FieldLabel htmlFor={`${id}-city`}>İl</FieldLabel>
-        <Select name="city" required disabled={disabled} value={city} onValueChange={(value) => { setCity(value); setDistrict(null); }}>
-          <SelectTrigger id={`${id}-city`} className="w-full"><SelectValue placeholder="İl seçin" /></SelectTrigger>
-          <SelectContent {...listProps}>{provinceOptions.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-        </Select>
+        <SearchableSelect id={`${id}-city`} name="city" required disabled={disabled} items={provinceOptions} value={city}
+          onValueChange={(value) => { setCity(value); setDistrict(null); }}
+          placeholder="İl seçin" searchPlaceholder="İl ara…" emptyText="Bu adla bir il bulunamadı." />
       </Field>
       <Field>
         <FieldLabel htmlFor={`${id}-district`}>İlçe</FieldLabel>
-        <Select key={city ?? ""} name="district" required disabled={disabled || !city} value={district} onValueChange={setDistrict}>
-          <SelectTrigger id={`${id}-district`} className="w-full"><SelectValue placeholder={city ? "İlçe seçin" : "Önce il seçin"} /></SelectTrigger>
-          <SelectContent {...listProps}>{districts.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-        </Select>
+        <SearchableSelect key={city ?? ""} id={`${id}-district`} name="district" required disabled={disabled || !city} items={districts} value={district}
+          onValueChange={setDistrict}
+          placeholder={city ? "İlçe seçin" : "Önce il seçin"} searchPlaceholder="İlçe ara…" emptyText={`${city ?? ""} içinde bu adla bir ilçe yok.`} />
       </Field>
     </div>
     <Field>
