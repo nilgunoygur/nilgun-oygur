@@ -9,6 +9,7 @@ import { createOwnerOverview } from "./dashboard.ts";
 import { ownerUsers, type UserListParams } from "./owner-users.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
+import { studentContact } from "./student-contact.ts";
 
 type Dependencies = {
   db: Database;
@@ -52,10 +53,20 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
         return { orders: orders.length, purchases, granted, courses: await syncCatalog() };
       },
     },
+    students: {
+      contact: (userId: string) => studentContact(db, userId),
+    },
     owner: {
       overview: ownerOverview,
-      catalog: async () => ownerCatalog(db, await products()),
-      needsAttention: () => failedEvents(db),
+      /** JSON-safe; shared by the page and GET /api/yonetim/courses. */
+      async catalogSnapshot() {
+        const [{ courses, recentSales }, attention] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db)]);
+        return {
+          courses,
+          recentSales: recentSales.map(sale => ({ ...sale, claimed: Boolean(sale.claimed), at: sale.at.toISOString() })),
+          attention: attention.map(item => ({ ...item, at: item.at.toISOString() })),
+        };
+      },
       users: (params: UserListParams) => ownerUsers(db, params, now()),
       setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),

@@ -5,7 +5,11 @@ import { z } from "zod";
 const API = "https://api.shopier.com/v1";
 
 const email = z.string().trim().toLowerCase().pipe(z.email());
-const party = z.object({ email: z.string().optional().nullable() }).partial().nullable().optional();
+// Best effort: odd buyer values become undefined and never reject an order.
+const loose = z.unknown().transform(value => typeof value === "string" || typeof value === "number" ? String(value) : undefined);
+const party = z.object({
+  email: z.string().optional().nullable(), phone: loose, address: loose, district: loose, city: loose, postcode: loose,
+}).partial().nullable().optional();
 const shopierDate = z.string().transform((value, ctx) => {
   const date = new Date(value.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
   if (Number.isNaN(date.getTime())) { ctx.addIssue({ code: "custom", message: "Invalid Shopier date" }); return z.NEVER; }

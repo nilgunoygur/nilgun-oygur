@@ -1,3 +1,5 @@
+export const callbackURL = "/akademi/giris?verified=1";
+
 // Only known post-login destinations are accepted; never redirect to user-supplied URLs.
 export function authDestination(value: unknown): string {
   if (value === "/yonetim" || value === "/yonetim/guvenlik") return value;
@@ -16,6 +18,8 @@ export function authErrorMessage(error: { code?: string; status?: number }): str
     case "INVALID_CODE":
     case "INVALID_BACKUP_CODE": return "Doğrulama kodu geçersiz. Güncel kodu kontrol edip yeniden deneyin.";
     case "INVALID_TWO_FACTOR_COOKIE": return "Doğrulama oturumunuz sona erdi. Lütfen tekrar giriş yapın.";
+    case "VALIDATION_ERROR":
+    case "MISSING_FIELD": return "Telefon ve adres bilgilerinizi kontrol edin.";
     case "INVALID_EMAIL_OR_PASSWORD":
     case "INVALID_PASSWORD": return "E-posta adresinizi ve şifrenizi kontrol edin.";
     default: return "İşlem tamamlanamadı. Bilgilerinizi kontrol edip yeniden deneyin.";

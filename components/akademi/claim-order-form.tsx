@@ -1,27 +1,31 @@
 "use client";
-import { useActionState, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { claimOrder } from "@/app/akademi/hesabim/actions";
+import { claimSchema } from "@/lib/akademi/claim-schema";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { FormStatus, idleForm, type FormState } from "@/components/akademi/form-status";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { EmailField, FormMessage, FormShell, SubmitButton, submitAction, TextField } from "./form-fields";
 
 export function ClaimOrderForm() {
-  const [attempt, setAttempt] = useState(0);
-  return <ClaimAttempt key={attempt} reset={() => setAttempt(value => value + 1)} />;
-}
+  const [granted, setGranted] = useState<string | null>(null);
+  const form = useForm({ resolver: zodResolver(claimSchema), mode: "onTouched", defaultValues: { orderNumber: "", email: "" } });
+  const submit = form.handleSubmit(async (values) => {
+    const result = await submitAction(form, () => claimOrder(values), "Sipariş şu anda doğrulanamıyor. Lütfen biraz sonra yeniden deneyin.");
+    if (result) setGranted(result.message);
+  });
+  const again = () => { form.reset(); setGranted(null); };
+  if (granted) return <div className="grid gap-5"><Alert><AlertDescription>{granted}</AlertDescription></Alert><Button type="button" variant="outline" onClick={again}>Başka sipariş ekle</Button></div>;
 
-function ClaimAttempt({ reset }: { reset: () => void }) {
-  const [state, action, pending] = useActionState(async (previous: FormState, data: FormData) => {
-    const next = await claimOrder(previous, data);
-    if (next.status === "error") toast.error(next.message);
-    return next;
-  }, idleForm);
-  return state.status === "success" ? <div className="grid gap-5"><FormStatus state={state} /><Button type="button" variant="outline" onClick={reset}>Başka sipariş ekle</Button></div> :
-    <form action={action}><FieldGroup className="gap-6">
-      <Field><FieldLabel htmlFor="orderNumber">Shopier sipariş numarası</FieldLabel><Input id="orderNumber" name="orderNumber" inputMode="numeric" autoComplete="off" placeholder="Sipariş numaranızı yazın" required /><FieldDescription>Shopier’in gönderdiği sipariş onay e-postasında yer alır.</FieldDescription></Field>
-      <Field><FieldLabel htmlFor="claimEmail">Shopier’de kullandığınız e-posta</FieldLabel><Input id="claimEmail" name="email" type="email" autoComplete="email" placeholder="ornek@eposta.com" required /></Field>
-      <div className="flex flex-wrap gap-3"><Button type="submit" disabled={pending}>{pending ? "Shopier’de kontrol ediliyor…" : "Siparişimi doğrula ve ekle"}</Button>{state.status === "error" && <Button type="button" variant="outline" onClick={reset}>Temizle ve tekrar dene</Button>}</div>
-    </FieldGroup></form>;
+  return <FormShell form={form} onSubmit={submit} size="lg" fieldsClassName="gap-6">
+    <TextField control={form.control} name="orderNumber" label="Shopier sipariş numarası" inputMode="numeric" autoComplete="off" placeholder="Sipariş numaranızı yazın" maxLength={20}
+      description="Shopier’in gönderdiği sipariş onay e-postasında yer alır." />
+    <EmailField control={form.control} name="email" label="Shopier’de kullandığınız e-posta" />
+    <FormMessage />
+    <div className="flex flex-wrap gap-3">
+      <SubmitButton pendingLabel="Shopier’de kontrol ediliyor…">Siparişimi doğrula ve ekle</SubmitButton>
+      {form.formState.errors.root && <Button type="button" variant="outline" onClick={again}>Temizle ve tekrar dene</Button>}
+    </div>
+  </FormShell>;
 }

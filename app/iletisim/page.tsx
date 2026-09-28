@@ -31,7 +31,7 @@ export default function Contact() {
           <br />
           Bugün konuşalım.
         </p>
-        <div className="m-auto grid max-w-[1100px] grid-cols-[1fr_1.15fr] gap-20 max-laptop:gap-10 max-tablet:grid-cols-1 max-tablet:gap-[35px] [&_form]:py-[10px] [&_input]:min-h-12 [&_textarea]:min-h-40">
+        <div className="m-auto grid max-w-[1100px] grid-cols-[1fr_1.15fr] gap-20 max-laptop:gap-10 max-tablet:grid-cols-1 max-tablet:gap-[35px] [&_form]:py-[10px] [&_textarea]:min-h-40">
           <div className="min-h-[350px] self-start rounded-[24px] bg-[linear-gradient(100deg,#778ac0,#4b999c)] p-10 text-white max-tablet:min-h-80 max-tablet:p-[30px]">
             <h3 className="mb-[10px] text-[28px]">İletişim bilgileri</h3>
             <p className="mb-[34px] text-[16px] text-[#ffffffbf]">Formu doldurun, 24 saat içinde size geri döneceğiz.</p>

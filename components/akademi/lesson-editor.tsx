@@ -1,5 +1,7 @@
 "use client";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { createUpload, type UpChunk } from "@mux/upchunk";
 import { CalendarDays, CirclePlay, Plus, Upload } from "lucide-react";
@@ -7,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, checkUpload, saveLesson, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
-import { FormStatus, idleForm } from "./form-status";
+import { FormStatus, idleForm, type FormState } from "./form-status";
+import { FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
+import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import { pillAction } from "@/lib/styles";
 
-const input = "mt-2 min-h-11 w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary";
 type Row = Awaited<ReturnType<typeof ownerLessons>>[number];
 const localDate = (date: Date | null | undefined) => date ? new Date(new Date(date).getTime() + 3 * 3600000).toISOString().slice(0, 16) : "";
 
@@ -28,24 +31,47 @@ export function CourseEditor({ courseId, rows, uploadsEnabled }: { courseId: str
     {visibleRows.length ? visibleRows.map(row => <EditorCard key={row.lesson.id} row={row} uploadsEnabled={uploadsEnabled} />) : <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">{rows.length === 0 ? "Programınız henüz boş. İlk dersinizi ekleyerek başlayın." : "Bu grupta gösterilecek ders yok."}</div>}
   </div>;
 }
+const visibility = { draft: "Taslak", published: "Yayında" };
+const liveStatuses = { scheduled: "Planlandı", rescheduled: "Yeniden planlandı", cancelled: "İptal edildi", completed: "Tamamlandı" };
+
 function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean }) {
   const { lesson, live } = row;
-  const [state, action, pending] = useActionState(saveLesson, idleForm);
   const isLive = lesson.kind === "live";
+  const [saved, setSaved] = useState<FormState>(idleForm);
+  const form = useForm({
+    resolver: zodResolver(lessonFormSchema), mode: "onTouched",
+    defaultValues: {
+      title: lesson.title, description: lesson.description, position: String(lesson.position), status: lesson.status,
+      startsAt: localDate(live?.startsAt), durationMinutes: String(live?.durationMinutes ?? 60), joinUrl: live?.zoomJoinUrl ?? "", passcode: live?.zoomPasscode ?? "", liveStatus: live?.status ?? "scheduled",
+    },
+  });
+  const submit = form.handleSubmit(async (values) => {
+    setSaved(await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.") ?? idleForm);
+  });
   return <details className="group rounded-[22px] border border-border bg-white">
     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-6"><div><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {lesson.position + 1}</span><h3 className="text-2xl">{lesson.title}</h3></div><span className={`rounded-full px-3 py-1 text-xs ${lesson.status === "published" ? "bg-mist text-forest" : "bg-[#f5ebdd] text-[#82623a]"}`}>{lesson.status === "published" ? "Yayında" : "Taslak"}</span></summary>
     <div className="border-t border-border p-6">
       {!isLive && <VideoUpload row={row} enabled={uploadsEnabled && lesson.status === "draft"} />}
-      <form action={action} className="grid gap-5"><input type="hidden" name="courseId" value={lesson.courseId} /><input type="hidden" name="lessonId" value={lesson.id} />
-        <label className="text-sm font-medium">Ders başlığı<input className={input} name="title" required maxLength={160} defaultValue={lesson.title} /></label>
-        <label className="text-sm font-medium">Açıklama / ders notları<textarea className={input} name="description" rows={4} maxLength={10000} defaultValue={lesson.description} /></label>
-        <div className="grid gap-5 sm:grid-cols-2"><label className="text-sm font-medium">Sıra (0 ilk ders)<input className={input} name="position" type="number" required min={0} max={1000} defaultValue={lesson.position} /></label><label className="text-sm font-medium">Görünürlük<select className={input} name="status" defaultValue={lesson.status}><option value="draft">Taslak</option><option value="published">Yayında</option></select></label></div>
-        {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2"><label className="text-sm font-medium">Başlangıç · İstanbul saati<input className={input} type="datetime-local" name="startsAt" defaultValue={localDate(live?.startsAt)} /></label><label className="text-sm font-medium">Süre (dakika)<input className={input} type="number" name="durationMinutes" min={1} max={1440} defaultValue={live?.durationMinutes ?? 60} required /></label><label className="text-sm font-medium sm:col-span-2">Toplantı bağlantısı<input className={input} type="url" name="joinUrl" placeholder="https://…" defaultValue={live?.zoomJoinUrl ?? ""} maxLength={2048} /></label><label className="text-sm font-medium">Toplantı şifresi (isteğe bağlı)<input className={input} name="passcode" defaultValue={live?.zoomPasscode ?? ""} maxLength={100} /></label><label className="text-sm font-medium">Buluşma durumu<select className={input} name="liveStatus" defaultValue={live?.status ?? "scheduled"}><option value="scheduled">Planlandı</option><option value="rescheduled">Yeniden planlandı</option><option value="cancelled">İptal edildi</option><option value="completed">Tamamlandı</option></select></label></div>}
-        <div className="flex flex-wrap items-center gap-5"><button className={pillAction} disabled={pending}>{pending ? "Kaydediliyor…" : "Dersi kaydet"}</button><div role="status"><FormStatus state={state} /></div></div>
-      </form>
+      <FormShell form={form} onSubmit={submit}>
+        <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
+        <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField control={form.control} name="position" label="Sıra (0 ilk ders)" type="number" inputMode="numeric" min={0} max={1000} />
+          <SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" />
+        </div>
+        {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
+          <TextField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" type="datetime-local" className="bg-white" />
+          <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
+          <div className="sm:col-span-2"><TextField control={form.control} name="joinUrl" label="Toplantı bağlantısı" type="url" placeholder="https://…" maxLength={2048} className="bg-white" /></div>
+          <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
+          <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
+        </div>}
+        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><div role="status"><FormMessage status={saved} /></div></div>
+      </FormShell>
     </div>
   </details>;
 }
+
 function VideoUpload({ row, enabled }: { row: Row; enabled: boolean }) {
   const router = useRouter();
   const upload = useRef<UpChunk | null>(null);

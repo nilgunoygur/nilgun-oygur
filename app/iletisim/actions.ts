@@ -11,17 +11,12 @@ import { deliverPendingEmailsAfterResponse, getEmailOutbox } from "@/lib/email";
 import { contactEmail } from "@/lib/email/templates";
 import type { FormState } from "@/components/akademi/form-status";
 
-type Fields = z.infer<typeof contactSchema>;
-/** `values` refill the form after React resets it; omitted on success. */
-export type ContactState = FormState & { errors?: Partial<Record<keyof Fields, string>>; values?: Fields };
-
-export async function sendContactMessage(_: ContactState, formData: FormData): Promise<ContactState> {
-  const values = { name: String(formData.get("name") ?? ""), email: String(formData.get("email") ?? ""), message: String(formData.get("message") ?? "") };
-  const failed = (message: string): ContactState => ({ status: "error", message, values });
+export async function sendContactMessage(values: z.input<typeof contactSchema>): Promise<FormState> {
+  const failed = (message: string): FormState => ({ status: "error", message });
   const settings = config();
   if (!settings.enabled.contact) return failed("Mesaj şu anda gönderilemiyor. Lütfen e-posta adresimizden bize ulaşın.");
   const input = contactSchema.safeParse(values);
-  if (!input.success) return { status: "idle", message: "", values, errors: Object.fromEntries(input.error.issues.map(issue => [issue.path[0], issue.message])) };
+  if (!input.success) return failed("Formdaki bilgileri kontrol edin.");
   try {
     if ((await checkBotId()).isBot) return failed("İstek doğrulanamadı.");
     const ip = (await headers()).get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || "local";

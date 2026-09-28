@@ -2,6 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
+import type { CourseChange } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
@@ -37,29 +38,29 @@ export const ownerQueryKeys = {
   transactions: (from: string, to: string) => [...ownerQueryKeys.all, "transactions", { from, to }] as const,
 };
 
+async function ownerFetch(url: string, init: RequestInit, fallback: string) {
+  const response = await fetch(url, { ...init, cache: "no-store" });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? fallback);
+  return response;
+}
+
 export function ownerTransactionsQueryOptions(from: string, to: string) {
   return queryOptions({
     queryKey: ownerQueryKeys.transactions(from, to),
-    queryFn: async ({ signal }): Promise<OwnerTransactions> => {
-      const params = new URLSearchParams({ from, to });
-      const response = await fetch(`/api/yonetim/transactions?${params}`, { signal, cache: "no-store" });
-      if (!response.ok) throw new Error("Shopier işlemleri yüklenemedi.");
-      return ownerTransactionsSchema.parse(await response.json());
-    },
+    queryFn: async ({ signal }): Promise<OwnerTransactions> => ownerTransactionsSchema.parse(
+      await (await ownerFetch(`/api/yonetim/transactions?${new URLSearchParams({ from, to })}`, { signal }, "Shopier işlemleri yüklenemedi.")).json()),
     staleTime: 30_000,
   });
 }
 
-export async function fetchOwnerCatalog(signal?: AbortSignal): Promise<OwnerCatalogSnapshot> {
-  const response = await fetch("/api/yonetim/courses", { signal, cache: "no-store" });
-  if (!response.ok) throw new Error("Yönetim verileri yenilenemedi.");
-  return ownerCatalogSnapshotSchema.parse(await response.json());
-}
+export const updateOwnerCourse = (courseId: string, change: CourseChange) => ownerFetch(`/api/yonetim/courses/${courseId}`,
+  { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) }, "Değişiklik kaydedilemedi.");
+export const syncOwnerCatalog = () => ownerFetch("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.");
 
 export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
   return queryOptions({
     queryKey: ownerQueryKeys.catalog(),
-    queryFn: ({ signal }) => fetchOwnerCatalog(signal),
+    queryFn: async ({ signal }) => ownerCatalogSnapshotSchema.parse(await (await ownerFetch("/api/yonetim/courses", { signal }, "Yönetim verileri yenilenemedi.")).json()),
     initialData,
     staleTime: 20_000,
   });

@@ -3,16 +3,9 @@ import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { adminAuditLog, courses, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
+import { lessonInput } from "./owner-forms.ts";
 
 // The boundary authorizes an owner before calling these audited commands.
-export const lessonInput = z.object({
-  courseId: z.uuid(), lessonId: z.uuid(), title: z.string().trim().min(1).max(160),
-  description: z.string().trim().max(10000), position: z.coerce.number().int().min(0).max(1000),
-  status: z.enum(["draft", "published"]),
-  startsAt: z.string().default(""), durationMinutes: z.coerce.number().int().min(1).max(1440).default(60),
-  joinUrl: z.string().trim().max(2048).default(""), passcode: z.string().trim().max(100).default(""),
-  liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]).default("scheduled"),
-});
 
 export async function ownerLessons(db: Database, courseId: string) {
   return db.select({ lesson: lessons, live: liveSessions, asset: videoAssets }).from(lessons)

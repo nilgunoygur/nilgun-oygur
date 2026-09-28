@@ -279,3 +279,34 @@ test("the composed Akademi claims orders through Shopier, limits attempts and re
   assert.deepEqual([replay.orders, replay.purchases, replay.granted], [1, 1, 1]);
   assert.deepEqual(await akademi.access.replayRecentOrders().then(r => r.granted), 0, "replays are idempotent");
 });
+
+test("a Shopier checkout fills only an empty phone and address; odd contact values never block the grant", async () => {
+  await db.insert(schema.user).values([
+    { id: "contact-new", name: "N", email: "contact-new@example.com", emailVerified: true },
+    { id: "contact-set", name: "S", email: "contact-set@example.com", emailVerified: true, phone: "+905051112233", city: "Ankara", district: "Çankaya", address: "Kızılay Mah. Atatürk Blv. No: 1" },
+    { id: "contact-claim", name: "C", email: "contact-claim@example.com", emailVerified: true },
+  ]);
+  const contactOf = async (id) => {
+    const [row] = await db.select({ phone: schema.user.phone, city: schema.user.city, district: schema.user.district, address: schema.user.address, postcode: schema.user.postcode }).from(schema.user).where(eq(schema.user.id, id));
+    return row;
+  };
+  // A landline in billing is skipped for the mobile in shipping; a postcode from another province is dropped.
+  const checkout = { phone: "532 123 45 67", address: "Moda Cad. No: 12 Daire 3", district: "KADIKÖY", city: "ISTANBUL", postcode: "06100", country: "Türkiye" };
+  assert.equal((await recordShopierOrder(db, order({ billingInfo: { phone: "0216 123 45 67" }, shippingInfo: { email: "contact-new@example.com", ...checkout } }))).granted, 1);
+  assert.deepEqual(await contactOf("contact-new"), { phone: "+905321234567", city: "İstanbul", district: "Kadıköy", address: "Moda Cad. No: 12 Daire 3", postcode: null });
+
+  const before = await contactOf("contact-set");
+  await recordShopierOrder(db, order({ shippingInfo: { email: "contact-set@example.com", ...checkout } }));
+  assert.deepEqual(await contactOf("contact-set"), before, "what the student entered is never overwritten");
+
+  await db.update(schema.user).set({ district: null, city: null, address: null }).where(eq(schema.user.id, "contact-new"));
+  await recordShopierOrder(db, order({ shippingInfo: { email: "contact-new@example.com", ...checkout, district: "Çankaya" } }));
+  assert.equal((await contactOf("contact-new")).city, null, "a district outside the province leaves the address for the student");
+
+  const odd = order({ shippingInfo: { email: "contact-new@example.com", phone: { nested: true }, city: 34 } });
+  assert.equal((await recordShopierOrder(db, odd)).granted, 1);
+
+  const gift = order({ shippingInfo: { email: "gift-contact@example.com", ...checkout, postcode: "34710" } });
+  assert.equal(await claimShopierOrder(db, gift, "gift-contact@example.com", "contact-claim"), "granted");
+  assert.deepEqual(await contactOf("contact-claim"), { phone: "+905321234567", city: "İstanbul", district: "Kadıköy", address: "Moda Cad. No: 12 Daire 3", postcode: "34710" }, "claiming by order number adopts the checkout contact too");
+});

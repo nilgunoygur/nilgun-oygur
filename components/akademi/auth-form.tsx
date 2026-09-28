@@ -1,110 +1,115 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
-import { authDestination, authErrorMessage } from "@/lib/auth/navigation";
+import { authDestination, callbackURL } from "@/lib/auth/navigation";
+import { backupCodeSchema, emailLinkSchema, loginSchema, resetSchema, totpSchema } from "@/lib/auth/forms";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { formStack } from "@/lib/styles";
+import { authAttempt, AuthSubmit, CheckboxField, EmailField, FormMessage, FormShell, PasswordField, TextField } from "./form-fields";
+
+const RegisterForm = dynamic(() => import("./register-form"));
 
 export type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 const inboxHint = "Gelen kutunuzu ve spam klasörünüzü kontrol edin.";
-const labels = { login: "Giriş yap", register: "Hesap oluştur", forgot: "Yenileme bağlantısı gönder", reset: "Şifremi yenile", verify: "Doğrulama bağlantısı gönder" };
 
 export function AuthForm({ mode, configured, localEmail = false, token, destination, initialMessage }: {
   mode: AuthMode; configured: boolean; localEmail?: boolean; token?: string; destination?: string; initialMessage?: string;
 }) {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState(initialMessage ?? "");
-  const [mfa, setMfa] = useState(false);
-  const [backup, setBackup] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [notice, setNotice] = useState(initialMessage ?? "");
   const [done, setDone] = useState(false);
   const invalidReset = mode === "reset" && !token;
-  const sent = (link: string, message: string) => setMessage(localEmail ? `Yerel test ${link} bağlantısı, pnpm run dev komutunun çalıştığı terminale yazdırıldı.` : `${message} ${inboxHint}`);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending || !configured || invalidReset) return;
-    const data = new FormData(event.currentTarget);
-    setError(""); setMessage("");
-    if ((mode === "reset" || mode === "register") && data.get("password") !== data.get("confirmPassword")) {
-      setError("Şifreler eşleşmiyor."); return;
-    }
-    setPending(true);
-    try {
-      const email = String(data.get("email") ?? "").trim();
-      const password = String(data.get("password") ?? "");
-      const callbackURL = "/akademi/giris?verified=1";
-      if (mfa) {
-        const code = String(data.get("code") ?? "").trim();
-        const result = backup ? await authClient.twoFactor.verifyBackupCode({ code }) : await authClient.twoFactor.verifyTotp({ code, trustDevice: false });
-        if (result.error) { setError(authErrorMessage(result.error)); return; }
-        track("login", { method: "email" });
-        router.replace(authDestination(destination)); router.refresh();
-      } else if (mode === "login") {
-        const result = await authClient.signIn.email({ email, password, rememberMe: remember });
-        if (result.error) { setError(authErrorMessage(result.error)); return; }
-        if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) { setMfa(true); return; }
-        track("login", { method: "email" });
-        router.replace(authDestination(destination)); router.refresh();
-      } else if (mode === "register") {
-        const result = await authClient.signUp.email({ name: String(data.get("name")).trim(), email, password, callbackURL });
-        if (result.error) { setError(authErrorMessage(result.error)); return; }
-        track("sign_up", { method: "email" });
-        sent("doğrulama", "Adresinizle hesap oluşturulabiliyorsa doğrulama bağlantısı gönderilecektir."); setDone(true);
-      } else if (mode === "forgot") {
-        const result = await authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" });
-        if (result.error) { setError(authErrorMessage(result.error)); return; }
-        sent("şifre yenileme", "Bu adresle bir hesabınız varsa şifre yenileme bağlantısı gönderilecektir."); setDone(true);
-      } else if (mode === "verify") {
-        const result = await authClient.sendVerificationEmail({ email, callbackURL });
-        if (result.error) { setError(authErrorMessage(result.error)); return; }
-        sent("doğrulama", "Adresiniz doğrulanmayı bekliyorsa yeni bir bağlantı gönderilecektir."); setDone(true);
-      } else {
-        const result = await authClient.resetPassword({ newPassword: password, token: token! });
-        if (result.error) { setError(authErrorMessage(result.error)); return; }
-        router.replace("/akademi/giris?reset=1");
-      }
-    } catch { setError("Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip yeniden deneyin."); }
-    finally { setPending(false); }
-  }
-
+  const sent = (link: string, text: string) => {
+    setNotice(localEmail ? `Yerel test ${link} bağlantısı, pnpm run dev komutunun çalıştığı terminale yazdırıldı.` : `${text} ${inboxHint}`);
+    setDone(true);
+  };
+  const disabled = !configured || invalidReset;
   return (
-    <div className={formStack}>
+    <div className="flex flex-col gap-[22px]">
       {!configured && <Alert><AlertDescription>Akademi hesapları henüz kullanıma açılmadı. Yakında buradan hesabınızı oluşturabilirsiniz.</AlertDescription></Alert>}
       {invalidReset && <Alert variant="destructive"><AlertDescription>Şifre yenileme bağlantısı geçersiz veya eksik. <Link href="/akademi/sifremi-unuttum" className="underline underline-offset-4">Yeni bağlantı isteyin.</Link></AlertDescription></Alert>}
-      {message && <div role="status"><Alert><AlertDescription>{message}</AlertDescription></Alert></div>}
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-      {!done && <form onSubmit={submit} aria-busy={pending}>
-        <FieldGroup>
-          {mfa ? <Field>
-            <FieldLabel htmlFor="code">{backup ? "Kurtarma kodu" : "Doğrulama kodu"}</FieldLabel>
-            <Input key={backup ? "backup" : "totp"} id="code" name="code" autoComplete="one-time-code" inputMode={backup ? "text" : "numeric"} pattern={backup ? undefined : "[0-9]{6}"} minLength={backup ? undefined : 6} maxLength={backup ? 64 : 6} required autoFocus disabled={pending} aria-invalid={!!error} />
-            <FieldDescription>{backup ? "Kaydettiğiniz kullanılmamış kurtarma kodlarından birini girin." : "Doğrulayıcı uygulamanızdaki 6 haneli kodu girin."}</FieldDescription>
-            <Button type="button" variant="link" onClick={() => { setBackup(!backup); setError(""); }} disabled={pending}>{backup ? "Doğrulayıcı uygulamasını kullan" : "Kurtarma kodu kullan"}</Button>
-          </Field> : <>
-            {mode === "register" && <Field><FieldLabel htmlFor="name">Adınız soyadınız</FieldLabel><Input id="name" name="name" autoComplete="name" required maxLength={100} disabled={pending || !configured} /></Field>}
-            {mode !== "reset" && <Field><FieldLabel htmlFor="email">E-posta adresiniz</FieldLabel><Input id="email" name="email" type="email" autoComplete="email" required maxLength={254} placeholder="ornek@eposta.com" disabled={pending || !configured} /></Field>}
-            {(mode === "login" || mode === "register" || mode === "reset") && <Field><FieldLabel htmlFor="password">{mode === "reset" ? "Yeni şifreniz" : "Şifreniz"}</FieldLabel><div className="relative"><Input id="password" name="password" type={passwordVisible ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} maxLength={128} className="pr-11" disabled={pending || !configured || invalidReset} /><button type="button" className="absolute top-1/2 right-1 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-stone transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50" onClick={() => setPasswordVisible(value => !value)} disabled={pending || !configured || invalidReset} aria-label={passwordVisible ? "Şifreyi gizle" : "Şifreyi göster"} aria-pressed={passwordVisible}>{passwordVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button></div><FieldDescription>En az 8 karakter.</FieldDescription></Field>}
-            {(mode === "register" || mode === "reset") && <Field data-invalid={error === "Şifreler eşleşmiyor."}><FieldLabel htmlFor="confirmPassword">Şifrenizi tekrar girin</FieldLabel><Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={128} aria-invalid={error === "Şifreler eşleşmiyor."} disabled={pending || !configured || invalidReset} /></Field>}
-            {mode === "login" && <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap"><Field orientation="horizontal" className="w-auto"><Checkbox id="remember" checked={remember} onCheckedChange={setRemember} disabled={pending || !configured} /><FieldLabel htmlFor="remember">Beni hatırla</FieldLabel></Field><Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link></div>}
-          </>}
-          <Button type="submit" size="pill" className="w-full min-h-12" disabled={pending || !configured || invalidReset}>{pending ? <LoaderCircle data-icon="inline-start" className="animate-spin motion-reduce:animate-none" /> : null}{pending ? "Lütfen bekleyin…" : mfa ? "Doğrula ve giriş yap" : labels[mode]}{!pending && <ArrowRight data-icon="inline-end" />}</Button>
-        </FieldGroup>
-      </form>}
+      {notice && <div role="status"><Alert><AlertDescription>{notice}</AlertDescription></Alert></div>}
+      {!done && (mode === "login" ? <LoginForm disabled={disabled} destination={destination} onSubmitStart={() => setNotice("")} />
+        : mode === "register" ? <RegisterForm disabled={disabled} onSent={() => sent("doğrulama", "Adresinizle hesap oluşturulabiliyorsa doğrulama bağlantısı gönderilecektir.")} />
+        : mode === "reset" ? <ResetForm disabled={disabled} token={token} />
+        : <EmailLinkForm mode={mode} disabled={disabled} onSent={sent} />)}
       <nav className="flex flex-col gap-4 text-center text-[14px] [&_a]:underline [&_a]:underline-offset-4" aria-label="Hesap işlemleri">
         {mode === "login" ? <><span>Henüz hesabınız yok mu? <Link href="/akademi/kayit">Hesap oluşturun</Link></span><Link href="/akademi/dogrulama">Doğrulama e-postasını yeniden gönder</Link></> : <Link href="/akademi/giris">Giriş sayfasına dön</Link>}
       </nav>
     </div>
   );
+}
+
+function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean; destination?: string; onSubmitStart: () => void }) {
+  const router = useRouter();
+  const [mfa, setMfa] = useState<"totp" | "backup" | null>(null);
+  const form = useForm({ resolver: zodResolver(loginSchema), mode: "onTouched", defaultValues: { email: "", password: "", remember: true } });
+  const enter = () => { track("login", { method: "email" }); router.replace(authDestination(destination)); router.refresh(); };
+  if (mfa) return <CodeForm key={mfa} backup={mfa === "backup"} onToggle={() => setMfa(mfa === "backup" ? "totp" : "backup")} onVerified={enter} />;
+
+  const submit = form.handleSubmit(async ({ email, password, remember }) => {
+    onSubmitStart();
+    const result = await authAttempt(form, () => authClient.signIn.email({ email, password, rememberMe: remember }));
+    if (!result) return;
+    if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) setMfa("totp"); else enter();
+  });
+  return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
+    <FormMessage />
+    <EmailField control={form.control} name="email" />
+    <PasswordField control={form.control} name="password" label="Şifreniz" autoComplete="current-password" />
+    <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap">
+      <CheckboxField control={form.control} name="remember" label="Beni hatırla" className="w-auto" />
+      <Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link>
+    </div>
+    <AuthSubmit>Giriş yap</AuthSubmit>
+  </FormShell>;
+}
+
+function CodeForm({ backup, onToggle, onVerified }: { backup: boolean; onToggle: () => void; onVerified: () => void }) {
+  const form = useForm({ resolver: zodResolver(backup ? backupCodeSchema : totpSchema), mode: "onTouched", defaultValues: { code: "" } });
+  const submit = form.handleSubmit(async ({ code }) => {
+    if (await authAttempt(form, () => backup ? authClient.twoFactor.verifyBackupCode({ code }) : authClient.twoFactor.verifyTotp({ code, trustDevice: false }))) onVerified();
+  });
+  return <FormShell form={form} onSubmit={submit} size="lg">
+    <FormMessage />
+    <TextField control={form.control} name="code" label={backup ? "Kurtarma kodu" : "Doğrulama kodu"} autoComplete="one-time-code" inputMode={backup ? "text" : "numeric"} maxLength={backup ? 64 : 6} autoFocus
+      description={backup ? "Kaydettiğiniz kullanılmamış kurtarma kodlarından birini girin." : "Doğrulayıcı uygulamanızdaki 6 haneli kodu girin."} />
+    <Button type="button" variant="link" onClick={onToggle}>{backup ? "Doğrulayıcı uygulamasını kullan" : "Kurtarma kodu kullan"}</Button>
+    <AuthSubmit>Doğrula ve giriş yap</AuthSubmit>
+  </FormShell>;
+}
+
+function EmailLinkForm({ mode, disabled, onSent }: { mode: "forgot" | "verify"; disabled: boolean; onSent: (link: string, text: string) => void }) {
+  const form = useForm({ resolver: zodResolver(emailLinkSchema), mode: "onTouched", defaultValues: { email: "" } });
+  const forgot = mode === "forgot";
+  const submit = form.handleSubmit(async ({ email }) => {
+    const call = () => forgot ? authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" }) : authClient.sendVerificationEmail({ email, callbackURL });
+    if (!await authAttempt(form, call)) return;
+    if (forgot) onSent("şifre yenileme", "Bu adresle bir hesabınız varsa şifre yenileme bağlantısı gönderilecektir.");
+    else onSent("doğrulama", "Adresiniz doğrulanmayı bekliyorsa yeni bir bağlantı gönderilecektir.");
+  });
+  return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
+    <FormMessage />
+    <EmailField control={form.control} name="email" />
+    <AuthSubmit>{forgot ? "Yenileme bağlantısı gönder" : "Doğrulama bağlantısı gönder"}</AuthSubmit>
+  </FormShell>;
+}
+
+function ResetForm({ disabled, token }: { disabled: boolean; token?: string }) {
+  const router = useRouter();
+  const form = useForm({ resolver: zodResolver(resetSchema), mode: "onTouched", defaultValues: { password: "", confirmPassword: "" } });
+  const submit = form.handleSubmit(async ({ password }) => {
+    if (await authAttempt(form, () => authClient.resetPassword({ newPassword: password, token: token! }))) router.replace("/akademi/giris?reset=1");
+  });
+  return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
+    <FormMessage />
+    <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
+    <PasswordField control={form.control} name="confirmPassword" label="Şifrenizi tekrar girin" autoComplete="new-password" />
+    <AuthSubmit>Şifremi yenile</AuthSubmit>
+  </FormShell>;
 }
