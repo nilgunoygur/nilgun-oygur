@@ -1,18 +1,21 @@
 "use client";
 import { useLayoutEffect, useRef, useState, type Ref } from "react";
-import Image from "next/image";
+import "flag-icons/css/flag-icons.min.css";
 import { callingCode, groupNational, phoneCountries, splitPhone, type CountryCode, type PhoneCountry } from "@/lib/phone";
 import { matchesTurkish } from "@/lib/turkiye";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxList, ComboboxTrigger } from "@/components/ui/combobox";
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
 import { picker, PickerSearch } from "./searchable-select";
+import { cn } from "@/lib/utils";
 
 const countries = phoneCountries();
 const byCode = new Map(countries.map(country => [country.code, country]));
 const digitCount = (text: string) => text.replace(/\D/g, "").length;
 
+// flag-icons keeps Ascension and Tristan da Cunha under Saint Helena; each SVG loads only when shown.
+const flagClass: Partial<Record<CountryCode, string>> = { AC: "sh-ac", TA: "sh-ta" };
 function Flag({ code }: { code: CountryCode }) {
-  return <Image src={`/flags/${code}.svg`} alt="" width={21} height={14} unoptimized className="h-3.5 w-[21px] shrink-0 rounded-[3px] object-cover ring-1 ring-black/10" />;
+  return <span aria-hidden className={cn("fi shrink-0 rounded-[3px] bg-cover text-[14px] ring-1 ring-black/10", `fi-${flagClass[code] ?? code.toLowerCase()}`)} />;
 }
 
 // Digits search the dial code ("49" → Almanya); letters search Turkish names or ISO codes.

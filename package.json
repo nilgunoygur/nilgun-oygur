@@ -15,8 +15,7 @@
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
     "email:dev": "email dev --dir emails --port 3001",
-    "turkiye:districts": "node scripts/generate-turkiye-districts.mjs",
-    "flags": "node scripts/generate-flags.mjs"
+    "turkiye:districts": "node scripts/generate-turkiye-districts.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -41,6 +40,7 @@
     "cn": "^0.3.0",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
+    "flag-icons": "^7.5.0",
     "lexical": "^0.51.0",
     "libphonenumber-js": "^1.13.14",
     "lucide-react": "^1.46.0",
@@ -71,7 +71,6 @@
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "country-flag-icons": "1.6.20",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
