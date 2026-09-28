@@ -13,7 +13,8 @@ export const picker = {
   list: "max-h-[min(17rem,calc(var(--available-height)-3.5rem))] scroll-py-2 p-2",
   item: "min-h-10 gap-2.5 rounded-lg py-2 pr-9 pl-3 text-[15px] md:text-sm",
   empty: "px-4 py-6",
-  trigger: "flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-left text-base transition-colors outline-none hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 data-popup-open:border-ring aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm",
+  // px-2.5 like Input, so selected text lines up with the typed fields around it.
+  trigger: "flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-left text-base transition-colors outline-none hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 data-popup-open:border-ring aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm",
 };
 
 export function PickerSearch({ placeholder }: { placeholder: string }) {

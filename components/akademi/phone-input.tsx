@@ -4,7 +4,7 @@ import Image from "next/image";
 import { callingCode, groupNational, phoneCountries, splitPhone, type CountryCode } from "@/lib/phone";
 import { matchesTurkish } from "@/lib/turkiye";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxList, ComboboxTrigger } from "@/components/ui/combobox";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
 import { picker, PickerSearch } from "./searchable-select";
 
 type Country = (typeof phoneCountries)[number];
@@ -51,10 +51,14 @@ export function PhoneInput({ id, value, onChange, onBlur, ref, invalid, onZeroRe
   };
   const selected = byCode.get(country) ?? phoneCountries[0];
 
-  return <InputGroup className="has-[[data-slot=input-group-addon]]:pl-0">
-    <InputGroupAddon className="self-stretch py-1.5 pl-1.5">
+  // One field, two segments: the country picker fills the left edge (its hover tint is clipped by the field's corners)
+  // and a full-height divider separates it from the number. Flag and number each start 10px in, like every input's text.
+  // A plain wrapper, not InputGroupAddon: the addon's negative margin and tighter input padding would break the alignment.
+  return <InputGroup className="overflow-hidden">
+    <div className="flex self-stretch">
       <Combobox items={phoneCountries} value={selected} onValueChange={next => { if (next) update(next.code, digits); }} filter={matchesCountry} itemToStringLabel={item => item.name} autoHighlight>
-        <ComboboxTrigger aria-label={`Ülke kodu: ${selected.name} ${selected.dial}`} className="flex h-full items-center gap-1.5 rounded-md px-2 text-sm font-medium text-foreground transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none data-popup-open:bg-muted">
+        {/* Its own slot, so the form-wide picker sizing (min-h-12) does not apply to it. */}
+        <ComboboxTrigger data-slot="phone-country-trigger" aria-label={`Ülke kodu: ${selected.name} ${selected.dial}`} className="flex h-full items-center gap-1.5 border-r border-input px-2.5 text-base font-medium text-foreground transition-colors outline-none hover:bg-muted/70 focus-visible:bg-muted/70 disabled:pointer-events-none data-popup-open:bg-muted/70 md:text-sm">
           <Flag code={selected.code} /><span className="tabular-nums">{selected.dial}</span>
         </ComboboxTrigger>
         <ComboboxContent align="start" className={`${picker.content} w-80 min-w-0 max-w-[calc(100vw-2rem)]`}>
@@ -67,7 +71,7 @@ export function PhoneInput({ id, value, onChange, onBlur, ref, invalid, onZeroRe
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
-    </InputGroupAddon>
+    </div>
     <InputGroupInput ref={ref} id={id} type="tel" inputMode="tel" autoComplete="tel-national" placeholder={country === "TR" ? "532 123 45 67" : ""}
       value={groupNational(country, digits)} onChange={event => type(event.target.value)} onBlur={onBlur} aria-invalid={invalid || undefined} className="tabular-nums" />
   </InputGroup>;

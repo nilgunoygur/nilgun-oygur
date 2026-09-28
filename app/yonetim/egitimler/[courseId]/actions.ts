@@ -6,6 +6,7 @@ import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, lessons, videoAssets } from "@/lib/db/schema";
 import { createLessons, updateLesson } from "@/lib/akademi/lesson-editor";
+import type { lessonInput } from "@/lib/akademi/owner-forms";
 import { muxRequest, videoConfigured } from "@/lib/video/mux";
 import { config } from "@/lib/config";
 import type { FormState } from "@/components/akademi/form-status";
@@ -25,10 +26,10 @@ export async function addLessons(_: FormState, form: FormData): Promise<FormStat
     return { status: "success", message: "Taslak dersler eklendi. İçerikleri hazırlayıp yayınlayabilirsiniz." };
   } catch (error) { return report(error); }
 }
-export async function saveLesson(_: FormState, form: FormData): Promise<FormState> {
+export async function saveLesson(values: z.input<typeof lessonInput>): Promise<FormState> {
   try {
     const viewer = await requireOwner();
-    const input = await updateLesson(getDatabase(), viewer.user.id, Object.fromEntries(form));
+    const input = await updateLesson(getDatabase(), viewer.user.id, values);
     changed(input.courseId);
     return { status: "success", message: input.status === "published" ? "Ders öğrencilerinize açıldı." : "Taslak kaydedildi." };
   } catch (error) { return report(error); }

@@ -3,6 +3,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/viewer";
 import { akademi, catalogChangedByOwner } from "@/lib/akademi/server";
+import { courseAccessSchema, coursePriceSchema } from "@/lib/akademi/owner-forms";
 
 const statusSchema = z.object({ courseId: z.uuid(), status: z.enum(["draft", "published", "archived"]) });
 
@@ -13,12 +14,12 @@ export async function setCourseStatus(formData: FormData) {
   refresh();
 }
 
-const accessSchema = z.object({ courseId: z.uuid(), accessDays: z.coerce.number().int().min(1).max(3650) });
+const accessSchema = courseAccessSchema.extend({ courseId: z.uuid() });
 
-export async function setAccessDuration(formData: FormData) {
+export async function setAccessDuration(input: z.input<typeof accessSchema>) {
   const viewer = await requireOwner();
-  const { courseId, accessDays } = accessSchema.parse({ courseId: formData.get("courseId"), accessDays: formData.get("accessDays") });
-  if (await akademi().owner.setAccessDuration(viewer.user.id, courseId, accessDays)) catalogChangedByOwner();
+  const { courseId, value } = accessSchema.parse(input);
+  if (await akademi().owner.setAccessDuration(viewer.user.id, courseId, value)) catalogChangedByOwner();
   refresh();
 }
 
@@ -29,12 +30,12 @@ export async function syncCatalogNow() {
   refresh();
 }
 
-const priceSchema = z.object({ courseId: z.uuid(), price: z.coerce.number().min(1).max(10_000_000) });
+const priceSchema = coursePriceSchema.extend({ courseId: z.uuid() });
 
-export async function updateCoursePrice(formData: FormData) {
+export async function updateCoursePrice(input: z.input<typeof priceSchema>) {
   const viewer = await requireOwner();
-  const { courseId, price } = priceSchema.parse({ courseId: formData.get("courseId"), price: formData.get("price") });
-  await akademi().owner.updateCoursePrice(viewer.user.id, courseId, Math.round(price * 100));
+  const { courseId, value } = priceSchema.parse(input);
+  await akademi().owner.updateCoursePrice(viewer.user.id, courseId, Math.round(value * 100));
   catalogChangedByOwner();
   refresh();
 }

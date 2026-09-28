@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, MoreHorizontal, Pencil, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
@@ -13,12 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { courseAccessSchema, coursePriceSchema } from "@/lib/akademi/owner-forms";
+import { TextField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
 type Edit = { kind: "price" | "access"; course: OwnerCourse } | null;
@@ -54,9 +58,9 @@ export function OwnerCourseManagement({ initialData }: { initialData: OwnerCatal
   });
   const sync = useMutation({ mutationFn: syncCatalogNow, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onSettled: refresh, onError: () => toast.error("Shopier eşitlemesi başarısız oldu.") });
   const edit = useMutation({
-    mutationFn: ({ kind, course, value }: { kind: "price" | "access"; course: OwnerCourse; value: string }) => kind === "price"
-      ? updateCoursePrice(formData({ courseId: course.id, price: value }))
-      : setAccessDuration(formData({ courseId: course.id, accessDays: value })),
+    mutationFn: ({ kind, course, value }: { kind: "price" | "access"; course: OwnerCourse; value: number }) => kind === "price"
+      ? updateCoursePrice({ courseId: course.id, value })
+      : setAccessDuration({ courseId: course.id, value }),
     onSuccess: () => { setEditing(null); toast.success("Değişiklik kaydedildi."); },
     onSettled: refresh,
     onError: error => toast.error(error instanceof Error ? error.message : "Değişiklik kaydedilemedi."),
@@ -98,6 +102,21 @@ export function OwnerCourseManagement({ initialData }: { initialData: OwnerCatal
       {data.attention.length > 0 && <TabsContent value="attention"><Card className="border-destructive/30"><CardHeader><CardTitle>İşlem bekleyen bildirimler</CardTitle><CardDescription>Yeniden işlenmesi veya incelenmesi gereken Shopier bildirimleri</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Tarih</TableHead><TableHead>Bildirim</TableHead><TableHead>Deneme</TableHead><TableHead>Hata</TableHead></TableRow></TableHeader><TableBody>{data.attention.map(item => <TableRow key={item.eventIdentity}><TableCell>{dateTimeLabel.format(new Date(item.at))}</TableCell><TableCell>{item.eventIdentity}</TableCell><TableCell>{item.attempts}</TableCell><TableCell className="max-w-sm text-xs text-muted-foreground">{item.error ?? "Hata ayrıntısı yok"}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card></TabsContent>}
     </Tabs>
 
-    <Dialog open={Boolean(editing)} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent><DialogHeader><DialogTitle>{editing?.kind === "price" ? "Shopier fiyatını değiştir" : "Erişim süresini değiştir"}</DialogTitle><DialogDescription>{editing?.course.title}</DialogDescription></DialogHeader>{editing && <form key={`${editing.kind}-${editing.course.id}`} onSubmit={event => { event.preventDefault(); const values = new FormData(event.currentTarget); edit.mutate({ kind: editing.kind, course: editing.course, value: String(values.get("value")) }); }}><FieldGroup><Field><FieldLabel htmlFor="course-setting">{editing.kind === "price" ? "Yeni fiyat (₺)" : "Erişim süresi (gün)"}</FieldLabel><Input id="course-setting" name="value" type="number" min={1} max={editing.kind === "price" ? 10000000 : 3650} step={editing.kind === "price" ? "0.01" : "1"} defaultValue={editing.kind === "price" ? ((editing.course.priceKurus ?? 0) / 100).toFixed(2) : editing.course.accessDurationDays} required autoFocus /><FieldDescription>{editing.kind === "price" ? "Fiyat Shopier ürününde güncellenir ve katalog yenilenir." : "Satın alanların eğitime erişim süresi."}</FieldDescription></Field></FieldGroup><DialogFooter className="mt-6"><Button type="submit" disabled={edit.isPending}>{edit.isPending ? <Spinner /> : null}Kaydet</Button></DialogFooter></form>}</DialogContent></Dialog>
+    <Dialog open={Boolean(editing)} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent><DialogHeader><DialogTitle>{editing?.kind === "price" ? "Shopier fiyatını değiştir" : "Erişim süresini değiştir"}</DialogTitle><DialogDescription>{editing?.course.title}</DialogDescription></DialogHeader>{editing && <CourseSettingForm key={`${editing.kind}-${editing.course.id}`} kind={editing.kind} course={editing.course} pending={edit.isPending} onSave={value => edit.mutate({ kind: editing.kind, course: editing.course, value })} />}</DialogContent></Dialog>
   </>;
+}
+
+function CourseSettingForm({ kind, course, pending, onSave }: { kind: "price" | "access"; course: OwnerCourse; pending: boolean; onSave: (value: number) => void }) {
+  const price = kind === "price";
+  const form = useForm({
+    resolver: zodResolver(price ? coursePriceSchema : courseAccessSchema), mode: "onTouched",
+    defaultValues: { value: price ? ((course.priceKurus ?? 0) / 100).toFixed(2) : String(course.accessDurationDays) },
+  });
+  return <form onSubmit={form.handleSubmit(({ value }) => onSave(value))} noValidate aria-busy={pending}>
+    <fieldset disabled={pending} className="contents"><FieldGroup>
+      <TextField control={form.control} name="value" label={price ? "Yeni fiyat (₺)" : "Erişim süresi (gün)"} type="number" inputMode="decimal" step={price ? "0.01" : "1"} autoFocus
+        description={price ? "Fiyat Shopier ürününde güncellenir ve katalog yenilenir." : "Satın alanların eğitime erişim süresi."} />
+    </FieldGroup></fieldset>
+    <DialogFooter className="mt-6"><Button type="submit" disabled={pending}>{pending ? <Spinner /> : null}Kaydet</Button></DialogFooter>
+  </form>;
 }

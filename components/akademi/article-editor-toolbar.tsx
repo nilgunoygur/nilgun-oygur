@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller, useForm } from "react-hook-form";
 import {
   $createParagraphNode, $getRoot, $getSelection, $isElementNode, $isRangeSelection, $isTextNode, $setSelection,
   CAN_REDO_COMMAND, CAN_UNDO_COMMAND, COMMAND_PRIORITY_LOW, FORMAT_ELEMENT_COMMAND, FORMAT_TEXT_COMMAND, REDO_COMMAND, UNDO_COMMAND,
@@ -20,12 +22,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { imageInsertSchema, linkSchema } from "@/lib/akademi/owner-forms";
 import { $createArticleImageNode } from "./article-image-node";
+import { TextField } from "./form-fields";
 import { ImageLibrary, ImageUploadButton, imageRules, type ImageChoice, type UploadImage } from "./image-library";
 
 type Block = "paragraph" | "h2" | "h3" | "h4" | "quote" | "bullet" | "number";
@@ -125,11 +129,14 @@ export function useFormatState() {
   return state;
 }
 
+/** Submits this form only: React bubbles events through portals, and these forms sit inside the article form. */
+const isolated = (submit: (event?: FormEvent) => Promise<void>) => (event: FormEvent) => { event.stopPropagation(); void submit(event); };
+
 /** Focus leaves the editor while typing a URL, so the selection is saved on open and restored on save. */
 export function LinkForm({ initial, onDone }: { initial: string | null; onDone: () => void }) {
   const [editor] = useLexicalComposerContext();
   const [saved] = useState(() => editor.getEditorState().read(() => $getSelection()?.clone() ?? null));
-  const [value, setValue] = useState(initial ?? "");
+  const form = useForm({ resolver: zodResolver(linkSchema), defaultValues: { url: initial ?? "" } });
   const apply = (url: string | null) => {
     editor.update(() => {
       if (saved) $setSelection(saved.clone());
@@ -138,9 +145,14 @@ export function LinkForm({ initial, onDone }: { initial: string | null; onDone: 
     onDone();
     editor.focus();
   };
-  // stopPropagation: React bubbles through the portal to the article form.
-  return <form className="flex items-center gap-1.5" onSubmit={event => { event.preventDefault(); event.stopPropagation(); apply(normalizeUrl(value)); }}>
-    <Input autoFocus value={value} onChange={event => setValue(event.target.value)} placeholder="ornek.com veya /blog/yazi" aria-label="Bağlantı adresi" className="h-8 w-60 text-sm" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); onDone(); editor.focus(); } }} />
+  return <form className="flex items-start gap-1.5" noValidate onSubmit={isolated(form.handleSubmit(({ url }) => apply(normalizeUrl(url))))}>
+    <Controller control={form.control} name="url" render={({ field, fieldState }) => (
+      <Field data-invalid={fieldState.invalid} className="w-60 gap-1">
+        <Input {...field} autoFocus placeholder="ornek.com veya /blog/yazi" aria-label="Bağlantı adresi" aria-invalid={fieldState.invalid} className="h-8 text-sm"
+          onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); onDone(); editor.focus(); } }} />
+        {fieldState.invalid && <FieldError errors={[fieldState.error]} className="text-xs" />}
+      </Field>
+    )} />
     <Button type="submit" size="icon-sm" aria-label="Bağlantıyı kaydet"><Check /></Button>
     {initial && <Button type="button" size="sm" variant="ghost" onClick={() => apply(null)}>Kaldır</Button>}
   </form>;
@@ -204,13 +216,20 @@ export function ImageDialog({ open, onOpenChange, images, upload, onInsert }: { 
 }
 
 function ImagePicker({ images, upload, onInsert }: { images: ImageChoice[]; upload: UploadImage; onInsert: (src: string, alt: string) => void }) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [alt, setAlt] = useState("");
-  const choose = (choice: ImageChoice) => { setSelected(choice.url); if (!alt) setAlt(choice.name.replace(/\.[a-z0-9]+$/i, "")); };
-  return <>
+  const form = useForm({ resolver: zodResolver(imageInsertSchema), defaultValues: { src: "", alt: "" } });
+  const choose = (choice: ImageChoice) => {
+    form.setValue("src", choice.url, { shouldValidate: true });
+    if (!form.getValues("alt")) form.setValue("alt", choice.name.replace(/\.[a-z0-9]+$/i, ""));
+  };
+  return <form noValidate onSubmit={isolated(form.handleSubmit(({ src, alt }) => onInsert(src, alt)))}><FieldGroup className="gap-5">
     <div className="flex justify-end"><ImageUploadButton upload={upload} onUploaded={choose} label="Görsel yükle">Yeni görsel yükle</ImageUploadButton></div>
-    <ImageLibrary images={images} selected={selected} onSelect={choose} label="Görsel kütüphanesi" className="max-h-[46vh] overflow-y-auto p-0.5 lg:grid-cols-3" />
-    <Field><FieldLabel htmlFor="article-image-alt">Açıklama (alt metin)</FieldLabel><Input id="article-image-alt" value={alt} onChange={event => setAlt(event.target.value)} maxLength={160} placeholder="Görselde ne var?" /></Field>
-    <DialogFooter><Button type="button" disabled={!selected} onClick={() => { if (selected) onInsert(selected, alt.trim()); }}>Görseli ekle</Button></DialogFooter>
-  </>;
+    <Controller control={form.control} name="src" render={({ field, fieldState }) => (
+      <Field data-invalid={fieldState.invalid}>
+        <ImageLibrary images={images} selected={field.value || null} onSelect={choose} label="Görsel kütüphanesi" className="max-h-[46vh] overflow-y-auto p-0.5 lg:grid-cols-3" />
+        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+      </Field>
+    )} />
+    <TextField control={form.control} name="alt" label="Açıklama (alt metin)" maxLength={160} placeholder="Görselde ne var?" />
+    <DialogFooter><Button type="submit">Görseli ekle</Button></DialogFooter>
+  </FieldGroup></form>;
 }

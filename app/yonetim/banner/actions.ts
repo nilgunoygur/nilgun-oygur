@@ -1,55 +1,24 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { z } from "zod";
+import type { z } from "zod";
 import { defaultBanner, type BannerConfig } from "@/lib/announcements";
 import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { bannerSettings } from "@/lib/db/schema";
-
-const hexColor = z.string().regex(/^#[\da-fA-F]{6}$/);
-const itemSchema = z.object({
-  text: z.string().trim().min(3).max(180),
-  href: z.string().trim().max(500).refine(value => !value || /^\/(?!\/)[^\s]*$/.test(value) || /^https:\/\/[^\s]+$/.test(value), "Geçerli bir site yolu veya HTTPS bağlantısı girin.").transform(value => value || undefined),
-});
-const bannerSchema = z.object({
-  items: z.array(itemSchema).min(1).max(10),
-  backgroundColor: hexColor,
-  textColor: hexColor,
-  accentColor: hexColor,
-  animation: z.enum(["scroll", "fade", "static"]),
-  speedSeconds: z.coerce.number().int().min(2).max(30),
-  loop: z.boolean(),
-  pauseOnHover: z.boolean(),
-  direction: z.enum(["left", "right"]),
-  separator: z.string().trim().min(1).max(3),
-});
+import { bannerSchema } from "@/lib/akademi/owner-forms";
 
 export type BannerActionState = { message: string; error: boolean; isPublished: boolean };
 
-export async function saveBanner(previous: BannerActionState, formData: FormData): Promise<BannerActionState> {
+export async function saveBanner(intent: "save" | "publish" | "unpublish", values: z.input<typeof bannerSchema> | null, isPublished: boolean): Promise<BannerActionState> {
   await requireOwner();
-  const intent = formData.get("intent");
+  const previous = { message: "", error: false, isPublished };
   if (intent !== "save" && intent !== "publish" && intent !== "unpublish") return { ...previous, message: "Geçersiz işlem.", error: true };
   let draft: BannerConfig | undefined;
   if (intent !== "unpublish") {
-    let items: unknown;
-    try { items = JSON.parse(String(formData.get("items") ?? "")); }
-    catch { return { ...previous, message: "Duyuru metinleri okunamadı.", error: true }; }
-    const parsed = bannerSchema.safeParse({
-      items,
-      backgroundColor: formData.get("backgroundColor"),
-      textColor: formData.get("textColor"),
-      accentColor: formData.get("accentColor"),
-      animation: formData.get("animation"),
-      speedSeconds: formData.get("speedSeconds"),
-      loop: formData.get("loop") === "true",
-      pauseOnHover: formData.get("pauseOnHover") === "true",
-      direction: formData.get("direction"),
-      separator: formData.get("separator"),
-    });
+    const parsed = bannerSchema.safeParse(values);
     if (!parsed.success) return { ...previous, message: parsed.error.issues[0]?.message ?? "Banner ayarlarını kontrol edin.", error: true };
-    draft = parsed.data;
+    draft = { ...parsed.data, items: parsed.data.items.map(item => ({ text: item.text, href: item.href || undefined })) };
   }
 
   try {
