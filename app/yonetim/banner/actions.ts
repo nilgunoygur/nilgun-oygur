@@ -23,8 +23,9 @@ export async function saveBanner(intent: "save" | "publish" | "unpublish", value
 
   try {
     const changes = !draft ? { isPublished: false } : intent === "publish" ? { draft, published: draft, isPublished: true } : { draft };
+    // No row yet means the default banner is live (see getPublishedBanner); the first save changes that state like any other.
     const [saved] = await getDatabase().insert(bannerSettings)
-      .values({ id: 1, draft: draft ?? defaultBanner, published: intent === "publish" ? draft : defaultBanner, isPublished: intent !== "unpublish" })
+      .values({ id: 1, draft: defaultBanner, published: defaultBanner, isPublished: true, ...changes })
       .onConflictDoUpdate({ target: bannerSettings.id, set: { ...changes, updatedAt: new Date() } })
       .returning({ isPublished: bannerSettings.isPublished });
     if (intent !== "save") {
