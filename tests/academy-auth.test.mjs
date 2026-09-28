@@ -141,7 +141,7 @@ test("MFA sign-in requires a valid code; old sessions are revoked; ownership com
 test("untrusted redirect origins, short passwords and missing or invalid contact are rejected", async () => {
   assert.equal((await request("/sign-up/email", { ...account, email: "new@example.com", password: "short" })).status, 400);
   assert.equal((await request("/sign-up/email", { ...account, email: "nophone@example.com", phone: undefined })).status, 400);
-  assert.equal((await request("/sign-up/email", { ...account, email: "foreign@example.com", phone: "+1 202 555 0100" })).status, 400);
+  assert.equal((await request("/sign-up/email", { ...account, email: "landline@example.com", phone: "+49 30 1234567" })).status, 400, "landlines are rejected in any country");
   assert.equal((await request("/sign-up/email", { ...account, email: "short-address@example.com", address: "Ev" })).status, 400);
   assert.equal((await request("/sign-up/email", { ...account, email: "wrong-district@example.com", district: "Çankaya" })).status, 400);
   assert.equal((await db.select().from(schema.user).where(eq(schema.user.email, "nophone@example.com"))).length, 0);

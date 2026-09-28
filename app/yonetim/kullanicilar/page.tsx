@@ -5,7 +5,7 @@ import { ArrowLeft, Search, ShieldCheck } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { dateTimeLabel, dayLabel } from "@/lib/akademi/format";
-import { formatPhone } from "@/lib/turkiye";
+import { formatPhone } from "@/lib/phone";
 import type { UserListParams, userListFilter } from "@/lib/akademi/owner-users";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";

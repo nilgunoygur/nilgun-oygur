@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { normalizeSlug } from "../lib/route-slug.ts";
 import { contactSchema } from "../lib/contact-schema.ts";
 import { articles } from "../lib/content.ts";
-import { districtsOf, formatPhone, matchDistrict, matchProvince, normalizePhone, plateCode, provinces } from "../lib/turkiye.ts";
+import { districtsOf, matchDistrict, matchProvince, matchesTurkish, plateCode, provinces } from "../lib/turkiye.ts";
+import { callingCode, formatPhone, groupNational, normalizePhone, phoneCountries, splitPhone } from "../lib/phone.ts";
 import { contactInput } from "../lib/auth/profile.ts";
 
 test("Turkish article slugs match whether URL-encoded or decoded", () => {
@@ -49,10 +50,29 @@ test("Shopier descriptions become plain text for cards and allowlisted HTML for 
   assert.equal(descriptionHtml("1 &lt; 2 &lt;script&gt;"), "1 &lt; 2 &lt;script&gt;");
 });
 
-test("Turkish mobile numbers normalize to E.164 however they are typed; others are rejected", () => {
+test("mobile numbers normalize to E.164 however they are typed; national formats are Turkish", () => {
   for (const typed of ["0532 123 45 67", "5321234567", "+90 532 123 45 67", "905321234567", "(0532) 123-45-67"]) assert.equal(normalizePhone(typed), "+905321234567", typed);
-  for (const typed of ["0212 123 45 67", "0850 123 45 67", "+1 202 555 0100", "0532 123 45", "", null]) assert.equal(normalizePhone(typed), null, String(typed));
-  assert.equal(formatPhone("+905321234567"), "0532 123 45 67");
+  assert.equal(normalizePhone("+49 1512 3456789"), "+4915123456789", "other countries' mobiles are accepted in international form");
+  for (const typed of ["0212 123 45 67", "0850 123 45 67", "+49 30 1234567", "0532 123 45", "", null]) assert.equal(normalizePhone(typed), null, String(typed));
+  assert.equal(formatPhone("+905321234567"), "+90 532 123 45 67");
+});
+
+test("the phone input groups national digits without the trunk 0 and lists Türkiye first", () => {
+  assert.equal(groupNational("TR", "5321234567"), "532 123 45 67");
+  assert.equal(groupNational("TR", "532"), "532");
+  assert.equal(groupNational("DE", "15123456789"), "1512 3456789");
+  assert.deepEqual(splitPhone("+4915123456789"), { country: "DE", digits: "15123456789" });
+  assert.deepEqual(splitPhone(""), { country: "TR", digits: "" });
+  assert.equal(callingCode("TR"), "+90");
+  assert.deepEqual(phoneCountries[0], { code: "TR", name: "Türkiye", dial: "+90" });
+  assert.equal(phoneCountries.find(country => country.code === "DE")?.name, "Almanya");
+});
+
+test("Turkish search ignores case, accents and dotted/dotless i", () => {
+  assert.ok(matchesTurkish("Çiğli", "cig"));
+  assert.ok(matchesTurkish("İzmir", "IZM"));
+  assert.ok(matchesTurkish("Iğdır", "igdir"));
+  assert.ok(!matchesTurkish("Bornova", "kad"));
 });
 
 test("provinces match Shopier spellings and carry their postcode prefix", () => {

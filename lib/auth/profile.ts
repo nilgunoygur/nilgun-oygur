@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { matchDistrict, matchProvince, normalizePhone, plateCode, type Province } from "../turkiye.ts";
+import { matchDistrict, matchProvince, plateCode, type Province } from "../turkiye.ts";
+import { normalizePhone } from "../phone.ts";
 
 // Small raster avatars are stored with the profile; no public file upload endpoint is needed.
 export const profileImage = z.string().max(100000).regex(/^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+/]+=*$/).nullable();
@@ -12,9 +13,9 @@ export function avatarSource(value: string | null | undefined) {
 // sign-up and update-user input, so direct API calls get the same normalization as the forms.
 export const contactFields = {
   /** Stored as E.164 (+905321234567). */
-  phone: z.string().transform((value, ctx) => normalizePhone(value) ?? (ctx.addIssue({ code: "custom", message: "Geçerli bir cep telefonu numarası girin: 05XX XXX XX XX." }), z.NEVER)),
+  phone: z.string().transform((value, ctx) => normalizePhone(value) ?? (ctx.addIssue({ code: "custom", message: value ? "Geçerli bir cep telefonu numarası girin." : "Cep telefonu numaranızı yazın." }), z.NEVER)),
   city: z.string().transform((value, ctx) => matchProvince(value) ?? (ctx.addIssue({ code: "custom", message: "İlinizi listeden seçin." }), z.NEVER)),
-  district: z.string().trim().min(2, "İlçenizi yazın.").max(60, "İlçe adı en fazla 60 karakter olabilir."),
+  district: z.string().trim().min(2, "İlçenizi seçin.").max(60, "İlçe adı en fazla 60 karakter olabilir."),
   address: z.string().trim().min(10, "Açık adresinizi mahalle, sokak ve numarayla yazın.").max(250, "Adres en fazla 250 karakter olabilir."),
   /** Optional; an empty value clears it. */
   postcode: z.string().nullable().transform(value => value?.trim() || null).pipe(z.string().regex(/^\d{5}$/, "Posta kodu 5 haneden oluşmalıdır.").nullable()),
@@ -34,6 +35,11 @@ export const contactInput = z.object(contactFields).transform((value, ctx) => {
   return { ...value, district: checked.district };
 });
 export type ContactInput = z.input<typeof contactInput>;
+/** What the contact controls edit: the stored contact, with empty strings for missing values. */
+export type ContactFormValues = { phone: string; city: string; district: string; address: string; postcode: string };
+export const contactFormValues = (contact?: Contact): ContactFormValues => ({
+  phone: contact?.phone ?? "", city: contact?.city ?? "", district: contact?.district ?? "", address: contact?.address ?? "", postcode: contact?.postcode ?? "",
+});
 export type Contact = { [K in keyof typeof contactFields]: string | null };
 
 /** Legacy accounts and some Shopier-filled profiles are incomplete; the postcode is optional. */

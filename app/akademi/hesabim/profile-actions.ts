@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { refresh } from "next/cache";
 import { requireStudent } from "@/lib/auth/viewer";
 import { getAuth } from "@/lib/auth";
+import type { z } from "zod";
 import { contactInput, profileInput, type ContactInput } from "@/lib/auth/profile";
 import type { FormState } from "@/components/akademi/form-status";
 
@@ -11,7 +12,7 @@ export async function accountOptions() {
   return { isOwner: viewer.owner };
 }
 
-export async function saveProfile(input: { name: string; image: string | null }): Promise<FormState> {
+export async function saveProfile(input: z.input<typeof profileInput>): Promise<FormState> {
   try {
     await requireStudent();
     const parsed = profileInput.safeParse(input);

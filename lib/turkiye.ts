@@ -1,7 +1,6 @@
-import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 import { districtsByPlateCode } from "./turkiye-districts.ts";
 
-// Türkiye-only contact formats, shared by the browser and the server.
+// Türkiye address data (provinces and districts), shared by the browser and the server.
 
 /** The 81 provinces in plate-code order: index + 1 is the plate code, which is also the first two digits of every postcode there. */
 export const provinces = [
@@ -49,16 +48,4 @@ export function matchDistrict(province: Province, value: string | null | undefin
   const districts = districtsOf(province);
   return districts.find(name => fold(name) === folded)
     ?? (folded === fold(province) || folded === `${fold(province)}merkez` ? districts.find(name => name === "Merkez") ?? null : null);
-}
-
-/** Any common way of writing a Turkish mobile number ("0532…", "532…", "+90 532…", "90532…") → E.164 "+905321234567"; null otherwise. */
-export function normalizePhone(value: string | null | undefined): string | null {
-  const phone = value ? parsePhoneNumberFromString(value, "TR") : undefined;
-  // The mobile metadata rejects landlines and premium/shared-cost numbers.
-  return phone?.country === "TR" && phone.isValid() ? phone.number : null;
-}
-
-/** E.164 → "0532 123 45 67"; unparseable values are returned unchanged. */
-export function formatPhone(value: string): string {
-  return parsePhoneNumberFromString(value, "TR")?.formatNational() ?? value;
 }

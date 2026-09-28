@@ -1,14 +1,10 @@
 "use server";
 import { refresh } from "next/cache";
-import { z } from "zod";
 import { requireStudent } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
+import { claimSchema, type ClaimInput } from "@/lib/akademi/claim-schema";
 import type { FormState } from "@/components/akademi/form-status";
 
-const claimSchema = z.object({
-  orderNumber: z.string().trim().regex(/^\d{5,20}$/, "Sipariş numarası yalnızca rakamlardan oluşur."),
-  email: z.email("Shopier’de kullandığınız e-posta adresini yazın."),
-});
 
 const messages = {
   granted: "Eğitiminiz hesabınıza eklendi.",
@@ -20,10 +16,10 @@ const messages = {
   rate_limited: "Çok fazla deneme yaptınız. Lütfen bir saat sonra yeniden deneyin.",
 } as const;
 
-export async function claimOrder(_: FormState, formData: FormData): Promise<FormState> {
+export async function claimOrder(values: ClaimInput): Promise<FormState> {
   let viewer;
   try { viewer = await requireStudent(); } catch { return { status: "error", message: "Lütfen yeniden giriş yapın." }; }
-  const input = claimSchema.safeParse({ orderNumber: formData.get("orderNumber"), email: formData.get("email") });
+  const input = claimSchema.safeParse(values);
   if (!input.success) return { status: "error", message: input.error.issues[0].message };
   try {
     const outcome = await akademi().access.claimOrder(viewer.user.id, input.data.orderNumber, input.data.email);

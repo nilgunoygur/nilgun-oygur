@@ -15,11 +15,13 @@
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
     "email:dev": "email dev --dir emails --port 3001",
-    "turkiye:districts": "node scripts/generate-turkiye-districts.mjs"
+    "turkiye:districts": "node scripts/generate-turkiye-districts.mjs",
+    "flags": "node scripts/generate-flags.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@c15t/nextjs": "^2.2.1",
+    "@hookform/resolvers": "^5.9.1",
     "@lexical/html": "^0.51.0",
     "@lexical/link": "^0.51.0",
     "@lexical/list": "^0.51.0",
@@ -50,6 +52,7 @@
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.8",
     "react-email": "6.11.0",
+    "react-hook-form": "^7.89.0",
     "resend": "6.28.0",
     "sanitize-html": "^2.17.7",
     "server-only": "^0.0.1",
@@ -68,6 +71,7 @@
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.1",
     "babel-plugin-react-compiler": "^1.0.0",
+    "country-flag-icons": "1.6.20",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
