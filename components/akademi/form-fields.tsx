@@ -1,17 +1,32 @@
 "use client";
-import { useId, useState, type ComponentProps, type ReactNode } from "react";
-import { Controller, type Control, type FieldPath, type FieldValues, type UseFormReturn } from "react-hook-form";
+import { useId, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import { Controller, FormProvider, type Control, type FieldPath, type FieldValues, type UseFormReturn } from "react-hook-form";
 import { Eye, EyeOff } from "lucide-react";
 import { authErrorMessage } from "@/lib/auth/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import type { FormState } from "./form-status";
 
-// shadcn's Controller → Field pattern for the common inputs; forms disable themselves with <fieldset disabled>.
+// shadcn's React Hook Form pattern: every form is a FormShell of Controller → Field fields.
+
+// Control height for every Input, InputGroup, Select and picker inside (they read --control-h).
+const controlHeights = { sm: "[--control-h:2rem]", md: "[--control-h:2.75rem]", lg: "[--control-h:3rem]" };
+
+/** FormProvider + <form noValidate> + a fieldset that disables everything while submitting (or while `busy`). */
+export function FormShell<T extends FieldValues, C, U>({ form, onSubmit, size = "md", busy, disabled, id, className, fieldsClassName, children }: {
+  form: UseFormReturn<T, C, U>; onSubmit: (event: FormEvent<HTMLFormElement>) => void; size?: keyof typeof controlHeights;
+  busy?: boolean; disabled?: boolean; id?: string; className?: string; fieldsClassName?: string; children: ReactNode;
+}) {
+  const pending = form.formState.isSubmitting || !!busy;
+  return <FormProvider {...form}><form id={id} className={cn(controlHeights[size], className)} onSubmit={onSubmit} noValidate aria-busy={pending}>
+    <fieldset disabled={pending || disabled} className="contents"><FieldGroup className={fieldsClassName}>{children}</FieldGroup></fieldset>
+  </form></FormProvider>;
+}
 
 type Controlled<T extends FieldValues, U> = { control: Control<T, unknown, U>; name: FieldPath<T>; label: ReactNode; description?: ReactNode };
 type Managed = "name" | "value" | "defaultValue" | "onChange" | "onBlur";
@@ -46,7 +61,7 @@ export function SelectField<T extends FieldValues, U = T>({ control, name, label
     <Field data-invalid={fieldState.invalid}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Select items={options} value={field.value} onValueChange={field.onChange} disabled={disabled}>
-        <SelectTrigger id={id} ref={field.ref} className={className ?? "h-11 w-full"} aria-invalid={fieldState.invalid}><SelectValue /></SelectTrigger>
+        <SelectTrigger id={id} ref={field.ref} className={cn("w-full", className)} aria-invalid={fieldState.invalid}><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(options).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
       </Select>
       {description && <FieldDescription>{description}</FieldDescription>}

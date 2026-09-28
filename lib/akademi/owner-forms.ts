@@ -9,6 +9,13 @@ const number = (label: string, min: number, max: number, step: "integer" | "pric
 
 export const coursePriceSchema = z.object({ value: number("Fiyat", 1, 10_000_000, "price") });
 export const courseAccessSchema = z.object({ value: number("Erişim süresi", 1, 3650, "integer") });
+/** One owner edit of a course, sent to PATCH /api/yonetim/courses/[courseId]. */
+export const courseChangeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("status"), status: z.enum(["draft", "published", "archived"]) }),
+  coursePriceSchema.extend({ kind: z.literal("price") }),
+  courseAccessSchema.extend({ kind: z.literal("access") }),
+]);
+export type CourseChange = z.output<typeof courseChangeSchema>;
 
 export const linkSchema = z.object({ url: z.string().trim().min(1, "Bir bağlantı yazın.").max(2048) });
 export const imageInsertSchema = z.object({ src: z.string().min(1, "Bir görsel seçin."), alt: z.string().trim().max(160, "Açıklama en fazla 160 karakter olabilir.") });

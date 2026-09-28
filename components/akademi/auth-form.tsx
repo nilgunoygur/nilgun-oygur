@@ -12,10 +12,10 @@ import { authDestination } from "@/lib/auth/navigation";
 import { backupCodeSchema, emailLinkSchema, loginSchema, resetSchema, totpSchema } from "@/lib/auth/forms";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formStack } from "@/lib/styles";
-import { authAttempt, FormRootError, PasswordField, TextField } from "./form-fields";
+import { authAttempt, FormRootError, FormShell, PasswordField, TextField } from "./form-fields";
 
 const RegisterForm = dynamic(() => import("./register-form"));
 
@@ -70,23 +70,21 @@ function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean
     if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) setMfa("totp"); else enter();
   });
   const pending = form.formState.isSubmitting;
-  return <form onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending || disabled} className="contents"><FieldGroup>
-      <FormRootError form={form} />
-      <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
-      <PasswordField control={form.control} name="password" label="Şifreniz" autoComplete="current-password" />
-      <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap">
-        <Controller control={form.control} name="remember" render={({ field }) => (
-          <Field orientation="horizontal" className="w-auto">
-            <Checkbox id="remember" checked={field.value} onCheckedChange={field.onChange} />
-            <FieldLabel htmlFor="remember">Beni hatırla</FieldLabel>
-          </Field>
-        )} />
-        <Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link>
-      </div>
-      <SubmitButton pending={pending}>Giriş yap</SubmitButton>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
+    <FormRootError form={form} />
+    <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
+    <PasswordField control={form.control} name="password" label="Şifreniz" autoComplete="current-password" />
+    <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap">
+      <Controller control={form.control} name="remember" render={({ field }) => (
+        <Field orientation="horizontal" className="w-auto">
+          <Checkbox id="remember" checked={field.value} onCheckedChange={field.onChange} />
+          <FieldLabel htmlFor="remember">Beni hatırla</FieldLabel>
+        </Field>
+      )} />
+      <Link href="/akademi/sifremi-unuttum" className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link>
+    </div>
+    <SubmitButton pending={pending}>Giriş yap</SubmitButton>
+  </FormShell>;
 }
 
 function CodeForm({ backup, onToggle, onVerified }: { backup: boolean; onToggle: () => void; onVerified: () => void }) {
@@ -95,15 +93,13 @@ function CodeForm({ backup, onToggle, onVerified }: { backup: boolean; onToggle:
     if (await authAttempt(form, () => backup ? authClient.twoFactor.verifyBackupCode({ code }) : authClient.twoFactor.verifyTotp({ code, trustDevice: false }))) onVerified();
   });
   const pending = form.formState.isSubmitting;
-  return <form onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending} className="contents"><FieldGroup>
-      <FormRootError form={form} />
-      <TextField control={form.control} name="code" label={backup ? "Kurtarma kodu" : "Doğrulama kodu"} autoComplete="one-time-code" inputMode={backup ? "text" : "numeric"} maxLength={backup ? 64 : 6} autoFocus
-        description={backup ? "Kaydettiğiniz kullanılmamış kurtarma kodlarından birini girin." : "Doğrulayıcı uygulamanızdaki 6 haneli kodu girin."} />
-      <Button type="button" variant="link" onClick={onToggle}>{backup ? "Doğrulayıcı uygulamasını kullan" : "Kurtarma kodu kullan"}</Button>
-      <SubmitButton pending={pending}>Doğrula ve giriş yap</SubmitButton>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={submit} size="lg">
+    <FormRootError form={form} />
+    <TextField control={form.control} name="code" label={backup ? "Kurtarma kodu" : "Doğrulama kodu"} autoComplete="one-time-code" inputMode={backup ? "text" : "numeric"} maxLength={backup ? 64 : 6} autoFocus
+      description={backup ? "Kaydettiğiniz kullanılmamış kurtarma kodlarından birini girin." : "Doğrulayıcı uygulamanızdaki 6 haneli kodu girin."} />
+    <Button type="button" variant="link" onClick={onToggle}>{backup ? "Doğrulayıcı uygulamasını kullan" : "Kurtarma kodu kullan"}</Button>
+    <SubmitButton pending={pending}>Doğrula ve giriş yap</SubmitButton>
+  </FormShell>;
 }
 
 function EmailLinkForm({ mode, disabled, onSent }: { mode: "forgot" | "verify"; disabled: boolean; onSent: (link: string, text: string) => void }) {
@@ -116,13 +112,11 @@ function EmailLinkForm({ mode, disabled, onSent }: { mode: "forgot" | "verify"; 
     else onSent("doğrulama", "Adresiniz doğrulanmayı bekliyorsa yeni bir bağlantı gönderilecektir.");
   });
   const pending = form.formState.isSubmitting;
-  return <form onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending || disabled} className="contents"><FieldGroup>
-      <FormRootError form={form} />
-      <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
-      <SubmitButton pending={pending}>{forgot ? "Yenileme bağlantısı gönder" : "Doğrulama bağlantısı gönder"}</SubmitButton>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
+    <FormRootError form={form} />
+    <TextField control={form.control} name="email" label="E-posta adresiniz" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" />
+    <SubmitButton pending={pending}>{forgot ? "Yenileme bağlantısı gönder" : "Doğrulama bağlantısı gönder"}</SubmitButton>
+  </FormShell>;
 }
 
 function ResetForm({ disabled, token }: { disabled: boolean; token?: string }) {
@@ -132,12 +126,10 @@ function ResetForm({ disabled, token }: { disabled: boolean; token?: string }) {
     if (await authAttempt(form, () => authClient.resetPassword({ newPassword: password, token: token! }))) router.replace("/akademi/giris?reset=1");
   });
   const pending = form.formState.isSubmitting;
-  return <form onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending || disabled} className="contents"><FieldGroup>
-      <FormRootError form={form} />
-      <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
-      <PasswordField control={form.control} name="confirmPassword" label="Şifrenizi tekrar girin" autoComplete="new-password" />
-      <SubmitButton pending={pending}>Şifremi yenile</SubmitButton>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
+    <FormRootError form={form} />
+    <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
+    <PasswordField control={form.control} name="confirmPassword" label="Şifrenizi tekrar girin" autoComplete="new-password" />
+    <SubmitButton pending={pending}>Şifremi yenile</SubmitButton>
+  </FormShell>;
 }

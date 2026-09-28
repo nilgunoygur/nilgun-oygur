@@ -58,8 +58,15 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
     },
     owner: {
       overview: ownerOverview,
-      catalog: async () => ownerCatalog(db, await products()),
-      needsAttention: () => failedEvents(db),
+      /** Course management data in its JSON shape: the page's initial query data and the refetch route. */
+      async catalogSnapshot() {
+        const [{ courses, recentSales }, attention] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db)]);
+        return {
+          courses,
+          recentSales: recentSales.map(sale => ({ ...sale, claimed: Boolean(sale.claimed), at: sale.at.toISOString() })),
+          attention: attention.map(item => ({ ...item, at: item.at.toISOString() })),
+        };
+      },
       users: (params: UserListParams) => ownerUsers(db, params, now()),
       setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),

@@ -10,9 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, checkUpload, saveLesson, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
-import { FormRootError, SelectField, submitAction, TextField, TextareaField } from "./form-fields";
+import { FormRootError, FormShell, SelectField, submitAction, TextField, TextareaField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
-import { FieldGroup } from "@/components/ui/field";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import { pillAction } from "@/lib/styles";
 
@@ -54,23 +53,23 @@ function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean
     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-6"><div><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {lesson.position + 1}</span><h3 className="text-2xl">{lesson.title}</h3></div><span className={`rounded-full px-3 py-1 text-xs ${lesson.status === "published" ? "bg-mist text-forest" : "bg-[#f5ebdd] text-[#82623a]"}`}>{lesson.status === "published" ? "Yayında" : "Taslak"}</span></summary>
     <div className="border-t border-border p-6">
       {!isLive && <VideoUpload row={row} enabled={uploadsEnabled && lesson.status === "draft"} />}
-      <form onSubmit={submit} noValidate aria-busy={pending}><fieldset disabled={pending} className="contents"><FieldGroup className="gap-5">
-        <TextField control={form.control} name="title" label="Ders başlığı" className="h-11" maxLength={160} />
+      <FormShell form={form} onSubmit={submit}>
+        <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
         <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
         <div className="grid gap-5 sm:grid-cols-2">
-          <TextField control={form.control} name="position" label="Sıra (0 ilk ders)" type="number" inputMode="numeric" min={0} max={1000} className="h-11" />
-          <SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="h-11 w-full bg-white" />
+          <TextField control={form.control} name="position" label="Sıra (0 ilk ders)" type="number" inputMode="numeric" min={0} max={1000} />
+          <SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" />
         </div>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
-          <TextField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" type="datetime-local" className="h-11 bg-white" />
-          <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="h-11 bg-white" />
-          <div className="sm:col-span-2"><TextField control={form.control} name="joinUrl" label="Toplantı bağlantısı" type="url" placeholder="https://…" maxLength={2048} className="h-11 bg-white" /></div>
-          <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="h-11 bg-white" />
-          <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="h-11 w-full bg-white" />
+          <TextField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" type="datetime-local" className="bg-white" />
+          <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
+          <div className="sm:col-span-2"><TextField control={form.control} name="joinUrl" label="Toplantı bağlantısı" type="url" placeholder="https://…" maxLength={2048} className="bg-white" /></div>
+          <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
+          <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
         </div>}
         <FormRootError form={form} />
         <div className="flex flex-wrap items-center gap-5"><button className={pillAction} type="submit">{pending ? "Kaydediliyor…" : "Dersi kaydet"}</button><div role="status"><FormStatus state={saved} /></div></div>
-      </FieldGroup></fieldset></form>
+      </FormShell>
     </div>
   </details>;
 }

@@ -22,14 +22,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Field, FieldError, FieldGroup } from "@/components/ui/field";
+import { Field, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { imageInsertSchema, linkSchema } from "@/lib/akademi/owner-forms";
 import { $createArticleImageNode } from "./article-image-node";
-import { TextField } from "./form-fields";
+import { FormShell, TextField } from "./form-fields";
 import { ImageLibrary, ImageUploadButton, imageRules, type ImageChoice, type UploadImage } from "./image-library";
 
 type Block = "paragraph" | "h2" | "h3" | "h4" | "quote" | "bullet" | "number";
@@ -145,17 +145,17 @@ export function LinkForm({ initial, onDone }: { initial: string | null; onDone: 
     onDone();
     editor.focus();
   };
-  return <form className="flex items-start gap-1.5" noValidate onSubmit={isolated(form.handleSubmit(({ url }) => apply(normalizeUrl(url))))}>
+  return <FormShell form={form} size="sm" fieldsClassName="flex-row items-start gap-1.5" onSubmit={isolated(form.handleSubmit(({ url }) => apply(normalizeUrl(url))))}>
     <Controller control={form.control} name="url" render={({ field, fieldState }) => (
       <Field data-invalid={fieldState.invalid} className="w-60 gap-1">
-        <Input {...field} autoFocus placeholder="ornek.com veya /blog/yazi" aria-label="Bağlantı adresi" aria-invalid={fieldState.invalid} className="h-8 text-sm"
+        <Input {...field} autoFocus placeholder="ornek.com veya /blog/yazi" aria-label="Bağlantı adresi" aria-invalid={fieldState.invalid} className="text-sm"
           onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); onDone(); editor.focus(); } }} />
         {fieldState.invalid && <FieldError errors={[fieldState.error]} className="text-xs" />}
       </Field>
     )} />
     <Button type="submit" size="icon-sm" aria-label="Bağlantıyı kaydet"><Check /></Button>
     {initial && <Button type="button" size="sm" variant="ghost" onClick={() => apply(null)}>Kaldır</Button>}
-  </form>;
+  </FormShell>;
 }
 
 export function ToolButton({ label, active, className, ...props }: React.ComponentProps<typeof Button> & { label: string; active?: boolean }) {
@@ -221,7 +221,7 @@ function ImagePicker({ images, upload, onInsert }: { images: ImageChoice[]; uplo
     form.setValue("src", choice.url, { shouldValidate: true });
     if (!form.getValues("alt")) form.setValue("alt", choice.name.replace(/\.[a-z0-9]+$/i, ""));
   };
-  return <form noValidate onSubmit={isolated(form.handleSubmit(({ src, alt }) => onInsert(src, alt)))}><FieldGroup className="gap-5">
+  return <FormShell form={form} onSubmit={isolated(form.handleSubmit(({ src, alt }) => onInsert(src, alt)))}>
     <div className="flex justify-end"><ImageUploadButton upload={upload} onUploaded={choose} label="Görsel yükle">Yeni görsel yükle</ImageUploadButton></div>
     <Controller control={form.control} name="src" render={({ field, fieldState }) => (
       <Field data-invalid={fieldState.invalid}>
@@ -231,5 +231,5 @@ function ImagePicker({ images, upload, onInsert }: { images: ImageChoice[]; uplo
     )} />
     <TextField control={form.control} name="alt" label="Açıklama (alt metin)" maxLength={160} placeholder="Görselde ne var?" />
     <DialogFooter><Button type="submit">Görseli ekle</Button></DialogFooter>
-  </FieldGroup></form>;
+  </FormShell>;
 }

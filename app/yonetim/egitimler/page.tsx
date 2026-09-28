@@ -13,13 +13,7 @@ export default function OwnerCourses() {
 
 async function Courses() {
   await ownerPage();
-  const owner = akademi().owner;
-  const [catalog, attention] = await Promise.all([owner.catalog(), owner.needsAttention()]);
-  const initialData = {
-    ...catalog,
-    recentSales: catalog.recentSales.map(sale => ({ ...sale, claimed: Boolean(sale.claimed), at: sale.at.toISOString() })),
-    attention: attention.map(item => ({ ...item, at: item.at.toISOString() })),
-  };
+  const initialData = await akademi().owner.catalogSnapshot();
 
   return <>
     <header className="mb-8"><p className={kicker}>AKADEMİ YÖNETİMİ</p><h1 className={accountTitle}>Eğitim yönetimi</h1><p className="mt-3 max-w-2xl text-muted-foreground">Eğitim programlarını, satışları ve bekleyen bildirimleri tek yerden takip edin.</p></header>

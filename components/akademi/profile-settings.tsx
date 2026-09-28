@@ -2,7 +2,7 @@
 import { accountCard } from "@/lib/styles";
 import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { authClient } from "@/lib/auth/client";
 import { avatarSource, profileInput } from "@/lib/auth/profile";
 import { contactFormSchema, contactFormValues, hasCompleteContact, type Contact } from "@/lib/auth/contact";
@@ -12,10 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { FormStatus, idleForm, type FormState } from "./form-status";
 import { ContactFields } from "./contact-fields";
-import { authAttempt, FormRootError, PasswordField, submitAction, TextField } from "./form-fields";
+import { authAttempt, FormRootError, FormShell, PasswordField, submitAction, TextField } from "./form-fields";
 
 type User = { name: string; email: string; image?: string | null };
 
@@ -56,33 +56,31 @@ function PersonalForm({ user }: { user: User }) {
   });
   const pending = form.formState.isSubmitting || processing;
   const name = useWatch({ control: form.control, name: "name" });
-  return <form className={accountCard} onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending} className="contents"><FieldGroup>
-      <CardHeading title="Kişisel bilgiler" description="Adınızı ve profil fotoğrafınızı güncelleyin." />
-      <Controller control={form.control} name="image" render={({ field, fieldState }) => (
-        <div className="flex items-center gap-4">
-          <Avatar className="size-16"><AvatarImage src={field.value ?? undefined} alt="Profil fotoğrafınız" /><AvatarFallback>{name.charAt(0).toLocaleUpperCase("tr-TR")}</AvatarFallback></Avatar>
-          <Field data-invalid={fieldState.invalid} className="min-w-0 flex-1">
-            <FieldLabel htmlFor={`${id}-photo`}>Profil fotoğrafı</FieldLabel>
-            <Input id={`${id}-photo`} ref={field.ref} type="file" accept="image/jpeg,image/png,image/webp" aria-invalid={fieldState.invalid} onChange={async (event) => {
-              const file = event.target.files?.[0]; if (!file) return;
-              setProcessing(true);
-              try { field.onChange(await avatarFrom(file)); form.clearErrors("image"); }
-              catch { form.setError("image", { message: "10 MB altında bir JPG, PNG veya WebP fotoğrafı seçin." }); }
-              finally { setProcessing(false); }
-            }} />
-            <FieldDescription>JPG, PNG veya WebP · En fazla 10 MB</FieldDescription>
-            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            {field.value && <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => field.onChange(null)}>Fotoğrafı kaldır</Button>}
-          </Field>
-        </div>
-      )} />
-      <TextField control={form.control} name="name" label="Adınız soyadınız" autoComplete="name" maxLength={100} />
-      <Field><FieldLabel>E-posta adresiniz</FieldLabel><p className="rounded-lg bg-mist px-4 py-3 text-sm text-stone">{user.email}</p><FieldDescription>Bu adres hesap ayarlarından değiştirilemez.</FieldDescription></Field>
-      <FormRootError form={form} /><FormStatus state={status} />
-      <Button type="submit">{pending ? "Kaydediliyor…" : "Profili kaydet"}</Button>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={submit} size="lg" busy={processing} className={accountCard}>
+    <CardHeading title="Kişisel bilgiler" description="Adınızı ve profil fotoğrafınızı güncelleyin." />
+    <Controller control={form.control} name="image" render={({ field, fieldState }) => (
+      <div className="flex items-center gap-4">
+        <Avatar className="size-16"><AvatarImage src={field.value ?? undefined} alt="Profil fotoğrafınız" /><AvatarFallback>{name.charAt(0).toLocaleUpperCase("tr-TR")}</AvatarFallback></Avatar>
+        <Field data-invalid={fieldState.invalid} className="min-w-0 flex-1">
+          <FieldLabel htmlFor={`${id}-photo`}>Profil fotoğrafı</FieldLabel>
+          <Input id={`${id}-photo`} ref={field.ref} type="file" accept="image/jpeg,image/png,image/webp" aria-invalid={fieldState.invalid} onChange={async (event) => {
+            const file = event.target.files?.[0]; if (!file) return;
+            setProcessing(true);
+            try { field.onChange(await avatarFrom(file)); form.clearErrors("image"); }
+            catch { form.setError("image", { message: "10 MB altında bir JPG, PNG veya WebP fotoğrafı seçin." }); }
+            finally { setProcessing(false); }
+          }} />
+          <FieldDescription>JPG, PNG veya WebP · En fazla 10 MB</FieldDescription>
+          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+          {field.value && <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => field.onChange(null)}>Fotoğrafı kaldır</Button>}
+        </Field>
+      </div>
+    )} />
+    <TextField control={form.control} name="name" label="Adınız soyadınız" autoComplete="name" maxLength={100} />
+    <Field><FieldLabel>E-posta adresiniz</FieldLabel><p className="rounded-lg bg-mist px-4 py-3 text-sm text-stone">{user.email}</p><FieldDescription>Bu adres hesap ayarlarından değiştirilemez.</FieldDescription></Field>
+    <FormRootError form={form} /><FormStatus state={status} />
+    <Button type="submit">{pending ? "Kaydediliyor…" : "Profili kaydet"}</Button>
+  </FormShell>;
 }
 
 function ContactForm({ contact }: { contact: Contact }) {
@@ -94,15 +92,13 @@ function ContactForm({ contact }: { contact: Contact }) {
     if (result) form.reset({ contact: contactFormValues(values) });
   });
   const pending = form.formState.isSubmitting;
-  return <FormProvider {...form}><form id="iletisim" className={accountCard} onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending} className="contents"><FieldGroup>
-      <CardHeading title="İletişim bilgileri" description="Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi güncel tutun." />
-      {!hasCompleteContact(contact) && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
-      <ContactFields />
-      <FormRootError form={form} /><FormStatus state={status} />
-      <Button type="submit">{pending ? "Kaydediliyor…" : "İletişim bilgilerini kaydet"}</Button>
-    </FieldGroup></fieldset>
-  </form></FormProvider>;
+  return <FormShell form={form} onSubmit={submit} size="lg" id="iletisim" className={accountCard}>
+    <CardHeading title="İletişim bilgileri" description="Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi güncel tutun." />
+    {!hasCompleteContact(contact) && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
+    <ContactFields />
+    <FormRootError form={form} /><FormStatus state={status} />
+    <Button type="submit">{pending ? "Kaydediliyor…" : "İletişim bilgilerini kaydet"}</Button>
+  </FormShell>;
 }
 
 function PasswordForm({ email, localEmail }: { email: string; localEmail: boolean }) {
@@ -124,16 +120,13 @@ function PasswordForm({ email, localEmail }: { email: string; localEmail: boolea
     }
     setSending(false);
   };
-  const pending = form.formState.isSubmitting || sending;
-  return <form className={accountCard} onSubmit={submit} noValidate aria-busy={pending}>
-    <fieldset disabled={pending} className="contents"><FieldGroup>
-      <CardHeading title="Şifrenizi değiştirin" description="Hesabınızı güvende tutmak için güçlü bir şifre seçin." />
-      <PasswordField control={form.control} name="currentPassword" label="Mevcut şifreniz" autoComplete="current-password" />
-      <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
-      <PasswordField control={form.control} name="confirmPassword" label="Yeni şifreniz (tekrar)" autoComplete="new-password" />
-      <FormRootError form={form} /><FormStatus state={status} />
-      <Button type="submit">{form.formState.isSubmitting ? "İşleniyor…" : "Şifreyi değiştir"}</Button>
-      <Button type="button" variant="link" className="h-auto whitespace-normal text-center" onClick={sendReset}>Şifremi unuttum · Sıfırlama bağlantısı gönder</Button>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={submit} size="lg" busy={sending} className={accountCard}>
+    <CardHeading title="Şifrenizi değiştirin" description="Hesabınızı güvende tutmak için güçlü bir şifre seçin." />
+    <PasswordField control={form.control} name="currentPassword" label="Mevcut şifreniz" autoComplete="current-password" />
+    <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
+    <PasswordField control={form.control} name="confirmPassword" label="Yeni şifreniz (tekrar)" autoComplete="new-password" />
+    <FormRootError form={form} /><FormStatus state={status} />
+    <Button type="submit">{form.formState.isSubmitting ? "İşleniyor…" : "Şifreyi değiştir"}</Button>
+    <Button type="button" variant="link" className="h-auto whitespace-normal text-center" onClick={sendReset}>Şifremi unuttum · Sıfırlama bağlantısı gönder</Button>
+  </FormShell>;
 }

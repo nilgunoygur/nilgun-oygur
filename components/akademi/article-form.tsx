@@ -14,12 +14,12 @@ import { ArticleRichEditor } from "@/components/akademi/article-rich-editor";
 import { ImageLibrary, ImageUploadButton, imageRules, type ImageChoice } from "@/components/akademi/image-library";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FormRootError, TextField } from "./form-fields";
+import { FormRootError, FormShell, TextField } from "./form-fields";
 
 type ArticleValues = { title: string; slug: string; category: string; image: string; date: string; duration: string; body: string };
 
@@ -70,59 +70,56 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
     try { await saveArticle(values, status, article?.slug); }
     catch { form.setError("root", { message: "Yazı kaydedilemedi. Alanları ve yönetim oturumunuzu kontrol edip tekrar deneyin." }); }
   });
-  const pending = form.formState.isSubmitting;
 
-  return <form onSubmit={save("draft")} noValidate aria-busy={pending}>
-    <fieldset disabled={pending} className="contents"><FieldGroup className="grid gap-7 sm:grid-cols-2">
-      <div className="sm:col-span-2"><TextField control={form.control} name="title" label="Başlık" className="h-11" maxLength={180} /></div>
-      <Field><FieldLabel htmlFor="article-slug">URL adı</FieldLabel><Input id="article-slug" className="h-11 bg-muted/50" value={article?.slug ?? articleSlug(title)} readOnly tabIndex={-1} /><FieldDescription>Başlıktan otomatik oluşturulur.</FieldDescription></Field>
-      <TextField control={form.control} name="category" label="Kategori" className="h-11" maxLength={70} />
-      <Controller control={form.control} name="date" render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor="article-date">Tarih</FieldLabel>
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-            <PopoverTrigger render={<Button type="button" variant="outline" id="article-date" ref={field.ref} className="h-11 w-full justify-start font-normal" aria-invalid={fieldState.invalid} />}><CalendarDays className="size-4" />{format(parseISO(field.value), "d MMM yyyy", { locale: tr })}</PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={parseISO(field.value)} onSelect={selected => { if (selected) { field.onChange(iso(selected)); setCalendarOpen(false); } }} locale={tr} /></PopoverContent>
-          </Popover>
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )} />
-      <Controller control={form.control} name="durationAmount" render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor="article-duration">Okuma süresi</FieldLabel>
-          <InputGroup className="h-11">
-            <InputGroupInput {...field} value={String(field.value ?? "")} id="article-duration" type="number" inputMode="numeric" min={1} max={999} className="h-full" aria-invalid={fieldState.invalid} />
-            <InputGroupAddon align="inline-end" className="pr-1">
-              <Controller control={form.control} name="durationUnit" render={({ field: unit }) => (
-                <Select items={units} value={unit.value} onValueChange={unit.onChange}>
-                  <SelectTrigger aria-label="Okuma süresi birimi" className="h-9 border-0 shadow-none"><SelectValue /></SelectTrigger>
-                  <SelectContent>{Object.entries(units).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
-                </Select>
-              )} />
-            </InputGroupAddon>
-          </InputGroup>
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )} />
-      <Controller control={form.control} name="image" render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><FieldLabel>Kapak görseli</FieldLabel><ImageUploadButton upload={uploadImage} label="Kapak görseli yükle" onUploaded={choice => { field.onChange(choice.url); toast.success("Kapak görseli kütüphaneye eklendi."); }}>Görsel yükle</ImageUploadButton></div>
-          <ImageLibrary images={images} selected={field.value} onSelect={choice => field.onChange(choice.url)} label="Kapak görseli kütüphanesi" />
-          <FieldDescription>Yüklenen görseller bu kütüphanede görünür. {imageRules}</FieldDescription>
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )} />
-      <Controller control={form.control} name="body" render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
-          <FieldLabel>Yazı içeriği</FieldLabel>
-          <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={images} upload={uploadImage} />
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )} />
-      <div className="grid gap-3 sm:col-span-2">
-        <FormRootError form={form} />
-        <div className="flex flex-wrap gap-3"><Button type="submit" variant="outline" size="pill">Taslak olarak kaydet</Button><Button type="button" size="pill" onClick={save("published")}>Yayınla</Button></div>
-      </div>
-    </FieldGroup></fieldset>
-  </form>;
+  return <FormShell form={form} onSubmit={save("draft")} fieldsClassName="grid gap-7 sm:grid-cols-2">
+    <div className="sm:col-span-2"><TextField control={form.control} name="title" label="Başlık" maxLength={180} /></div>
+    <Field><FieldLabel htmlFor="article-slug">URL adı</FieldLabel><Input id="article-slug" className="bg-muted/50" value={article?.slug ?? articleSlug(title)} readOnly tabIndex={-1} /><FieldDescription>Başlıktan otomatik oluşturulur.</FieldDescription></Field>
+    <TextField control={form.control} name="category" label="Kategori" maxLength={70} />
+    <Controller control={form.control} name="date" render={({ field, fieldState }) => (
+      <Field data-invalid={fieldState.invalid}>
+        <FieldLabel htmlFor="article-date">Tarih</FieldLabel>
+        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <PopoverTrigger render={<Button type="button" variant="outline" id="article-date" ref={field.ref} className="h-(--control-h) w-full justify-start font-normal" aria-invalid={fieldState.invalid} />}><CalendarDays className="size-4" />{format(parseISO(field.value), "d MMM yyyy", { locale: tr })}</PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={parseISO(field.value)} onSelect={selected => { if (selected) { field.onChange(iso(selected)); setCalendarOpen(false); } }} locale={tr} /></PopoverContent>
+        </Popover>
+        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+      </Field>
+    )} />
+    <Controller control={form.control} name="durationAmount" render={({ field, fieldState }) => (
+      <Field data-invalid={fieldState.invalid}>
+        <FieldLabel htmlFor="article-duration">Okuma süresi</FieldLabel>
+        <InputGroup>
+          <InputGroupInput {...field} value={String(field.value ?? "")} id="article-duration" type="number" inputMode="numeric" min={1} max={999} aria-invalid={fieldState.invalid} />
+          <InputGroupAddon align="inline-end" className="pr-1">
+            <Controller control={form.control} name="durationUnit" render={({ field: unit }) => (
+              <Select items={units} value={unit.value} onValueChange={unit.onChange}>
+                <SelectTrigger aria-label="Okuma süresi birimi" className="h-9 border-0 shadow-none"><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(units).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
+              </Select>
+            )} />
+          </InputGroupAddon>
+        </InputGroup>
+        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+      </Field>
+    )} />
+    <Controller control={form.control} name="image" render={({ field, fieldState }) => (
+      <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><FieldLabel>Kapak görseli</FieldLabel><ImageUploadButton upload={uploadImage} label="Kapak görseli yükle" onUploaded={choice => { field.onChange(choice.url); toast.success("Kapak görseli kütüphaneye eklendi."); }}>Görsel yükle</ImageUploadButton></div>
+        <ImageLibrary images={images} selected={field.value} onSelect={choice => field.onChange(choice.url)} label="Kapak görseli kütüphanesi" />
+        <FieldDescription>Yüklenen görseller bu kütüphanede görünür. {imageRules}</FieldDescription>
+        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+      </Field>
+    )} />
+    <Controller control={form.control} name="body" render={({ field, fieldState }) => (
+      <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
+        <FieldLabel>Yazı içeriği</FieldLabel>
+        <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={images} upload={uploadImage} />
+        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+      </Field>
+    )} />
+    <div className="grid gap-3 sm:col-span-2">
+      <FormRootError form={form} />
+      <div className="flex flex-wrap gap-3"><Button type="submit" variant="outline" size="pill">Taslak olarak kaydet</Button><Button type="button" size="pill" onClick={save("published")}>Yayınla</Button></div>
+    </div>
+  </FormShell>;
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { cacheLife, cacheTag, revalidateTag, updateTag } from "next/cache";
+import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { getShopier } from "@/lib/shopier";
@@ -44,9 +44,9 @@ export async function courseCards(): Promise<Record<string, { title: string; ima
   try { return await akademi().catalog.cards(); } catch { return {}; }
 }
 
-/** From a Server Function: the next render reads fresh data. */
+/** From an owner route handler: expired now, so the next public render reads fresh data (and no page re-renders). */
 export function catalogChangedByOwner() {
-  updateTag(CATALOG_TAG);
+  revalidateTag(CATALOG_TAG, { expire: 0 });
 }
 
 /** From a route handler (webhook, cron): serve stale while the catalog refreshes in the background. */

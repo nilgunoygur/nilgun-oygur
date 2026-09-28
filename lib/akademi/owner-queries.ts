@@ -2,6 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
+import type { CourseChange } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
@@ -55,6 +56,15 @@ export async function fetchOwnerCatalog(signal?: AbortSignal): Promise<OwnerCata
   if (!response.ok) throw new Error("Yönetim verileri yenilenemedi.");
   return ownerCatalogSnapshotSchema.parse(await response.json());
 }
+
+async function ownerRequest(url: string, init: RequestInit, fallback: string) {
+  const response = await fetch(url, { ...init, cache: "no-store" });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? fallback);
+}
+
+export const updateOwnerCourse = (courseId: string, change: CourseChange) => ownerRequest(`/api/yonetim/courses/${courseId}`,
+  { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) }, "Değişiklik kaydedilemedi.");
+export const syncOwnerCatalog = () => ownerRequest("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.");
 
 export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
   return queryOptions({
