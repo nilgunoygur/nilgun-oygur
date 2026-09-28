@@ -1,6 +1,5 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import type { z } from "zod";
 import { eq } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
@@ -11,16 +10,20 @@ import { articleSlug } from "@/lib/akademi/slug";
 import { dayLabel } from "@/lib/akademi/format";
 import { articlePlainText, cleanArticleHtml, slugOf, uploadedImagePrefix } from "@/lib/articles";
 import { articleMinLength, articleSchema, articleStatus } from "@/lib/akademi/owner-forms";
+import type { FormState } from "@/components/akademi/form-status";
 
-export async function saveArticle(values: z.input<typeof articleSchema>, requestedStatus: z.input<typeof articleStatus>, originalSlug = "") {
+/** The client navigates to the article list on success. */
+export async function saveArticle(values: z.input<typeof articleSchema>, requestedStatus: z.input<typeof articleStatus>, originalSlug = ""): Promise<FormState> {
   await requireOwner();
-  const article = { ...articleSchema.parse(values), status: articleStatus.parse(requestedStatus) };
+  const parsed = articleSchema.safeParse(values);
+  if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Yazı alanlarını kontrol edin." };
+  const article = { ...parsed.data, status: articleStatus.parse(requestedStatus) };
   const body = cleanArticleHtml(article.body);
-  if (articlePlainText(body).length < articleMinLength.length) throw new Error(articleMinLength.message);
+  if (articlePlainText(body).length < articleMinLength.length) return { status: "error", message: articleMinLength.message };
   if (article.image.startsWith(uploadedImagePrefix)) {
     const imageId = article.image.slice(uploadedImagePrefix.length);
     const [found] = await getDatabase().select({ id: articleAssets.id }).from(articleAssets).where(eq(articleAssets.id, imageId)).limit(1);
-    if (!found) throw new Error("Kapak görseli bulunamadı.");
+    if (!found) return { status: "error", message: "Kapak görseli bulunamadı." };
   }
   const allSlugs = new Set([...importedArticles.map(item => slugOf(item)), ...(await getDatabase().select({ slug: articleEdits.slug }).from(articleEdits)).map(item => item.slug)]);
   const baseSlug = articleSlug(article.title);
@@ -32,5 +35,5 @@ export async function saveArticle(values: z.input<typeof articleSchema>, request
   revalidatePath("/");
   revalidatePath(`/blog/${slug}`);
   revalidatePath("/yonetim/yazilar");
-  redirect("/yonetim/yazilar");
+  return { status: "success", message: "" };
 }

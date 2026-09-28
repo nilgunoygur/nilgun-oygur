@@ -1,11 +1,11 @@
-import { getViewer, ownerRouteDenied, privateNoStore } from "@/lib/auth/viewer";
+import { ownerRoute, privateNoStore } from "@/lib/auth/viewer";
 import { akademi, catalogChangedByOwner } from "@/lib/akademi/server";
 
 export async function POST() {
-  const denied = await ownerRouteDenied();
-  if (denied) return denied;
+  const viewer = await ownerRoute();
+  if (viewer instanceof Response) return viewer;
   try {
-    await akademi().owner.syncCatalog((await getViewer())!.user.id);
+    await akademi().owner.syncCatalog(viewer.user.id);
     catalogChangedByOwner();
     return new Response(null, { status: 204, headers: privateNoStore });
   } catch {

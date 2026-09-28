@@ -83,7 +83,6 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
   </FormShell>;
 }
 
-/** The live bar, from the current (possibly invalid) values. */
 function Preview({ control, fallback }: { control: BannerControl; fallback: BannerConfig }) {
   const values = useWatch({ control });
   const config: BannerConfig = {

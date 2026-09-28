@@ -58,7 +58,7 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
     },
     owner: {
       overview: ownerOverview,
-      /** Course management data in its JSON shape: the page's initial query data and the refetch route. */
+      /** Serialized for the page's initialData and GET /api/yonetim/courses. */
       async catalogSnapshot() {
         const [{ courses, recentSales }, attention] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db)]);
         return {

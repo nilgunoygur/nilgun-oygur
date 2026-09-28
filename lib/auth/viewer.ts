@@ -53,8 +53,13 @@ export async function requireOwner() {
 
 export const privateNoStore = { "Cache-Control": "private, no-store" };
 
-// Route handler adapter: a private 403 for non-owners, otherwise null.
-export async function ownerRouteDenied() {
+// Route handler adapters (cache() does not memoize here, so read the viewer once): a private 403 for non-owners.
+export async function ownerRoute(): Promise<Viewer | Response> {
   const viewer = await getViewer();
-  return viewer?.owner ? null : Response.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403, headers: privateNoStore });
+  return viewer?.owner ? viewer : Response.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403, headers: privateNoStore });
+}
+
+export async function ownerRouteDenied() {
+  const viewer = await ownerRoute();
+  return viewer instanceof Response ? viewer : null;
 }

@@ -1,8 +1,8 @@
 "use client";
-import { accountCard } from "@/lib/styles";
 import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
+import { accountCard } from "@/lib/styles";
 import { authClient } from "@/lib/auth/client";
 import { avatarSource, profileInput } from "@/lib/auth/profile";
 import { contactFormSchema, contactFormValues, hasCompleteContact, type Contact } from "@/lib/auth/contact";
@@ -13,9 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
-import { FormStatus, idleForm, type FormState } from "./form-status";
+import { idleForm, type FormState } from "./form-status";
 import { ContactFields } from "./contact-fields";
-import { authAttempt, FormRootError, FormShell, PasswordField, submitAction, TextField } from "./form-fields";
+import { authAttempt, FormMessage, FormShell, PasswordField, SubmitButton, submitAction, TextField } from "./form-fields";
 
 type User = { name: string; email: string; image?: string | null };
 
@@ -31,7 +31,7 @@ function CardHeading({ title, description }: { title: string; description: strin
   return <div className="mb-2"><h2 className="text-2xl font-semibold text-forest">{title}</h2><p className="mt-2 text-sm text-stone">{description}</p></div>;
 }
 
-/** Crops the chosen photo to a 256px WebP square small enough to store with the profile. */
+/** 256px WebP square, small enough to store with the profile. */
 async function avatarFrom(file: File) {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error();
   const bitmap = await createImageBitmap(file);
@@ -54,7 +54,6 @@ function PersonalForm({ user }: { user: User }) {
     setStatus(result ?? idleForm);
     if (result) { form.reset(values); void refetch(); }
   });
-  const pending = form.formState.isSubmitting || processing;
   const name = useWatch({ control: form.control, name: "name" });
   return <FormShell form={form} onSubmit={submit} size="lg" busy={processing} className={accountCard}>
     <CardHeading title="Kişisel bilgiler" description="Adınızı ve profil fotoğrafınızı güncelleyin." />
@@ -78,8 +77,8 @@ function PersonalForm({ user }: { user: User }) {
     )} />
     <TextField control={form.control} name="name" label="Adınız soyadınız" autoComplete="name" maxLength={100} />
     <Field><FieldLabel>E-posta adresiniz</FieldLabel><p className="rounded-lg bg-mist px-4 py-3 text-sm text-stone">{user.email}</p><FieldDescription>Bu adres hesap ayarlarından değiştirilemez.</FieldDescription></Field>
-    <FormRootError form={form} /><FormStatus state={status} />
-    <Button type="submit">{pending ? "Kaydediliyor…" : "Profili kaydet"}</Button>
+    <FormMessage status={status} />
+    <SubmitButton busy={processing}>Profili kaydet</SubmitButton>
   </FormShell>;
 }
 
@@ -91,13 +90,12 @@ function ContactForm({ contact }: { contact: Contact }) {
     setStatus(result ?? idleForm);
     if (result) form.reset({ contact: contactFormValues(values) });
   });
-  const pending = form.formState.isSubmitting;
   return <FormShell form={form} onSubmit={submit} size="lg" id="iletisim" className={accountCard}>
     <CardHeading title="İletişim bilgileri" description="Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi güncel tutun." />
     {!hasCompleteContact(contact) && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
     <ContactFields />
-    <FormRootError form={form} /><FormStatus state={status} />
-    <Button type="submit">{pending ? "Kaydediliyor…" : "İletişim bilgilerini kaydet"}</Button>
+    <FormMessage status={status} />
+    <SubmitButton>İletişim bilgilerini kaydet</SubmitButton>
   </FormShell>;
 }
 
@@ -114,7 +112,7 @@ function PasswordForm({ email, localEmail }: { email: string; localEmail: boolea
     } catch { form.setError("root", { message: "Şifre değiştirilemedi. Lütfen tekrar deneyin." }); }
   });
   const sendReset = async () => {
-    setSending(true); setStatus(idleForm);
+    setSending(true); setStatus(idleForm); form.clearErrors("root");
     if (await authAttempt(form, () => authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" }))) {
       setStatus({ status: "success", message: localEmail ? "Şifre sıfırlama bağlantısı geliştirme terminaline yazıldı." : "Şifre sıfırlama bağlantısı için e-posta kutunuzu kontrol edin." });
     }
@@ -125,8 +123,8 @@ function PasswordForm({ email, localEmail }: { email: string; localEmail: boolea
     <PasswordField control={form.control} name="currentPassword" label="Mevcut şifreniz" autoComplete="current-password" />
     <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
     <PasswordField control={form.control} name="confirmPassword" label="Yeni şifreniz (tekrar)" autoComplete="new-password" />
-    <FormRootError form={form} /><FormStatus state={status} />
-    <Button type="submit">{form.formState.isSubmitting ? "İşleniyor…" : "Şifreyi değiştir"}</Button>
+    <FormMessage status={status} />
+    <SubmitButton pendingLabel="İşleniyor…">Şifreyi değiştir</SubmitButton>
     <Button type="button" variant="link" className="h-auto whitespace-normal text-center" onClick={sendReset}>Şifremi unuttum · Sıfırlama bağlantısı gönder</Button>
   </FormShell>;
 }

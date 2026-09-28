@@ -1,4 +1,4 @@
-// `pnpm turkiye:districts`: regenerates lib/turkiye-districts.ts from turkey-neighbourhoods (PTT data, a 24 MB dev dependency).
+// `pnpm turkiye:districts`: regenerates lib/turkiye-districts.ts from PTT data.
 import { writeFileSync } from "node:fs";
 import { getCityCodes, getCityNames, getDistrictsByCityCode } from "turkey-neighbourhoods";
 

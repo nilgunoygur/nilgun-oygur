@@ -44,7 +44,7 @@ export async function courseCards(): Promise<Record<string, { title: string; ima
   try { return await akademi().catalog.cards(); } catch { return {}; }
 }
 
-/** From an owner route handler: expired now, so the next public render reads fresh data (and no page re-renders). */
+/** From an owner route handler: expire now, without re-rendering a page. */
 export function catalogChangedByOwner() {
   revalidateTag(CATALOG_TAG, { expire: 0 });
 }

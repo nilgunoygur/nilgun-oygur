@@ -1,0 +1,2 @@
+ALTER TABLE "user" DROP CONSTRAINT "user_phone_e164";--> statement-breakpoint
+ALTER TABLE "user" ADD CONSTRAINT "user_phone_e164" CHECK ("user"."phone" IS NULL OR "user"."phone" ~ '^\+[1-9][0-9]{6,14}$');

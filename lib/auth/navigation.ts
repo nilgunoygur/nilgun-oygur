@@ -1,3 +1,5 @@
+export const callbackURL = "/akademi/giris?verified=1";
+
 // Only known post-login destinations are accepted; never redirect to user-supplied URLs.
 export function authDestination(value: unknown): string {
   if (value === "/yonetim" || value === "/yonetim/guvenlik") return value;

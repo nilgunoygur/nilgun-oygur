@@ -1,4 +1,4 @@
-// `pnpm flags`: copies country-flag-icons SVGs for every phone country into public/flags/ (loaded only when shown).
+// `pnpm flags`: copies a flag SVG for every phone country into public/flags/.
 import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";

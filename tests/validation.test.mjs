@@ -64,8 +64,8 @@ test("the phone input groups national digits without the trunk 0 and lists Türk
   assert.deepEqual(splitPhone("+4915123456789"), { country: "DE", digits: "15123456789" });
   assert.deepEqual(splitPhone(""), { country: "TR", digits: "" });
   assert.equal(callingCode("TR"), "+90");
-  assert.deepEqual(phoneCountries[0], { code: "TR", name: "Türkiye", dial: "+90" });
-  assert.equal(phoneCountries.find(country => country.code === "DE")?.name, "Almanya");
+  assert.deepEqual(phoneCountries()[0], { code: "TR", name: "Türkiye", dial: "+90" });
+  assert.equal(phoneCountries().find(country => country.code === "DE")?.name, "Almanya");
 });
 
 test("Turkish search ignores case, accents and dotted/dotless i", () => {
@@ -89,6 +89,7 @@ test("contact input requires a matching postcode prefix when a postcode is given
   assert.equal(contactInput.parse({ ...input, postcode: "35040" }).postcode, "35040");
   assert.equal(contactInput.safeParse({ ...input, postcode: "34710" }).error?.issues[0].message, "İzmir posta kodları 35 ile başlar.");
   assert.equal(contactInput.safeParse({ ...input, address: "Ev" }).success, false);
+  assert.equal(contactInput.safeParse({ ...input, city: "İzmir".repeat(1000) }).success, false, "free-text input is capped before any matching");
   assert.equal(contactInput.parse({ ...input, district: "BORNOVA" }).district, "Bornova");
   assert.equal(contactInput.safeParse({ ...input, district: "Kadıköy" }).error?.issues[0].message, "Kadıköy bir İzmir ilçesi değil. İlçenizi listeden seçin.");
 });

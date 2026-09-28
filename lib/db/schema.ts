@@ -20,7 +20,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
-  // Contact details (Better Auth additional fields, required at sign-up; null on older accounts).
+  // Contact (Better Auth additional fields); null on older accounts.
   phone: text("phone"),
   address: text("address"),
   district: text("district"),
@@ -28,7 +28,7 @@ export const user = pgTable("user", {
   postcode: text("postcode"),
   ...timestamps(),
 }, (t) => [
-  check("user_phone_e164", sql`${t.phone} IS NULL OR ${t.phone} ~ '^\\+[1-9][0-9]{7,14}$'`),
+  check("user_phone_e164", sql`${t.phone} IS NULL OR ${t.phone} ~ '^\\+[1-9][0-9]{6,14}$'`),
   check("user_postcode_valid", sql`${t.postcode} IS NULL OR ${t.postcode} ~ '^[0-9]{5}$'`),
 ]);
 export const session = pgTable("session", {

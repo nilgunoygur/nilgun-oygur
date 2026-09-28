@@ -1,12 +1,12 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { user } from "../db/schema.ts";
-import { checkDistrict, contactFields, type Contact } from "../auth/contact.ts";
-import { plateCode } from "../turkiye.ts";
+import { contactFields, type Contact } from "../auth/contact.ts";
+import { matchDistrict, plateCode } from "../turkiye.ts";
 import type { ShopierOrder } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
 
-// Student Contact: phone and address. The student owns them; a Shopier checkout only fills what is still empty.
+// A Shopier checkout only fills contact fields that are still empty.
 
 export const contactColumns = { phone: user.phone, address: user.address, district: user.district, city: user.city, postcode: user.postcode };
 const empty: Contact = { phone: null, address: null, district: null, city: null, postcode: null };
@@ -21,7 +21,7 @@ const shopierAddress = z.object({
   postcode: contactFields.postcode.catch(null),
 });
 
-/** What the buyer typed at checkout, normalized: the first valid phone and the first complete address, billing before shipping. */
+/** First valid phone and first complete address; billing before shipping. */
 function shopierContact(order: ShopierOrder): { phone: string | null; address: Omit<Contact, "phone"> | null } {
   const parties = [order.billingInfo, order.shippingInfo];
   const phone = parties.map(party => contactFields.phone.safeParse(party?.phone ?? "")).find(result => result.success)?.data ?? null;
@@ -29,14 +29,14 @@ function shopierContact(order: ShopierOrder): { phone: string | null; address: O
     const parsed = shopierAddress.safeParse(party ?? {});
     if (!parsed.success) continue;
     const { postcode, city, address } = parsed.data;
-    const { district } = checkDistrict(city, parsed.data.district);
+    const district = matchDistrict(city, parsed.data.district);
     if (!district) continue;
     return { phone, address: { address, district, city, postcode: postcode?.startsWith(plateCode(city)) ? postcode : null } };
   }
   return { phone, address: null };
 }
 
-/** Fills an empty phone, and an empty address as one block, from a Shopier order of this student. Never overwrites. */
+/** Never overwrites; the address is filled as one block. */
 export async function adoptShopierContact(db: Database, userId: string, order: ShopierOrder) {
   const { phone, address } = shopierContact(order);
   if (phone) await db.update(user).set({ phone }).where(and(eq(user.id, userId), isNull(user.phone)));

@@ -3,41 +3,31 @@ import { useId, useState } from "react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import type { ContactFormValues } from "@/lib/auth/contact";
 import { districtsOf, matchProvince, provinceOptions } from "@/lib/turkiye";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { SearchableSelect } from "./searchable-select";
 import { PhoneInput } from "./phone-input";
-import { TextField, TextareaField } from "./form-fields";
+import { ControlledField, TextField, TextareaField } from "./form-fields";
 import { cn } from "@/lib/utils";
 
-/** Phone and address fields for a form with a `contact` value; render inside <FormProvider>. */
+/** Render inside a FormProvider whose values have `contact`. */
 export function ContactFields() {
   const id = useId();
   const { control, setValue } = useFormContext<{ contact: ContactFormValues }>();
   const city = matchProvince(useWatch({ control, name: "contact.city" }));
   const [zeroRemoved, setZeroRemoved] = useState(false);
   return <>
-    <Controller control={control} name="contact.phone" render={({ field, fieldState }) => (
-      <Field data-invalid={fieldState.invalid}>
-        <FieldLabel htmlFor={`${id}-phone`}>Cep telefonunuz</FieldLabel>
-        <PhoneInput id={`${id}-phone`} value={field.value} onChange={field.onChange} onBlur={field.onBlur} ref={field.ref} invalid={fieldState.invalid} onZeroRemoved={setZeroRemoved} />
-        <FieldDescription className={cn(zeroRemoved && "text-primary")}>
-          {zeroRemoved ? "Baştaki 0 gerekmez, sizin için kaldırdık." : "Numaranızı başında 0 olmadan yazın."}
-        </FieldDescription>
-        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-      </Field>
-    )} />
+    <ControlledField control={control} name="contact.phone" label="Cep telefonunuz"
+      description={<span className={cn(zeroRemoved && "text-primary")}>{zeroRemoved ? "Baştaki 0 gerekmez, sizin için kaldırdık." : "Numaranızı başında 0 olmadan yazın."}</span>}>
+      {(field, fieldId, invalid) => <PhoneInput id={fieldId} value={String(field.value)} onChange={field.onChange} onBlur={field.onBlur} ref={field.ref} invalid={invalid} onZeroRemoved={setZeroRemoved} />}
+    </ControlledField>
     <div className="grid gap-5 sm:grid-cols-2">
-      <Controller control={control} name="contact.city" render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor={`${id}-city`}>İl</FieldLabel>
-          <SearchableSelect id={`${id}-city`} items={provinceOptions} value={matchProvince(field.value)} ref={field.ref} onBlur={field.onBlur} invalid={fieldState.invalid}
-            onValueChange={(value) => { field.onChange(value ?? ""); setValue("contact.district", ""); }}
-            placeholder="İl seçin" searchPlaceholder="İl ara…" emptyText="Bu adla bir il bulunamadı." />
-          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )} />
+      <ControlledField control={control} name="contact.city" label="İl">
+        {(field, fieldId, invalid) => <SearchableSelect id={fieldId} items={provinceOptions} value={matchProvince(String(field.value))} ref={field.ref} onBlur={field.onBlur} invalid={invalid}
+          onValueChange={(value) => { field.onChange(value ?? ""); setValue("contact.district", ""); }}
+          placeholder="İl seçin" searchPlaceholder="İl ara…" emptyText="Bu adla bir il bulunamadı." />}
+      </ControlledField>
       <Controller control={control} name="contact.district" render={({ field, fieldState }) => {
-        // Until a province is chosen, the province error covers it.
+        // Hidden until a province is chosen; the province error covers it.
         const invalid = fieldState.invalid && !!city;
         return <Field data-invalid={invalid}>
           <FieldLabel htmlFor={`${id}-district`}>İlçe</FieldLabel>

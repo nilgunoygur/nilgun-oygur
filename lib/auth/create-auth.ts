@@ -43,7 +43,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
     database: dependencies.database,
     trustedOrigins: [dependencies.baseURL],
     user: {
-      // Contact: required at sign-up, validated by the before hook, never returned in sessions.
+      // Validated by the before hook; never returned in sessions.
       additionalFields: {
         phone: { type: "string", required: true, returned: false },
         address: { type: "string", required: true, returned: false },
@@ -100,10 +100,10 @@ export function createAcademyAuth(dependencies: Dependencies) {
       } } },
     },
     hooks: {
-      // Contact fields are validated and normalized together, with the forms' schema.
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== "/sign-up/email" && ctx.path !== "/update-user") return;
-        const body: Record<string, unknown> = ctx.body ?? {};
+        if (typeof ctx.body !== "object" || ctx.body === null) return;
+        const body = ctx.body as Record<string, unknown>;
         if (!contactKeys.some(key => key in body)) return;
         const parsed = contactInput.safeParse({ ...Object.fromEntries(contactKeys.map(key => [key, body[key]])), postcode: body.postcode ?? null });
         if (!parsed.success) throw new APIError("BAD_REQUEST", { code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message });

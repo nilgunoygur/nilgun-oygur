@@ -110,3 +110,12 @@ test("the newest migration applies to a database that already has every earlier 
     await rm(previous, { recursive: true, force: true });
   }
 });
+
+test("stored phones are E.164 (including 7-digit mobiles) and postcodes are 5 digits", async () => {
+  const { normalizePhone } = await import("../lib/phone.ts");
+  const short = normalizePhone("+290 8999");
+  assert.equal(short, "+2908999", "Tristan da Cunha mobiles have 7 digits");
+  await db.insert(schema.user).values({ id: "short-phone", name: "S", email: "short-phone@example.com", phone: short });
+  await rejectsConstraint(() => db.insert(schema.user).values({ id: "national-phone", name: "N", email: "national-phone@example.com", phone: "05321234567" }), "23514");
+  await rejectsConstraint(() => db.insert(schema.user).values({ id: "bad-postcode", name: "P", email: "bad-postcode@example.com", postcode: "" }), "23514");
+});

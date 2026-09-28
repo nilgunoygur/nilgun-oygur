@@ -176,6 +176,7 @@ test("profile changes stay on the signed-in account and password changes require
   assert.equal((await request("/update-user", { phone: "0212 123 45 67" }, cookie)).status, 400, "landlines are rejected");
   assert.equal((await request("/update-user", { city: "Atlantis" }, cookie)).status, 400);
   assert.equal((await request("/update-user", { city: "Ankara" }, cookie)).status, 400, "contact fields are updated together");
+  assert.equal((await request("/update-user", 5, cookie)).status, 400, "a non-object body is a client error, not a crash");
   assert.equal((await request("/update-user", { city: "Ankara", district: "Kadıköy" }, cookie)).status, 400, "the district must belong to the province");
   assert.equal((await request("/update-user", { ...contact, postcode: "35040" }, cookie)).status, 400, "the postcode must match the province");
   assert.equal((await request("/update-user", { ...contact, phone: "+90 (505) 765 43 21", city: "IZMIR", district: "bornova", postcode: "" }, cookie)).status, 200);

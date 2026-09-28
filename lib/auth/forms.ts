@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-// Auth form schemas; kept free of contact code so sign-in pages stay light.
+// No contact imports: keeps sign-in pages light.
 
 export const emailField = (required = "E-posta adresinizi yazın.") => z.string().trim().min(1, required).pipe(z.email("Geçerli bir e-posta adresi yazın."));
 export const newPassword = z.string().min(8, "Şifreniz en az 8 karakter olmalıdır.").max(128, "Şifreniz en fazla 128 karakter olabilir.");
 export const matchingPasswords = (value: { password: string; confirmPassword: string }) => value.password === value.confirmPassword;
-const mismatch = { path: ["confirmPassword"], message: "Şifreler eşleşmiyor." };
+export const mismatch = { path: ["confirmPassword"], message: "Şifreler eşleşmiyor." };
 
 export const loginSchema = z.object({ email: emailField(), password: z.string().min(1, "Şifrenizi yazın."), remember: z.boolean() });
 export const emailLinkSchema = z.object({ email: emailField() });

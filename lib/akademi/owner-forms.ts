@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Owner form schemas for the resolvers and the server actions; each accepts its own output, so the server can re-parse it.
+// Each schema accepts its own output, so the server can re-parse what the form submits.
 
 const number = (label: string, min: number, max: number, step: "integer" | "price") => z.coerce.string().trim().min(1, `${label} yazın.`)
   .transform(Number).pipe(z.number({ error: `${label} bir sayı olmalıdır.` })
@@ -9,7 +9,6 @@ const number = (label: string, min: number, max: number, step: "integer" | "pric
 
 export const coursePriceSchema = z.object({ value: number("Fiyat", 1, 10_000_000, "price") });
 export const courseAccessSchema = z.object({ value: number("Erişim süresi", 1, 3650, "integer") });
-/** One owner edit of a course, sent to PATCH /api/yonetim/courses/[courseId]. */
 export const courseChangeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("status"), status: z.enum(["draft", "published", "archived"]) }),
   coursePriceSchema.extend({ kind: z.literal("price") }),

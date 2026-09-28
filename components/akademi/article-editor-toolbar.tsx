@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -129,9 +129,6 @@ export function useFormatState() {
   return state;
 }
 
-// Portaled forms sit inside the article form; stop the submit from bubbling to it.
-const isolated = (submit: (event?: FormEvent) => Promise<void>) => (event: FormEvent) => { event.stopPropagation(); void submit(event); };
-
 /** Focus leaves the editor while typing a URL, so the selection is saved on open and restored on save. */
 export function LinkForm({ initial, onDone }: { initial: string | null; onDone: () => void }) {
   const [editor] = useLexicalComposerContext();
@@ -145,7 +142,7 @@ export function LinkForm({ initial, onDone }: { initial: string | null; onDone: 
     onDone();
     editor.focus();
   };
-  return <FormShell form={form} size="sm" fieldsClassName="flex-row items-start gap-1.5" onSubmit={isolated(form.handleSubmit(({ url }) => apply(normalizeUrl(url))))}>
+  return <FormShell form={form} size="sm" fieldsClassName="flex-row items-start gap-1.5" onSubmit={form.handleSubmit(({ url }) => apply(normalizeUrl(url)))}>
     <Controller control={form.control} name="url" render={({ field, fieldState }) => (
       <Field data-invalid={fieldState.invalid} className="w-60 gap-1">
         <Input {...field} autoFocus placeholder="ornek.com veya /blog/yazi" aria-label="Bağlantı adresi" aria-invalid={fieldState.invalid} className="text-sm"
@@ -221,7 +218,7 @@ function ImagePicker({ images, upload, onInsert }: { images: ImageChoice[]; uplo
     form.setValue("src", choice.url, { shouldValidate: true });
     if (!form.getValues("alt")) form.setValue("alt", choice.name.replace(/\.[a-z0-9]+$/i, ""));
   };
-  return <FormShell form={form} onSubmit={isolated(form.handleSubmit(({ src, alt }) => onInsert(src, alt)))}>
+  return <FormShell form={form} onSubmit={form.handleSubmit(({ src, alt }) => onInsert(src, alt))}>
     <div className="flex justify-end"><ImageUploadButton upload={upload} onUploaded={choose} label="Görsel yükle">Yeni görsel yükle</ImageUploadButton></div>
     <Controller control={form.control} name="src" render={({ field, fieldState }) => (
       <Field data-invalid={fieldState.invalid}>

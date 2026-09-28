@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, checkUpload, saveLesson, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
-import { FormRootError, FormShell, SelectField, submitAction, TextField, TextareaField } from "./form-fields";
+import { FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import { pillAction } from "@/lib/styles";
@@ -48,7 +48,6 @@ function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean
   const submit = form.handleSubmit(async (values) => {
     setSaved(await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.") ?? idleForm);
   });
-  const pending = form.formState.isSubmitting;
   return <details className="group rounded-[22px] border border-border bg-white">
     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-6"><div><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {lesson.position + 1}</span><h3 className="text-2xl">{lesson.title}</h3></div><span className={`rounded-full px-3 py-1 text-xs ${lesson.status === "published" ? "bg-mist text-forest" : "bg-[#f5ebdd] text-[#82623a]"}`}>{lesson.status === "published" ? "Yayında" : "Taslak"}</span></summary>
     <div className="border-t border-border p-6">
@@ -67,8 +66,7 @@ function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
           <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
         </div>}
-        <FormRootError form={form} />
-        <div className="flex flex-wrap items-center gap-5"><button className={pillAction} type="submit">{pending ? "Kaydediliyor…" : "Dersi kaydet"}</button><div role="status"><FormStatus state={saved} /></div></div>
+        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><div role="status"><FormMessage status={saved} /></div></div>
       </FormShell>
     </div>
   </details>;

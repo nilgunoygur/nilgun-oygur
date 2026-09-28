@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FormRootError, FormShell, TextField } from "./form-fields";
+import { ControlledField, FormMessage, FormShell, submitAction, TextField } from "./form-fields";
 
 type ArticleValues = { title: string; slug: string; category: string; image: string; date: string; duration: string; body: string };
 
@@ -36,6 +37,7 @@ function dateFromLabel(label?: string) {
 const units = { minute: "dk.", hour: "saat" };
 
 export function ArticleForm({ article, initialImages }: { article?: ArticleValues; initialImages: ImageChoice[] }) {
+  const router = useRouter();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [images, setImages] = useState(initialImages);
   const durationMatch = article?.duration.match(/^(\d+)\s*(saat|dk)/i);
@@ -65,43 +67,34 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
     }
   }
 
-  // The server redirects to the article list after saving; a thrown error lands here.
   const save = (status: "draft" | "published") => form.handleSubmit(async (values) => {
-    try { await saveArticle(values, status, article?.slug); }
-    catch { form.setError("root", { message: "Yazı kaydedilemedi. Alanları ve yönetim oturumunuzu kontrol edip tekrar deneyin." }); }
+    if (await submitAction(form, () => saveArticle(values, status, article?.slug), "Yazı kaydedilemedi. Yönetim oturumunuzu kontrol edip tekrar deneyin.")) router.push("/yonetim/yazilar");
   });
 
-  return <FormShell form={form} onSubmit={save("draft")} fieldsClassName="grid gap-7 sm:grid-cols-2">
+  // Stays disabled after a save while the list page loads, so a second click cannot save twice.
+  return <FormShell form={form} onSubmit={save("draft")} busy={form.formState.isSubmitSuccessful} fieldsClassName="grid gap-7 sm:grid-cols-2">
     <div className="sm:col-span-2"><TextField control={form.control} name="title" label="Başlık" maxLength={180} /></div>
     <Field><FieldLabel htmlFor="article-slug">URL adı</FieldLabel><Input id="article-slug" className="bg-muted/50" value={article?.slug ?? articleSlug(title)} readOnly tabIndex={-1} /><FieldDescription>Başlıktan otomatik oluşturulur.</FieldDescription></Field>
     <TextField control={form.control} name="category" label="Kategori" maxLength={70} />
-    <Controller control={form.control} name="date" render={({ field, fieldState }) => (
-      <Field data-invalid={fieldState.invalid}>
-        <FieldLabel htmlFor="article-date">Tarih</FieldLabel>
-        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-          <PopoverTrigger render={<Button type="button" variant="outline" id="article-date" ref={field.ref} className="h-(--control-h) w-full justify-start font-normal" aria-invalid={fieldState.invalid} />}><CalendarDays className="size-4" />{format(parseISO(field.value), "d MMM yyyy", { locale: tr })}</PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={parseISO(field.value)} onSelect={selected => { if (selected) { field.onChange(iso(selected)); setCalendarOpen(false); } }} locale={tr} /></PopoverContent>
-        </Popover>
-        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-      </Field>
-    )} />
-    <Controller control={form.control} name="durationAmount" render={({ field, fieldState }) => (
-      <Field data-invalid={fieldState.invalid}>
-        <FieldLabel htmlFor="article-duration">Okuma süresi</FieldLabel>
-        <InputGroup>
-          <InputGroupInput {...field} value={String(field.value ?? "")} id="article-duration" type="number" inputMode="numeric" min={1} max={999} aria-invalid={fieldState.invalid} />
-          <InputGroupAddon align="inline-end" className="pr-1">
-            <Controller control={form.control} name="durationUnit" render={({ field: unit }) => (
-              <Select items={units} value={unit.value} onValueChange={unit.onChange}>
-                <SelectTrigger aria-label="Okuma süresi birimi" className="h-9 border-0 shadow-none"><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.entries(units).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
-              </Select>
-            )} />
-          </InputGroupAddon>
-        </InputGroup>
-        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-      </Field>
-    )} />
+    <ControlledField control={form.control} name="date" label="Tarih">
+      {(field, id, invalid) => <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <PopoverTrigger render={<Button type="button" variant="outline" id={id} ref={field.ref} className="h-(--control-h) w-full justify-start font-normal" aria-invalid={invalid} />}><CalendarDays className="size-4" />{format(parseISO(String(field.value)), "d MMM yyyy", { locale: tr })}</PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-2"><Calendar mode="single" selected={parseISO(String(field.value))} onSelect={selected => { if (selected) { field.onChange(iso(selected)); setCalendarOpen(false); } }} locale={tr} /></PopoverContent>
+      </Popover>}
+    </ControlledField>
+    <ControlledField control={form.control} name="durationAmount" label="Okuma süresi">
+      {(field, id, invalid) => <InputGroup>
+        <InputGroupInput {...field} value={String(field.value ?? "")} id={id} type="number" inputMode="numeric" min={1} max={999} aria-invalid={invalid} />
+        <InputGroupAddon align="inline-end" className="pr-1">
+          <Controller control={form.control} name="durationUnit" render={({ field: unit }) => (
+            <Select items={units} value={unit.value} onValueChange={unit.onChange}>
+              <SelectTrigger aria-label="Okuma süresi birimi" className="border-0 shadow-none data-[size=default]:h-[calc(var(--control-h)-0.75rem)]"><SelectValue /></SelectTrigger>
+              <SelectContent>{Object.entries(units).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
+            </Select>
+          )} />
+        </InputGroupAddon>
+      </InputGroup>}
+    </ControlledField>
     <Controller control={form.control} name="image" render={({ field, fieldState }) => (
       <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3"><FieldLabel>Kapak görseli</FieldLabel><ImageUploadButton upload={uploadImage} label="Kapak görseli yükle" onUploaded={choice => { field.onChange(choice.url); toast.success("Kapak görseli kütüphaneye eklendi."); }}>Görsel yükle</ImageUploadButton></div>
@@ -110,15 +103,11 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
         {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
       </Field>
     )} />
-    <Controller control={form.control} name="body" render={({ field, fieldState }) => (
-      <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
-        <FieldLabel>Yazı içeriği</FieldLabel>
-        <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={images} upload={uploadImage} />
-        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-      </Field>
-    )} />
+    <ControlledField control={form.control} name="body" label="Yazı içeriği" className="sm:col-span-2">
+      {field => <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={images} upload={uploadImage} />}
+    </ControlledField>
     <div className="grid gap-3 sm:col-span-2">
-      <FormRootError form={form} />
+      <FormMessage />
       <div className="flex flex-wrap gap-3"><Button type="submit" variant="outline" size="pill">Taslak olarak kaydet</Button><Button type="button" size="pill" onClick={save("published")}>Yayınla</Button></div>
     </div>
   </FormShell>;

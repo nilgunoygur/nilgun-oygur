@@ -6,7 +6,7 @@ import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, 
 import { InputGroupAddon } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
-// Shared picker classes; concentric corners: 24px popup, 8px gap, 16px search box and rows (the inputs' radius).
+// Concentric radii: 24px popup, 8px inset, 16px search box and rows.
 export const picker = {
   content: "rounded-xl *:data-[slot=input-group]:m-2 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-10 *:data-[slot=input-group]:rounded-lg",
   list: "max-h-[min(17rem,calc(var(--available-height)-3.5rem))] scroll-py-2 p-2",
@@ -21,7 +21,6 @@ export function PickerSearch({ placeholder }: { placeholder: string }) {
   </ComboboxInput>;
 }
 
-/** A select with a search box in its popup (shadcn Combobox), wired like any React Hook Form control. */
 export function SearchableSelect<T extends string>({ id, items, value, onValueChange, onBlur, ref, invalid, placeholder, searchPlaceholder, emptyText, disabled }: {
   id: string; items: readonly T[]; value: T | null; onValueChange: (value: T | null) => void; onBlur?: () => void; ref?: Ref<HTMLButtonElement>;
   invalid?: boolean; placeholder: string; searchPlaceholder: string; emptyText: string; disabled?: boolean;
