@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { Field, FieldDescription, FieldGroup } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { FormStatus, idleForm, type FormState } from "@/components/akademi/form-status";
-import { FormRootError, TextareaField, TextField } from "@/components/akademi/form-fields";
+import { FormRootError, submitAction, TextareaField, TextField } from "@/components/akademi/form-fields";
 import { sendContactMessage } from "@/app/iletisim/actions";
 import { contactSchema } from "@/lib/contact-schema";
 import { track } from "@/lib/analytics";
@@ -16,17 +16,11 @@ export function ContactForm({ enabled }: { enabled: boolean }) {
   const [sent, setSent] = useState<FormState>(idleForm);
   const form = useForm({ resolver: zodResolver(contactSchema), mode: "onTouched", defaultValues: { name: "", email: "", message: "" } });
   const submit = form.handleSubmit(async (values) => {
-    setSent(idleForm);
-    try {
-      const result = await sendContactMessage(values);
-      if (result.status !== "success") {
-        for (const [key, message] of Object.entries(result.errors ?? {})) form.setError(key as keyof typeof values, { message });
-        if (!result.errors) form.setError("root", { message: result.message });
-        return;
-      }
-      track("generate_lead", { method: "contact_form" });
-      form.reset(); setSent(result);
-    } catch { form.setError("root", { message: "Mesajınız alınamadı. Lütfen biraz sonra tekrar deneyin veya bize e-posta gönderin." }); }
+    const result = await submitAction(form, () => sendContactMessage(values), "Mesajınız alınamadı. Lütfen biraz sonra tekrar deneyin veya bize e-posta gönderin.");
+    setSent(result ?? idleForm);
+    if (!result) return;
+    track("generate_lead", { method: "contact_form" });
+    form.reset();
   });
   const pending = form.formState.isSubmitting;
   return (

@@ -11,15 +11,12 @@ import { deliverPendingEmailsAfterResponse, getEmailOutbox } from "@/lib/email";
 import { contactEmail } from "@/lib/email/templates";
 import type { FormState } from "@/components/akademi/form-status";
 
-type Fields = z.infer<typeof contactSchema>;
-export type ContactState = FormState & { errors?: Partial<Record<keyof Fields, string>> };
-
-export async function sendContactMessage(values: z.input<typeof contactSchema>): Promise<ContactState> {
-  const failed = (message: string): ContactState => ({ status: "error", message });
+export async function sendContactMessage(values: z.input<typeof contactSchema>): Promise<FormState> {
+  const failed = (message: string): FormState => ({ status: "error", message });
   const settings = config();
   if (!settings.enabled.contact) return failed("Mesaj şu anda gönderilemiyor. Lütfen e-posta adresimizden bize ulaşın.");
   const input = contactSchema.safeParse(values);
-  if (!input.success) return { status: "error", message: "Formdaki bilgileri kontrol edin.", errors: Object.fromEntries(input.error.issues.map(issue => [issue.path[0], issue.message])) };
+  if (!input.success) return failed("Formdaki bilgileri kontrol edin.");
   try {
     if ((await checkBotId()).isBot) return failed("İstek doğrulanamadı.");
     const ip = (await headers()).get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || "local";

@@ -5,7 +5,7 @@ import { contactSchema } from "../lib/contact-schema.ts";
 import { articles } from "../lib/content.ts";
 import { districtsOf, matchDistrict, matchProvince, matchesTurkish, plateCode, provinces } from "../lib/turkiye.ts";
 import { callingCode, formatPhone, groupNational, normalizePhone, phoneCountries, splitPhone } from "../lib/phone.ts";
-import { contactInput } from "../lib/auth/profile.ts";
+import { contactInput } from "../lib/auth/contact.ts";
 
 test("Turkish article slugs match whether URL-encoded or decoded", () => {
   const slug = "doğal-taşların-psikolojik-etkileri-bilimsel-bir-bakış";

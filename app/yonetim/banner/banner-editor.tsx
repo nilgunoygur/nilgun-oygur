@@ -1,23 +1,23 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import { AnnouncementBar } from "@/components/announcement-bar";
-import { TextField } from "@/components/akademi/form-fields";
+import { SelectField, TextField } from "@/components/akademi/form-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { BannerConfig } from "@/lib/announcements";
 import { bannerSchema, type BannerFormValues } from "@/lib/akademi/owner-forms";
 import { saveBanner, type BannerActionState } from "./actions";
 
 type Intent = "save" | "publish" | "unpublish";
+type BannerControl = Control<BannerFormValues, unknown, BannerConfig>;
 const colorFields = [
   { key: "backgroundColor", label: "Arka plan" },
   { key: "textColor", label: "Metin" },
@@ -33,17 +33,16 @@ const formValues = (banner: BannerConfig): BannerFormValues => ({
 
 export function BannerEditor({ initial, initiallyPublished }: { initial: BannerConfig; initiallyPublished: boolean }) {
   const [result, setResult] = useState<BannerActionState>({ message: "", error: false, isPublished: initiallyPublished });
-  const [pending, setPending] = useState(false);
+  const [pending, startTransition] = useTransition();
   const form = useForm({ resolver: zodResolver(bannerSchema), mode: "onTouched", defaultValues: formValues(initial) });
   const items = useFieldArray({ control: form.control, name: "items" });
+  const animation = useWatch({ control: form.control, name: "animation" });
   const published = result.isPublished;
 
-  const run = async (intent: Intent, values: BannerFormValues | null) => {
-    setPending(true);
+  const run = (intent: Intent, values: BannerFormValues | null) => startTransition(async () => {
     try { setResult(await saveBanner(intent, values, published)); }
     catch { setResult({ message: "Banner kaydedilemedi. Lütfen tekrar deneyin.", error: true, isPublished: published }); }
-    finally { setPending(false); }
-  };
+  });
   // Saving and publishing validate the form; unpublishing ignores unsaved edits.
   const submit = (intent: Exclude<Intent, "unpublish">) => form.handleSubmit(values => run(intent, values));
 
@@ -63,17 +62,9 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
 
       <Card className={card}><CardHeader><CardTitle className="text-[25px]">Görünüm ve hareket</CardTitle><CardDescription>Renkleri ve duyuruların nasıl değişeceğini ayarlayın.</CardDescription></CardHeader><CardContent><FieldGroup className="grid gap-5 sm:grid-cols-3">
         {colorFields.map(({ key, label }) => <ColorField key={key} control={form.control} name={key} label={label} />)}
-        <Controller control={form.control} name="animation" render={({ field, fieldState }) => (
-          <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor="banner-animation">Animasyon</FieldLabel>
-            <Select items={animations} value={field.value} onValueChange={field.onChange}>
-              <SelectTrigger id="banner-animation" ref={field.ref} className="h-11 w-full" aria-invalid={fieldState.invalid}><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(animations).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
-            </Select>
-          </Field>
-        )} />
+        <SelectField control={form.control} name="animation" label="Animasyon" options={animations} />
         <TextField control={form.control} name="speedSeconds" label="Mesaj başına süre (sn)" type="number" inputMode="numeric" min={2} max={30} step={1} className="h-11" description="2–30 saniye." />
-        <DirectionField control={form.control} />
+        <SelectField control={form.control} name="direction" label="Kayma yönü" options={directions} disabled={animation !== "scroll"} />
         <TextField control={form.control} name="separator" label="Ayraç" className="h-11" maxLength={3} />
         {([["loop", "Sürekli tekrarla", "Kapalıysa animasyon son mesajda durur."], ["pauseOnHover", "Üzerine gelince duraklat", null]] as const).map(([name, label, description]) =>
           <Controller key={name} control={form.control} name={name} render={({ field }) => (
@@ -95,7 +86,7 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
 }
 
 /** The live bar, from the current (possibly invalid) values. */
-function Preview({ control, fallback }: { control: Control<BannerFormValues, unknown, BannerConfig>; fallback: BannerConfig }) {
+function Preview({ control, fallback }: { control: BannerControl; fallback: BannerConfig }) {
   const values = useWatch({ control });
   const config: BannerConfig = {
     ...fallback, ...values,
@@ -105,7 +96,7 @@ function Preview({ control, fallback }: { control: Control<BannerFormValues, unk
   return <AnnouncementBar config={config} preview />;
 }
 
-function ColorField({ control, name, label }: { control: Control<BannerFormValues, unknown, BannerConfig>; name: (typeof colorFields)[number]["key"]; label: string }) {
+function ColorField({ control, name, label }: { control: BannerControl; name: (typeof colorFields)[number]["key"]; label: string }) {
   const id = useId();
   return <Controller control={control} name={name} render={({ field, fieldState }) => (
     <Field data-invalid={fieldState.invalid}>
@@ -115,19 +106,6 @@ function ColorField({ control, name, label }: { control: Control<BannerFormValue
         <Input {...field} id={id} className="h-11" aria-invalid={fieldState.invalid} />
       </div>
       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-    </Field>
-  )} />;
-}
-
-function DirectionField({ control }: { control: Control<BannerFormValues, unknown, BannerConfig> }) {
-  const scrolling = useWatch({ control, name: "animation" }) === "scroll";
-  return <Controller control={control} name="direction" render={({ field }) => (
-    <Field>
-      <FieldLabel htmlFor="banner-direction">Kayma yönü</FieldLabel>
-      <Select items={directions} value={field.value} onValueChange={field.onChange} disabled={!scrolling}>
-        <SelectTrigger id="banner-direction" ref={field.ref} className="h-11 w-full"><SelectValue /></SelectTrigger>
-        <SelectContent>{Object.entries(directions).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
-      </Select>
     </Field>
   )} />;
 }

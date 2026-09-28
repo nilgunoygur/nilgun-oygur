@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { emailField } from "./auth/forms.ts";
 export const contactSchema = z.object({
   name: z
     .string()
     .trim()
     .min(2, "Lütfen adınızı ve soyadınızı yazın.")
     .max(100, "Adınız en fazla 100 karakter olabilir."),
-  email: z.string().trim().min(1, "E-posta adresinizi yazın.").pipe(z.email("Geçerli bir e-posta adresi yazın.")),
+  email: emailField(),
   message: z
     .string()
     .trim()

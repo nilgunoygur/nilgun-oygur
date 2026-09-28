@@ -6,7 +6,7 @@ import { ArrowUpRight, BookOpen, Check, Clock3, Phone } from "lucide-react";
 import { studentPage } from "@/lib/auth/viewer";
 import { akademi, courseCards } from "@/lib/akademi/server";
 import { fallbackCover } from "@/lib/akademi/catalog";
-import { hasCompleteContact } from "@/lib/auth/profile";
+import { hasCompleteContact } from "@/lib/auth/contact";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { buttonVariants } from "@/components/ui/button";

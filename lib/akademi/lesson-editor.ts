@@ -5,8 +5,7 @@ import { adminAuditLog, courses, lessons, liveSessions, modules, videoAssets } f
 import type { Database } from "../db/types.ts";
 import { lessonInput } from "./owner-forms.ts";
 
-// The boundary authorizes an owner before calling these audited commands. Input rules are shared with the lesson form.
-export { lessonInput };
+// The boundary authorizes an owner before calling these audited commands.
 
 export async function ownerLessons(db: Database, courseId: string) {
   return db.select({ lesson: lessons, live: liveSessions, asset: videoAssets }).from(lessons)

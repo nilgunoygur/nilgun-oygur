@@ -1,8 +1,7 @@
 "use client";
-import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm, type Control } from "react-hook-form";
-import type { z } from "zod";
+import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { createUpload, type UpChunk } from "@mux/upchunk";
 import { CalendarDays, CirclePlay, Plus, Upload } from "lucide-react";
@@ -11,10 +10,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, checkUpload, saveLesson, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
-import { FormRootError, TextField, TextareaField } from "./form-fields";
-import { lessonFormSchema, type LessonFormValues } from "@/lib/akademi/owner-forms";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormRootError, SelectField, submitAction, TextField, TextareaField } from "./form-fields";
+import { lessonFormSchema } from "@/lib/akademi/owner-forms";
+import { FieldGroup } from "@/components/ui/field";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import { pillAction } from "@/lib/styles";
 
@@ -49,12 +47,7 @@ function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean
     },
   });
   const submit = form.handleSubmit(async (values) => {
-    setSaved(idleForm);
-    try {
-      const result = await saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id });
-      if (result.status === "error") { form.setError("root", { message: result.message }); return; }
-      setSaved(result);
-    } catch { form.setError("root", { message: "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin." }); }
+    setSaved(await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.") ?? idleForm);
   });
   const pending = form.formState.isSubmitting;
   return <details className="group rounded-[22px] border border-border bg-white">
@@ -66,14 +59,14 @@ function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean
         <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField control={form.control} name="position" label="Sıra (0 ilk ders)" type="number" inputMode="numeric" min={0} max={1000} className="h-11" />
-          <ChoiceField control={form.control} name="status" label="Görünürlük" options={visibility} />
+          <SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="h-11 w-full bg-white" />
         </div>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
           <TextField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" type="datetime-local" className="h-11 bg-white" />
           <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="h-11 bg-white" />
           <div className="sm:col-span-2"><TextField control={form.control} name="joinUrl" label="Toplantı bağlantısı" type="url" placeholder="https://…" maxLength={2048} className="h-11 bg-white" /></div>
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="h-11 bg-white" />
-          <ChoiceField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} />
+          <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="h-11 w-full bg-white" />
         </div>}
         <FormRootError form={form} />
         <div className="flex flex-wrap items-center gap-5"><button className={pillAction} type="submit">{pending ? "Kaydediliyor…" : "Dersi kaydet"}</button><div role="status"><FormStatus state={saved} /></div></div>
@@ -82,19 +75,6 @@ function EditorCard({ row, uploadsEnabled }: { row: Row; uploadsEnabled: boolean
   </details>;
 }
 
-function ChoiceField<N extends "status" | "liveStatus">({ control, name, label, options }: { control: Control<LessonFormValues, unknown, z.output<typeof lessonFormSchema>>; name: N; label: string; options: Record<string, string> }) {
-  const id = useId();
-  return <Controller control={control} name={name} render={({ field, fieldState }) => (
-    <Field data-invalid={fieldState.invalid}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Select items={options} value={field.value} onValueChange={field.onChange}>
-        <SelectTrigger id={id} ref={field.ref} className="h-11 w-full bg-white" aria-invalid={fieldState.invalid}><SelectValue /></SelectTrigger>
-        <SelectContent>{Object.entries(options).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
-      </Select>
-      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-    </Field>
-  )} />;
-}
 function VideoUpload({ row, enabled }: { row: Row; enabled: boolean }) {
   const router = useRouter();
   const upload = useRef<UpChunk | null>(null);

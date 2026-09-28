@@ -89,8 +89,11 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   if (purchaseIds.length === 0) return "not_academy";
   let granted = 0;
   for (const id of purchaseIds) if (await claimPurchase(db, id, userId)) granted++;
-  const owners = granted > 0 ? [] : await db.select({ userId: shopierPurchases.userId }).from(shopierPurchases).where(inArray(shopierPurchases.id, purchaseIds));
-  const outcome = granted > 0 ? "granted" : owners.every(p => p.userId === userId) ? "already_yours" : "claimed_by_other";
+  let outcome: ClaimOutcome = "granted";
+  if (!granted) {
+    const owners = await db.select({ userId: shopierPurchases.userId }).from(shopierPurchases).where(inArray(shopierPurchases.id, purchaseIds));
+    outcome = owners.every(p => p.userId === userId) ? "already_yours" : "claimed_by_other";
+  }
   if (outcome !== "claimed_by_other") await adoptContactSafely(db, userId, order);
   return outcome;
 }

@@ -175,9 +175,10 @@ test("profile changes stay on the signed-in account and password changes require
   assert.equal(session.user.phone, undefined, "contact details stay out of session responses");
   assert.equal((await request("/update-user", { phone: "0212 123 45 67" }, cookie)).status, 400, "landlines are rejected");
   assert.equal((await request("/update-user", { city: "Atlantis" }, cookie)).status, 400);
-  assert.equal((await request("/update-user", { city: "Ankara" }, cookie)).status, 400, "a province change needs its district");
+  assert.equal((await request("/update-user", { city: "Ankara" }, cookie)).status, 400, "contact fields are updated together");
   assert.equal((await request("/update-user", { city: "Ankara", district: "Kadıköy" }, cookie)).status, 400, "the district must belong to the province");
-  assert.equal((await request("/update-user", { phone: "+90 (505) 765 43 21", city: "IZMIR", district: "bornova", postcode: "" }, cookie)).status, 200);
+  assert.equal((await request("/update-user", { ...contact, postcode: "35040" }, cookie)).status, 400, "the postcode must match the province");
+  assert.equal((await request("/update-user", { ...contact, phone: "+90 (505) 765 43 21", city: "IZMIR", district: "bornova", postcode: "" }, cookie)).status, 200);
   const [profile] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
   assert.deepEqual([profile.phone, profile.city, profile.district, profile.postcode], ["+905057654321", "İzmir", "Bornova", null], "updates are normalized and an empty postcode clears it");
   assert.equal((await request("/update-user", { name: "Anonymous" })).status, 401);

@@ -12,13 +12,13 @@ export type BannerActionState = { message: string; error: boolean; isPublished: 
 
 export async function saveBanner(intent: "save" | "publish" | "unpublish", values: z.input<typeof bannerSchema> | null, isPublished: boolean): Promise<BannerActionState> {
   await requireOwner();
-  const previous = { message: "", error: false, isPublished };
-  if (intent !== "save" && intent !== "publish" && intent !== "unpublish") return { ...previous, message: "Geçersiz işlem.", error: true };
+  const fail = (message: string): BannerActionState => ({ message, error: true, isPublished });
+  if (intent !== "save" && intent !== "publish" && intent !== "unpublish") return fail("Geçersiz işlem.");
   let draft: BannerConfig | undefined;
   if (intent !== "unpublish") {
     const parsed = bannerSchema.safeParse(values);
-    if (!parsed.success) return { ...previous, message: parsed.error.issues[0]?.message ?? "Banner ayarlarını kontrol edin.", error: true };
-    draft = { ...parsed.data, items: parsed.data.items.map(item => ({ text: item.text, href: item.href || undefined })) };
+    if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Banner ayarlarını kontrol edin.");
+    draft = parsed.data;
   }
 
   try {
@@ -39,6 +39,6 @@ export async function saveBanner(intent: "save" | "publish" | "unpublish", value
     };
   } catch (error) {
     console.error("Banner settings could not be saved.", error);
-    return { ...previous, message: "Banner kaydedilemedi. Lütfen tekrar deneyin.", error: true };
+    return fail("Banner kaydedilemedi. Lütfen tekrar deneyin.");
   }
 }

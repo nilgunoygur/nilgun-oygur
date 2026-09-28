@@ -4,8 +4,9 @@ import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { authClient } from "@/lib/auth/client";
-import { avatarSource, contactFormValues, hasCompleteContact, profileInput, type Contact } from "@/lib/auth/profile";
-import { contactFormSchema, passwordChangeSchema } from "@/lib/auth/forms";
+import { avatarSource, profileInput } from "@/lib/auth/profile";
+import { contactFormSchema, contactFormValues, hasCompleteContact, type Contact } from "@/lib/auth/contact";
+import { passwordChangeSchema } from "@/lib/auth/forms";
 import { saveContact, saveProfile } from "@/app/akademi/hesabim/profile-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { FormStatus, idleForm, type FormState } from "./form-status";
 import { ContactFields } from "./contact-fields";
-import { FormRootError, PasswordField, TextField } from "./form-fields";
+import { authAttempt, FormRootError, PasswordField, submitAction, TextField } from "./form-fields";
 
 type User = { name: string; email: string; image?: string | null };
 
@@ -49,12 +50,9 @@ function PersonalForm({ user }: { user: User }) {
   const [processing, setProcessing] = useState(false);
   const form = useForm({ resolver: zodResolver(profileInput), mode: "onTouched", defaultValues: { name: user.name, image: avatarSource(user.image) ?? null } });
   const submit = form.handleSubmit(async (values) => {
-    setStatus(idleForm);
-    try {
-      const result = await saveProfile(values);
-      if (result.status === "error") { form.setError("root", { message: result.message }); return; }
-      setStatus(result); form.reset(values); void refetch();
-    } catch { form.setError("root", { message: "Profil kaydedilemedi. Lütfen tekrar deneyin." }); }
+    const result = await submitAction(form, () => saveProfile(values), "Profil kaydedilemedi. Lütfen tekrar deneyin.");
+    setStatus(result ?? idleForm);
+    if (result) { form.reset(values); void refetch(); }
   });
   const pending = form.formState.isSubmitting || processing;
   const name = useWatch({ control: form.control, name: "name" });
@@ -91,18 +89,15 @@ function ContactForm({ contact }: { contact: Contact }) {
   const [status, setStatus] = useState<FormState>(idleForm);
   const form = useForm({ resolver: zodResolver(contactFormSchema), mode: "onTouched", defaultValues: { contact: contactFormValues(contact) } });
   const submit = form.handleSubmit(async ({ contact: values }) => {
-    setStatus(idleForm);
-    try {
-      const result = await saveContact(values);
-      if (result.status === "error") { form.setError("root", { message: result.message }); return; }
-      setStatus(result); form.reset({ contact: contactFormValues(values) });
-    } catch { form.setError("root", { message: "İletişim bilgileri kaydedilemedi. Lütfen tekrar deneyin." }); }
+    const result = await submitAction(form, () => saveContact(values), "İletişim bilgileri kaydedilemedi. Lütfen tekrar deneyin.");
+    setStatus(result ?? idleForm);
+    if (result) form.reset({ contact: contactFormValues(values) });
   });
   const pending = form.formState.isSubmitting;
   return <FormProvider {...form}><form id="iletisim" className={accountCard} onSubmit={submit} noValidate aria-busy={pending}>
     <fieldset disabled={pending} className="contents"><FieldGroup>
       <CardHeading title="İletişim bilgileri" description="Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi güncel tutun." />
-      {!hasCompleteContact(contact) && status.status !== "success" && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
+      {!hasCompleteContact(contact) && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
       <ContactFields />
       <FormRootError form={form} /><FormStatus state={status} />
       <Button type="submit">{pending ? "Kaydediliyor…" : "İletişim bilgilerini kaydet"}</Button>
@@ -124,12 +119,10 @@ function PasswordForm({ email, localEmail }: { email: string; localEmail: boolea
   });
   const sendReset = async () => {
     setSending(true); setStatus(idleForm);
-    try {
-      const result = await authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" });
-      if (result.error) throw new Error();
+    if (await authAttempt(form, () => authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" }))) {
       setStatus({ status: "success", message: localEmail ? "Şifre sıfırlama bağlantısı geliştirme terminaline yazıldı." : "Şifre sıfırlama bağlantısı için e-posta kutunuzu kontrol edin." });
-    } catch { form.setError("root", { message: "Bağlantı gönderilemedi. Lütfen tekrar deneyin." }); }
-    finally { setSending(false); }
+    }
+    setSending(false);
   };
   const pending = form.formState.isSubmitting || sending;
   return <form className={accountCard} onSubmit={submit} noValidate aria-busy={pending}>

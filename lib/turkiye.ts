@@ -16,13 +16,15 @@ export const provinces = [
 ] as const;
 export type Province = (typeof provinces)[number];
 
-/** Alphabetical (Turkish collation) for pickers. */
-export const provinceOptions = [...provinces].sort((a, b) => a.localeCompare(b, "tr-TR"));
+export const provinceOptions = [...provinces].sort(new Intl.Collator("tr-TR").compare);
 
-// "İSTANBUL", "Istanbul" and "istanbul" all fold to "istanbul".
-const fold = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "")
-  .replaceAll("ı", "i").replace(/[^a-z]/g, "");
-/** Case-, accent- and dotted/dotless-i-insensitive search: "kadikoy" finds Kadıköy, "IGDIR" finds Iğdır. */
+// Case-, accent- and dotted/dotless-i-insensitive: "IGDIR" and "ığdır" both fold to "igdir". Memoized for per-keystroke search.
+const folded = new Map<string, string>();
+const fold = (value: string) => {
+  let key = folded.get(value);
+  if (key === undefined) folded.set(value, key = value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{M}/gu, "").replaceAll("ı", "i").replace(/[^a-z]/g, ""));
+  return key;
+};
 export const matchesTurkish = (text: string, query: string) => fold(text).includes(fold(query));
 const aliases: Record<string, Province> = { icel: "Mersin", afyon: "Afyonkarahisar", maras: "Kahramanmaraş", kmaras: "Kahramanmaraş", urfa: "Şanlıurfa", antep: "Gaziantep" };
 const byFolded = new Map<string, Province>([...provinces.map(name => [fold(name), name] as const), ...Object.entries(aliases)]);

@@ -10,13 +10,13 @@ import { articles as importedArticles } from "@/lib/content";
 import { articleSlug } from "@/lib/akademi/slug";
 import { dayLabel } from "@/lib/akademi/format";
 import { articlePlainText, cleanArticleHtml, slugOf, uploadedImagePrefix } from "@/lib/articles";
-import { articleSchema, articleStatus } from "@/lib/akademi/owner-forms";
+import { articleMinLength, articleSchema, articleStatus } from "@/lib/akademi/owner-forms";
 
 export async function saveArticle(values: z.input<typeof articleSchema>, requestedStatus: z.input<typeof articleStatus>, originalSlug = "") {
   await requireOwner();
   const article = { ...articleSchema.parse(values), status: articleStatus.parse(requestedStatus) };
   const body = cleanArticleHtml(article.body);
-  if (articlePlainText(body).length < 40) throw new Error("Yazı içeriği en az 40 karakter olmalıdır.");
+  if (articlePlainText(body).length < articleMinLength.length) throw new Error(articleMinLength.message);
   if (article.image.startsWith(uploadedImagePrefix)) {
     const imageId = article.image.slice(uploadedImagePrefix.length);
     const [found] = await getDatabase().select({ id: articleAssets.id }).from(articleAssets).where(eq(articleAssets.id, imageId)).limit(1);

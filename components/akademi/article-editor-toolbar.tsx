@@ -129,7 +129,7 @@ export function useFormatState() {
   return state;
 }
 
-/** Submits this form only: React bubbles events through portals, and these forms sit inside the article form. */
+// Portaled forms sit inside the article form; stop the submit from bubbling to it.
 const isolated = (submit: (event?: FormEvent) => Promise<void>) => (event: FormEvent) => { event.stopPropagation(); void submit(event); };
 
 /** Focus leaves the editor while typing a URL, so the selection is saved on open and restored on save. */

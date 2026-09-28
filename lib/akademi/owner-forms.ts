@@ -1,8 +1,7 @@
 import { z } from "zod";
 
-// Owner (yönetim) form schemas, shared by the React Hook Form resolvers and the server actions that re-validate them.
+// Owner form schemas for the resolvers and the server actions; each accepts its own output, so the server can re-parse it.
 
-// Inputs send strings, and the server re-validates the parsed numbers, so both are accepted.
 const number = (label: string, min: number, max: number, step: "integer" | "price") => z.coerce.string().trim().min(1, `${label} yazın.`)
   .transform(Number).pipe(z.number({ error: `${label} bir sayı olmalıdır.` })
     .refine(value => step === "price" || Number.isInteger(value), `${label} tam sayı olmalıdır.`)
@@ -15,9 +14,10 @@ export const linkSchema = z.object({ url: z.string().trim().min(1, "Bir bağlant
 export const imageInsertSchema = z.object({ src: z.string().min(1, "Bir görsel seçin."), alt: z.string().trim().max(160, "Açıklama en fazla 160 karakter olabilir.") });
 
 const hexColor = z.string().regex(/^#[\da-fA-F]{6}$/, "Rengi #224c40 biçiminde yazın.");
-export const bannerItemSchema = z.object({
+const bannerItemSchema = z.object({
   text: z.string().trim().min(3, "Mesaj en az 3 karakter olmalıdır.").max(180, "Mesaj en fazla 180 karakter olabilir."),
-  href: z.string().trim().max(500).refine(value => !value || /^\/(?!\/)[^\s]*$/.test(value) || /^https:\/\/[^\s]+$/.test(value), "Geçerli bir site yolu veya HTTPS bağlantısı girin."),
+  href: z.string().trim().max(500).refine(value => !value || /^\/(?!\/)[^\s]*$/.test(value) || /^https:\/\/[^\s]+$/.test(value), "Geçerli bir site yolu veya HTTPS bağlantısı girin.")
+    .optional().transform(value => value || undefined),
 });
 export const bannerSchema = z.object({
   items: z.array(bannerItemSchema).min(1, "En az bir mesaj ekleyin.").max(10, "En fazla 10 mesaj ekleyebilirsiniz."),
@@ -30,6 +30,7 @@ export const bannerSchema = z.object({
 });
 export type BannerFormValues = z.input<typeof bannerSchema>;
 
+export const articleMinLength = { length: 40, message: "Yazı içeriği en az 40 karakter olmalıdır." };
 const plainText = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 export const articleSchema = z.object({
   title: z.string().trim().min(3, "Başlık en az 3 karakter olmalıdır.").max(180, "Başlık en fazla 180 karakter olabilir."),
@@ -38,9 +39,8 @@ export const articleSchema = z.object({
   date: z.iso.date("Bir tarih seçin."),
   durationAmount: number("Okuma süresi", 1, 999, "integer"),
   durationUnit: z.enum(["minute", "hour"]),
-  body: z.string().trim().max(100_000, "Yazı çok uzun.").refine(value => plainText(value).length >= 40, "Yazı içeriği en az 40 karakter olmalıdır."),
+  body: z.string().trim().max(100_000, "Yazı çok uzun.").refine(value => plainText(value).length >= articleMinLength.length, articleMinLength.message),
 });
-export type ArticleFormValues = z.input<typeof articleSchema>;
 export const articleStatus = z.enum(["draft", "published"]);
 
 export const lessonFormSchema = z.object({
@@ -54,6 +54,4 @@ export const lessonFormSchema = z.object({
   passcode: z.string().trim().max(100, "Şifre en fazla 100 karakter olabilir.").default(""),
   liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]).default("scheduled"),
 });
-export type LessonFormValues = z.input<typeof lessonFormSchema>;
-/** The server's input: the form plus which lesson it edits. */
 export const lessonInput = lessonFormSchema.extend({ courseId: z.uuid(), lessonId: z.uuid() });

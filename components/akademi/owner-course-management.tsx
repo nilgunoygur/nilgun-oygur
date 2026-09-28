@@ -29,12 +29,6 @@ type Edit = { kind: "price" | "access"; course: OwnerCourse } | null;
 const perPage = 6;
 const statusLabel = { published: "Yayında", draft: "Taslak", archived: "Arşivde" } as const;
 
-function formData(fields: Record<string, string>) {
-  const data = new FormData();
-  for (const [key, value] of Object.entries(fields)) data.set(key, value);
-  return data;
-}
-
 export function OwnerCourseManagement({ initialData }: { initialData: OwnerCatalogSnapshot }) {
   const client = useQueryClient();
   const [tab, setTab] = useState<Filter>("published");
@@ -45,7 +39,7 @@ export function OwnerCourseManagement({ initialData }: { initialData: OwnerCatal
   const queryKey = ownerQueryKeys.catalog();
   const refresh = async () => { await client.invalidateQueries({ queryKey }); };
   const status = useMutation({
-    mutationFn: async ({ id, next }: { id: string; next: OwnerCourse["status"] }) => setCourseStatus(formData({ courseId: id, status: next })),
+    mutationFn: async ({ id, next }: { id: string; next: OwnerCourse["status"] }) => setCourseStatus({ courseId: id, status: next }),
     onMutate: async ({ id, next }) => {
       await client.cancelQueries({ queryKey });
       const previous = client.getQueryData<OwnerCatalogSnapshot>(queryKey);

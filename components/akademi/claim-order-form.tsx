@@ -2,23 +2,19 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { claimOrder } from "@/app/akademi/hesabim/actions";
 import { claimSchema } from "@/lib/akademi/claim-schema";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { FormStatus, idleForm, type FormState } from "@/components/akademi/form-status";
-import { FormRootError, TextField } from "./form-fields";
+import { FormRootError, submitAction, TextField } from "./form-fields";
 
 export function ClaimOrderForm() {
   const [granted, setGranted] = useState<FormState>(idleForm);
   const form = useForm({ resolver: zodResolver(claimSchema), mode: "onTouched", defaultValues: { orderNumber: "", email: "" } });
   const submit = form.handleSubmit(async (values) => {
-    try {
-      const result = await claimOrder(values);
-      if (result.status === "error") { form.setError("root", { message: result.message }); toast.error(result.message); return; }
-      setGranted(result);
-    } catch { form.setError("root", { message: "Sipariş şu anda doğrulanamıyor. Lütfen biraz sonra yeniden deneyin." }); }
+    const result = await submitAction(form, () => claimOrder(values), "Sipariş şu anda doğrulanamıyor. Lütfen biraz sonra yeniden deneyin.");
+    if (result) setGranted(result);
   });
   const again = () => { form.reset(); setGranted(idleForm); };
   if (granted.status === "success") return <div className="grid gap-5"><FormStatus state={granted} /><Button type="button" variant="outline" onClick={again}>Başka sipariş ekle</Button></div>;

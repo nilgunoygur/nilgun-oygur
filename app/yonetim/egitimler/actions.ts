@@ -7,9 +7,9 @@ import { courseAccessSchema, coursePriceSchema } from "@/lib/akademi/owner-forms
 
 const statusSchema = z.object({ courseId: z.uuid(), status: z.enum(["draft", "published", "archived"]) });
 
-export async function setCourseStatus(formData: FormData) {
+export async function setCourseStatus(input: z.input<typeof statusSchema>) {
   const viewer = await requireOwner();
-  const { courseId, status } = statusSchema.parse({ courseId: formData.get("courseId"), status: formData.get("status") });
+  const { courseId, status } = statusSchema.parse(input);
   if (await akademi().owner.setCourseStatus(viewer.user.id, courseId, status)) catalogChangedByOwner();
   refresh();
 }

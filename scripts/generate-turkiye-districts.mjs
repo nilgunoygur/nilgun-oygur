@@ -1,6 +1,4 @@
-// Regenerates lib/turkiye-districts.ts from PTT's postcode list (via turkey-neighbourhoods, a dev dependency).
-// The package is ~24 MB, so only this small province → districts map ships with the site.
-// Run: node scripts/generate-turkiye-districts.mjs
+// `pnpm turkiye:districts`: regenerates lib/turkiye-districts.ts from turkey-neighbourhoods (PTT data, a 24 MB dev dependency).
 import { writeFileSync } from "node:fs";
 import { getCityCodes, getCityNames, getDistrictsByCityCode } from "turkey-neighbourhoods";
 

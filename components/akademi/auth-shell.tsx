@@ -8,8 +8,7 @@ export function AuthShell({ title, description, children }: {
 }) {
   return (
     <section className={cn(pageWidth, "grid grid-cols-2 items-start gap-[90px] pt-[150px] pb-[90px] max-[901px]:gap-[38px] max-[681px]:grid-cols-1 max-[681px]:gap-7 max-[681px]:pt-[116px] max-[681px]:pb-[60px]")}>
-      {/* Beside the form the panel sticks exactly where it starts (150px + banner), so it never moves while long forms
-          scroll; it is released with the section, revealing the footer. Screens too short to fit it scroll normally. */}
+      {/* Sticks where it starts beside long forms; screens too short for it scroll normally. */}
       <aside className="flex min-h-[650px] flex-col justify-between gap-8 rounded-[28px] bg-accent p-11 max-[901px]:p-[30px] max-[681px]:min-h-0 max-[681px]:gap-6 max-[681px]:p-6 [@media(min-width:682px)_and_(min-height:640px)]:sticky [@media(min-width:682px)_and_(min-height:640px)]:top-[calc(150px+var(--announcement-offset,0px))] [@media(min-width:682px)_and_(min-height:640px)]:h-[min(650px,calc(100svh-174px-var(--announcement-offset,0px)))] [@media(min-width:682px)_and_(min-height:640px)]:min-h-[430px]">
         <span className="flex items-center gap-[10px] text-[17px] font-medium"><Leaf aria-hidden="true" className="text-primary" /> Nilgün Oygur Akademi</span>
         <div className="max-[681px]:hidden">

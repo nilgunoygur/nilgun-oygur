@@ -1,6 +1,4 @@
-// Copies a 3:2 SVG flag for every country the phone input offers into public/flags/, from country-flag-icons
-// (a dev dependency). Served as static files, so the browser loads only the flags on screen.
-// Run: node scripts/generate-flags.mjs
+// `pnpm flags`: copies country-flag-icons SVGs for every phone country into public/flags/ (loaded only when shown).
 import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";

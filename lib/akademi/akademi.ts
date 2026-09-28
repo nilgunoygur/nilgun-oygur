@@ -54,7 +54,6 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
       },
     },
     students: {
-      /** Phone and address of a verified student, for their own profile. */
       contact: (userId: string) => studentContact(db, userId),
     },
     owner: {

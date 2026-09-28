@@ -2,6 +2,7 @@ import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, max, or, sql }
 import { courseAccess, owners, session, user } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { hasActiveAccess } from "./access-policy.ts";
+import { contactColumns } from "./student-contact.ts";
 
 // Read-only: owner rights come only from the protected owners table.
 
@@ -27,7 +28,7 @@ export async function ownerUsers(db: Database, params: UserListParams, now: Date
   const rowsOf = (page: number) => db.select({
     id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, twoFactorEnabled: user.twoFactorEnabled,
     createdAt: user.createdAt, owner: isNotNull(owners.userId).mapWith(Boolean),
-    phone: user.phone, address: user.address, district: user.district, city: user.city, postcode: user.postcode,
+    ...contactColumns,
   }).from(user).leftJoin(owners, eq(owners.userId, user.id)).where(where)
     .orderBy(desc(user.createdAt), user.id).limit(perPage).offset((page - 1) * perPage);
 

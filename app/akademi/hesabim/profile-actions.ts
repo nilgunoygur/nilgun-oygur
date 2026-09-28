@@ -4,7 +4,8 @@ import { refresh } from "next/cache";
 import { requireStudent } from "@/lib/auth/viewer";
 import { getAuth } from "@/lib/auth";
 import type { z } from "zod";
-import { contactInput, profileInput, type ContactInput } from "@/lib/auth/profile";
+import { profileInput } from "@/lib/auth/profile";
+import { contactInput, type ContactInput } from "@/lib/auth/contact";
 import type { FormState } from "@/components/akademi/form-status";
 
 export async function accountOptions() {

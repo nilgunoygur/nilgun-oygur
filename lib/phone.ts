@@ -1,14 +1,11 @@
 import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/mobile";
 
-// Mobile numbers for any country, Türkiye first. Stored as E.164 (+905321234567).
-
 export type { CountryCode };
-export const defaultCountry: CountryCode = "TR";
+const defaultCountry: CountryCode = "TR";
 
 /** Any common way of writing a mobile number ("+90 532…", "0532…", "532…") → E.164; national formats are read as Turkish. Null for landlines and invalid numbers. */
 export function normalizePhone(value: string | null | undefined): string | null {
   const phone = value ? parsePhoneNumberFromString(value, defaultCountry) : undefined;
-  // The mobile metadata rejects landlines and premium/shared-cost numbers.
   return phone?.isValid() ? phone.number : null;
 }
 
@@ -33,7 +30,8 @@ export function splitPhone(value: string | null | undefined, fallback: CountryCo
 }
 
 const regionNames = new Intl.DisplayNames(["tr"], { type: "region" });
+const turkishOrder = new Intl.Collator("tr-TR").compare;
 /** Every country with a calling code, named in Turkish; Türkiye first, the rest alphabetical. */
 export const phoneCountries: readonly { code: CountryCode; name: string; dial: string }[] = getCountries()
   .map(code => ({ code, name: regionNames.of(code) ?? code, dial: callingCode(code) }))
-  .sort((a, b) => a.code === defaultCountry ? -1 : b.code === defaultCountry ? 1 : a.name.localeCompare(b.name, "tr-TR"));
+  .sort((a, b) => a.code === defaultCountry ? -1 : b.code === defaultCountry ? 1 : turkishOrder(a.name, b.name));

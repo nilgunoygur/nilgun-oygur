@@ -1,7 +1,7 @@
 "use client";
 import { useId, useState } from "react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
-import type { ContactFormValues } from "@/lib/auth/profile";
+import type { ContactFormValues } from "@/lib/auth/contact";
 import { districtsOf, matchProvince, provinceOptions } from "@/lib/turkiye";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { SearchableSelect } from "./searchable-select";
@@ -9,10 +9,7 @@ import { PhoneInput } from "./phone-input";
 import { TextField, TextareaField } from "./form-fields";
 import { cn } from "@/lib/utils";
 
-/**
- * Phone and address controls for any React Hook Form whose values include `contact` (see contactFormFields).
- * Render inside <FormProvider>.
- */
+/** Phone and address fields for a form with a `contact` value; render inside <FormProvider>. */
 export function ContactFields() {
   const id = useId();
   const { control, setValue } = useFormContext<{ contact: ContactFormValues }>();
@@ -39,16 +36,17 @@ export function ContactFields() {
           {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
         </Field>
       )} />
-      <Controller control={control} name="contact.district" render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid && !!city}>
+      <Controller control={control} name="contact.district" render={({ field, fieldState }) => {
+        // Until a province is chosen, the province error covers it.
+        const invalid = fieldState.invalid && !!city;
+        return <Field data-invalid={invalid}>
           <FieldLabel htmlFor={`${id}-district`}>İlçe</FieldLabel>
-          <SearchableSelect key={city ?? ""} id={`${id}-district`} items={city ? districtsOf(city) : []} value={field.value || null} ref={field.ref} onBlur={field.onBlur} invalid={fieldState.invalid && !!city}
+          <SearchableSelect key={city ?? ""} id={`${id}-district`} items={city ? districtsOf(city) : []} value={field.value || null} ref={field.ref} onBlur={field.onBlur} invalid={invalid}
             onValueChange={(value) => field.onChange(value ?? "")} disabled={!city}
             placeholder={city ? "İlçe seçin" : "Önce il seçin"} searchPlaceholder="İlçe ara…" emptyText={`${city ?? ""} içinde bu adla bir ilçe yok.`} />
-          {/* Until a province is chosen the province error says it all. */}
-          {fieldState.invalid && city && <FieldError errors={[fieldState.error]} />}
-        </Field>
-      )} />
+          {invalid && <FieldError errors={[fieldState.error]} />}
+        </Field>;
+      }} />
     </div>
     <TextareaField control={control} name="contact.address" label="Açık adres" autoComplete="street-address" maxLength={250} rows={2} placeholder="Mahalle, cadde/sokak, bina ve daire no" />
     <div className="grid gap-5 sm:grid-cols-2">

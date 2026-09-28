@@ -5,7 +5,6 @@ import { akademi } from "@/lib/akademi/server";
 import { claimSchema, type ClaimInput } from "@/lib/akademi/claim-schema";
 import type { FormState } from "@/components/akademi/form-status";
 
-
 const messages = {
   granted: "Eğitiminiz hesabınıza eklendi.",
   already_yours: "Bu sipariş zaten hesabınızda.",
