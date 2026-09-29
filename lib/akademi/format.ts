@@ -14,3 +14,4 @@ export function formatAccess(days: number) {
   if (days % 30 === 0) return `${days / 30} ay erişim`;
   return `${days} gün erişim`;
 }
+export const formatDuration = (seconds: number) => seconds < 60 ? `${seconds} sn` : `${Math.floor(seconds / 60)} dk${seconds % 60 ? ` ${seconds % 60} sn` : ""}`;

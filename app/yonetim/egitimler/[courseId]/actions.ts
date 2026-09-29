@@ -5,14 +5,15 @@ import { and, eq, inArray } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, lessons, videoAssets } from "@/lib/db/schema";
-import { createLessons, updateLesson } from "@/lib/akademi/lesson-editor";
+import { attachVideo, createLessons, updateLesson } from "@/lib/akademi/lesson-editor";
 import type { lessonInput } from "@/lib/akademi/owner-forms";
-import { muxRequest, playbackTokens, videoConfigured } from "@/lib/video/mux";
-import { captionLanguage, describeAsset, newAssetSettings, type MuxAsset } from "@/lib/video/library";
+import { muxLibrary, muxRequest, ownerTokenExpiry, playbackTokens, thumbnailUrl, videoConfigured } from "@/lib/video/mux";
+import { captionLanguage, describeAsset, newAssetSettings, type AssetInfo, type MuxAsset } from "@/lib/video/library";
 import { config } from "@/lib/config";
 import type { FormState } from "@/components/akademi/form-status";
 
-const report = (error: unknown): FormState => ({ status: "error", message: error instanceof z.ZodError ? "Lütfen ders alanlarını kontrol edin: " + error.issues[0]?.message : error instanceof Error && !["UNAUTHORIZED", "FORBIDDEN"].includes(error.message) && !error.message.includes("query") ? error.message : "İşlem tamamlanamadı. Yönetim oturumunuzu kontrol edin." });
+const errorMessage = (error: unknown) => error instanceof z.ZodError ? "Lütfen ders alanlarını kontrol edin: " + error.issues[0]?.message : error instanceof Error && !["UNAUTHORIZED", "FORBIDDEN"].includes(error.message) && !error.message.includes("query") ? error.message : "İşlem tamamlanamadı. Yönetim oturumunuzu kontrol edin.";
+const report = (error: unknown): FormState => ({ status: "error", message: errorMessage(error) });
 function changed(courseId: string) {
   revalidatePath(`/yonetim/egitimler/${courseId}`);
   revalidatePath(`/akademi/hesabim/${courseId}`);
@@ -60,12 +61,11 @@ export async function checkUpload(lessonId: string) {
   const upload = await muxRequest<{ status: string; asset_id?: string }>(`uploads/${encodeURIComponent(row.asset.muxUploadId)}`);
   if (["errored", "timed_out", "cancelled"].includes(upload.status)) return { status: "failed" as const };
   if (!upload.asset_id) return { status: "processing" as const };
-  const asset = await muxRequest<{ id: string; status: string; duration?: number; aspect_ratio?: string; playback_ids?: { id: string; policy: string }[] }>(`assets/${encodeURIComponent(upload.asset_id)}`);
-  const playbackId = asset.playback_ids?.find(p => p.policy === "signed")?.id;
-  if (asset.status === "errored") return { status: "failed" as const };
-  if (asset.status !== "ready" || !playbackId) return { status: "processing" as const };
+  const asset = describeAsset(await muxRequest<MuxAsset>(`assets/${encodeURIComponent(upload.asset_id)}`));
+  if (asset.failed) return { status: "failed" as const };
+  if (!asset.ready || !asset.signedPlaybackId) return { status: "processing" as const };
   await db.transaction(async tx => {
-    const updated = await tx.update(videoAssets).set({ muxAssetId: asset.id, signedPlaybackId: playbackId, status: "ready", durationSeconds: Math.ceil(asset.duration ?? 0), aspectRatio: asset.aspect_ratio }).where(and(eq(videoAssets.id, row.asset.id), eq(videoAssets.status, row.asset.status))).returning();
+    const updated = await tx.update(videoAssets).set({ muxAssetId: asset.id, signedPlaybackId: asset.signedPlaybackId, status: "ready", durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio }).where(and(eq(videoAssets.id, row.asset.id), eq(videoAssets.status, row.asset.status))).returning();
     if (updated.length) await tx.insert(adminAuditLog).values({ actorId: viewer.user.id, action: "video.ready", resourceType: "lesson", resourceId: row.lesson.id, reason: "Video oynatılmaya hazır" });
   });
   changed(row.lesson.courseId);
@@ -73,65 +73,51 @@ export async function checkUpload(lessonId: string) {
 }
 
 const assetId = z.string().regex(/^[A-Za-z0-9]{1,128}$/, "Geçersiz video.");
-const hour = () => Math.floor(Date.now() / 1000) + 3600;
 
-/** Videos in the Mux environment, for attaching one uploaded in the Mux dashboard to a lesson. */
-type LibraryAsset = ReturnType<typeof describeAsset> & { thumbnail?: string; usedBy: string[] };
-export async function listMuxLibrary(): Promise<{ assets: LibraryAsset[] } | { error: string }> {
+export async function listMuxLibrary(): Promise<{ assets: (AssetInfo & { thumbnail?: string; usedBy: string[] })[] } | { error: string }> {
   try {
     await requireOwner();
     if (!videoConfigured()) return { error: "Mux bağlantısı kurulmadan video kütüphanesi görüntülenemez." };
-    const assets = (await muxRequest<MuxAsset[]>("assets?limit=50")).map(describeAsset);
-    const ids = assets.map(asset => asset.id);
-    const used = ids.length ? await getDatabase().select({ muxAssetId: videoAssets.muxAssetId, lesson: lessons.title }).from(videoAssets).innerJoin(lessons, eq(lessons.videoAssetId, videoAssets.id)).where(inArray(videoAssets.muxAssetId, ids)) : [];
-    const expires = hour();
-    return { assets: assets.map(asset => {
-      const signed = asset.signedPlaybackId, open = asset.publicPlaybackIds[0];
-      const thumbnail = signed ? `https://image.mux.com/${signed}/thumbnail.webp?width=320&token=${playbackTokens(signed, expires).thumbnail}` : open ? `https://image.mux.com/${open}/thumbnail.webp?width=320` : undefined;
-      return { ...asset, thumbnail, usedBy: used.filter(row => row.muxAssetId === asset.id).map(row => row.lesson) };
-    }) };
-  } catch (error) { return { error: report(error).message }; }
+    const assets = await muxLibrary();
+    const used = assets.length ? await getDatabase().select({ muxAssetId: videoAssets.muxAssetId, lesson: lessons.title })
+      .from(videoAssets).innerJoin(lessons, eq(lessons.videoAssetId, videoAssets.id))
+      .where(inArray(videoAssets.muxAssetId, assets.map(asset => asset.id))) : [];
+    return { assets: assets.map(asset => ({
+      ...asset,
+      thumbnail: asset.signedPlaybackId ? thumbnailUrl(asset.signedPlaybackId) : asset.publicPlaybackIds[0] && thumbnailUrl(asset.publicPlaybackIds[0], false),
+      usedBy: used.filter(row => row.muxAssetId === asset.id).map(row => row.lesson),
+    })) };
+  } catch (error) { return { error: errorMessage(error) }; }
 }
 
-/**
- * Links a ready Mux asset to a video lesson, draft or published. Paid lessons must not stay reachable through a public link, so the asset
- * gets a signed playback ID and loses its public ones; Turkish captions are requested when the asset has none.
- */
+// Paid lessons stay signed-only: add a signed playback ID, drop public ones, request Turkish captions if missing.
 export async function attachMuxAsset(lessonId: string, rawAssetId: string): Promise<FormState> {
   try {
     const viewer = await requireOwner();
     if (!videoConfigured()) throw new Error("Mux bağlantısı kurulmadan video eklenemez.");
-    const db = getDatabase();
-    const [lesson] = await db.select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
-    // Published lessons may switch too: the chosen asset must already be ready, so students never lose playback.
-    if (!lesson || lesson.kind !== "video") throw new Error("Ders bulunamadı.");
     const id = assetId.parse(rawAssetId);
-    const raw = await muxRequest<MuxAsset>(`assets/${id}`);
-    const asset = describeAsset(raw);
+    const [[lesson], asset] = await Promise.all([
+      getDatabase().select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId))),
+      muxRequest<MuxAsset>(`assets/${id}`).then(describeAsset),
+    ]);
+    if (!lesson || lesson.kind !== "video") throw new Error("Ders bulunamadı.");
     if (!asset.ready) throw new Error("Bu video Mux’ta henüz hazırlanıyor. Hazır olduğunda yeniden deneyin.");
     const signedPlaybackId = asset.signedPlaybackId ?? (await muxRequest<{ id: string }>(`assets/${id}/playback-ids`, { policy: "signed" })).id;
     for (const playbackId of asset.publicPlaybackIds) await muxRequest(`assets/${id}/playback-ids/${playbackId}`, undefined, "DELETE");
-    // Best effort: captions and dashboard labels improve the lesson but must not block attaching it.
+    // Best effort; must not block attaching.
     if (asset.captions === "none" && asset.audioTrackId) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
-    if (!raw.meta?.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
-    await db.transaction(async tx => {
-      await tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.id, lesson.id)).for("update");
-      const values = { signedPlaybackId, status: "ready" as const, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio };
-      const [row] = await tx.insert(videoAssets).values({ muxAssetId: id, ...values }).onConflictDoUpdate({ target: videoAssets.muxAssetId, set: values }).returning();
-      await tx.update(lessons).set({ videoAssetId: row.id }).where(eq(lessons.id, lesson.id));
-      await tx.insert(adminAuditLog).values({ actorId: viewer.user.id, action: "video.attach", resourceType: "lesson", resourceId: lesson.id, reason: "Mux kütüphanesinden video bağlandı" });
-    });
+    if (!asset.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
+    await attachVideo(getDatabase(), viewer.user.id, lesson.id, { muxAssetId: id, signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio });
     changed(lesson.courseId);
     return { status: "success", message: asset.captions === "none" ? "Video derse bağlandı. Türkçe altyazı birkaç dakika içinde hazırlanır." : "Video derse bağlandı." };
   } catch (error) { return report(error); }
 }
 
-/** Owner-only preview with short-lived tokens, so the owner watches exactly what students will see. */
 export async function previewPlayback(lessonId: string) {
   try {
     await requireOwner();
     const [row] = await getDatabase().select({ asset: videoAssets }).from(lessons).innerJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id)).where(eq(lessons.id, z.uuid().parse(lessonId)));
     if (row?.asset.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Video henüz hazır değil." };
-    return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, hour()) };
-  } catch (error) { return { error: report(error).message }; }
+    return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, ownerTokenExpiry()) };
+  } catch (error) { return { error: errorMessage(error) }; }
 }

@@ -11,11 +11,12 @@ test("a dashboard upload is seen as public, uncaptioned, and needing a signed pl
   assert.equal(info.audioTrackId, "a1");
   assert.equal(info.captions, "none");
   assert.equal(info.durationSeconds, 62);
-  assert.match(info.title, /^Video · \d{1,2}\.\d{1,2}\.\d{4}$/);
+  assert.equal(info.title, undefined);
+  assert.match(info.label, /^Video · \d{1,2}\.\d{1,2}\.\d{4}$/);
 });
 
 test("caption state follows the generated text tracks", () => {
-  const withText = status => describeAsset(asset({ tracks: [{ id: "t1", type: "text", status, text_source: "generated_vod" }] })).captions;
+  const withText = status => describeAsset(asset({ tracks: [{ id: "t1", type: "text", status }] })).captions;
   assert.equal(withText("preparing"), "preparing");
   assert.equal(withText("ready"), "ready");
   assert.equal(withText("errored"), "failed");
@@ -24,6 +25,7 @@ test("caption state follows the generated text tracks", () => {
 test("the Mux title and signed playback ID are used when present", () => {
   const info = describeAsset(asset({ meta: { title: "  Giriş  " }, playback_ids: [{ id: "sig1", policy: "signed" }] }));
   assert.equal(info.title, "Giriş");
+  assert.equal(info.label, "Giriş");
   assert.equal(info.signedPlaybackId, "sig1");
   assert.deepEqual(info.publicPlaybackIds, []);
 });

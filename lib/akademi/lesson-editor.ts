@@ -58,3 +58,13 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   });
   return input;
 }
+
+export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string }) {
+  const { muxAssetId, ...values } = video;
+  await db.transaction(async tx => {
+    const [asset] = await tx.insert(videoAssets).values({ muxAssetId, ...values, status: "ready" })
+      .onConflictDoUpdate({ target: videoAssets.muxAssetId, set: { ...values, status: "ready" } }).returning();
+    await tx.update(lessons).set({ videoAssetId: asset.id }).where(eq(lessons.id, lessonId));
+    await tx.insert(adminAuditLog).values({ actorId, action: "video.attach", resourceType: "lesson", resourceId: lessonId, reason: "Mux kütüphanesinden video bağlandı" });
+  });
+}

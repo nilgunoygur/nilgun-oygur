@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { studentCourse, accessibleLesson, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
-import { createLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
+import { attachVideo, createLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -85,4 +85,16 @@ test("unpublishing a lesson or its module blocks existing direct links and mutat
   assert.equal(await accessibleLesson(db, "buyer", live.id, now), null);
   assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.length, 0);
   assert.ok((await db.select().from(schema.adminAuditLog)).length >= 5);
+});
+
+test("attaching a library video makes it ready, reuses the asset row, and is audited", async () => {
+  const [first, second] = (await ownerLessons(db, course.id)).filter(row => row.lesson.kind === "video").map(row => row.lesson);
+  const video = { muxAssetId: "library-asset", signedPlaybackId: "library-signed", durationSeconds: 87, aspectRatio: "16:9" };
+  await attachVideo(db, "owner", first.id, video);
+  await attachVideo(db, "owner", second.id, video);
+  const rows = (await ownerLessons(db, course.id)).filter(row => [first.id, second.id].includes(row.lesson.id));
+  assert.equal(new Set(rows.map(row => row.asset.id)).size, 1);
+  assert.deepEqual([rows[0].asset.status, rows[0].asset.durationSeconds], ["ready", 87]);
+  const audits = await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "video.attach"));
+  assert.equal(audits.length, 2);
 });

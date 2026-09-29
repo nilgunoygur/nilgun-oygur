@@ -1,7 +1,10 @@
 import "server-only";
-import { signPlaybackTokens } from "./playback-token";
+import { signPlaybackToken, signPlaybackTokens } from "./playback-token";
 import { config } from "@/lib/config";
 import { describeAsset, type CaptionState, type MuxAsset } from "./library";
+import type { videoAssets } from "@/lib/db/schema";
+
+type VideoAsset = typeof videoAssets.$inferSelect;
 
 export function videoConfigured() {
   const v = config().video;
@@ -21,23 +24,27 @@ export async function muxRequest<T>(path: string, body?: unknown, method: "GET" 
   return (await response.json()).data as T;
 }
 
-export function playbackTokens(playbackId: string, expiresAt: number) {
+function signingKey() {
   const v = config().video;
   if (!v.signingKeyId || !v.signingPrivateKey) throw new Error("Video hizmeti henüz bağlanmadı.");
-  return signPlaybackTokens(playbackId, expiresAt, v.signingKeyId, v.signingPrivateKey);
+  return [v.signingKeyId, v.signingPrivateKey] as const;
 }
+
+export const playbackTokens = (playbackId: string, expiresAt: number) => signPlaybackTokens(playbackId, expiresAt, ...signingKey());
+export const ownerTokenExpiry = () => Math.floor(Date.now() / 1000) + 3600;
+export const thumbnailUrl = (playbackId: string, signed = true) =>
+  `https://image.mux.com/${playbackId}/thumbnail.webp?width=320${signed ? `&token=${signPlaybackToken(playbackId, "t", ownerTokenExpiry(), ...signingKey())}` : ""}`;
+export const muxLibrary = async () => (await muxRequest<MuxAsset[]>("assets?limit=100")).map(describeAsset);
 
 export type AttachedVideo = { title?: string; captions?: CaptionState; thumbnail: string };
 
-/** Mux title, caption state and a signed thumbnail for the videos on a course's lessons, keyed by Mux asset ID. */
-export async function attachedVideos(videos: { assetId: string; playbackId: string }[]): Promise<Record<string, AttachedVideo>> {
-  if (!videos.length || !videoConfigured()) return {};
-  const expires = Math.floor(Date.now() / 1000) + 3600;
-  const entries = await Promise.all(videos.map(async ({ assetId, playbackId }) => {
-    const thumbnail = `https://image.mux.com/${playbackId}/thumbnail.webp?width=320&token=${playbackTokens(playbackId, expires).thumbnail}`;
-    // The card still shows the thumbnail when Mux is briefly unreachable.
-    const asset = await muxRequest<MuxAsset>(`assets/${encodeURIComponent(assetId)}`).then(describeAsset, () => undefined);
-    return [assetId, { title: asset?.title, captions: asset?.captions, thumbnail }] as const;
+/** One Mux list call for every video on the page; on failure the cards still get thumbnails. */
+export async function attachedVideos(assets: (VideoAsset | null)[]): Promise<Record<string, AttachedVideo>> {
+  const ready = assets.filter((asset): asset is VideoAsset & { muxAssetId: string; signedPlaybackId: string } => asset?.status === "ready" && !!asset.muxAssetId && !!asset.signedPlaybackId);
+  if (!ready.length || !videoConfigured()) return {};
+  const library = new Map((await muxLibrary().catch(() => [])).map(asset => [asset.id, asset]));
+  return Object.fromEntries(ready.map(asset => {
+    const info = library.get(asset.muxAssetId);
+    return [asset.muxAssetId, { title: info?.title, captions: info?.captions, thumbnail: thumbnailUrl(asset.signedPlaybackId) }];
   }));
-  return Object.fromEntries(entries);
 }

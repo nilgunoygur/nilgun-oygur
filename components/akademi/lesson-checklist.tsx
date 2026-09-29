@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useRef, useState, useTransition } from "react";
-import dynamic from "next/dynamic";
 import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, LoaderCircle, Video } from "lucide-react";
 import { getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
 import type { studentCourse } from "@/lib/akademi/learning";
 import { pillAction } from "@/lib/styles";
+import { formatDuration } from "@/lib/akademi/format";
+import { LessonVideo } from "./lesson-video";
 
-const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), { ssr: false, loading: () => <div className="aspect-video animate-pulse bg-forest/10" /> });
 type Lesson = NonNullable<Awaited<ReturnType<typeof studentCourse>>>["lessons"][number];
 const date = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" });
 
@@ -38,7 +38,7 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
   return <article className={`overflow-hidden rounded-[22px] border transition-colors ${completed ? "border-[#c7dccd] bg-[#f7faf5]" : "border-border bg-white"}`}>
     <div className="flex items-start gap-4 p-5 sm:items-center sm:gap-6 sm:p-7">
       <div className={`hidden size-14 shrink-0 items-center justify-center rounded-2xl sm:flex ${isLive ? "bg-[#f5ebdd] text-[#997348]" : "bg-mist text-forest"}`}>{isLive ? <Video size={24} /> : <CirclePlay size={26} />}</div>
-      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {isLive ? "CANLI BULUŞMA" : "VİDEO DERS"}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? `${Math.ceil(lesson.durationSeconds / 60)} dakika` : lesson.moduleTitle}</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
+      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {isLive ? "CANLI BULUŞMA" : "VİDEO DERS"}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
       <div className="flex shrink-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
         <label className="flex cursor-pointer items-center gap-2 text-sm text-forest"><input type="checkbox" className="size-5 accent-forest" aria-label={`${lesson.title}: izledim`} checked={completed} disabled={pending} onChange={e => { const value = e.target.checked; startTransition(() => mark(value)); }} /><span className="hidden sm:inline">{pending ? "Kaydediliyor" : completed ? "Tamamlandı" : "İzledim"}</span></label>
         <button type="button" onClick={onOpen} aria-expanded={open} aria-controls={`lesson-${lesson.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm hover:bg-mist">{isLive ? "Detaylar" : "Dersi aç"}<ChevronDown size={15} className={open ? "rotate-180" : ""} /></button>
@@ -82,5 +82,5 @@ function LessonPlayer({ lessonId, title, startTime, onEnded }: { lessonId: strin
   }
   if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><LoaderCircle className="animate-spin" aria-label="Video yükleniyor" /></div>;
   if (playback.error || !playback.playbackId) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
-  return <div><MuxPlayer key={playback.expiresAt} className="aspect-video overflow-hidden rounded-2xl" playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} defaultHiddenCaptions streamType="on-demand" accentColor="#489b9e" startTime={resume.time} autoPlay={resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => setProgressError("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
+  return <div><LessonVideo key={playback.expiresAt} playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} startTime={resume.time} autoPlay={resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => setProgressError("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }
