@@ -55,8 +55,9 @@ test("unpaid and expired users cannot read lessons or write progress", async () 
   await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true }, new Date("2026-09-24")), /FORBIDDEN/);
 });
 
-test("completion persists, position saves preserve it, and students can undo it", async () => {
-  await saveProgress(db, "buyer", video.id, { completed: true }, now);
+test("a video completes only once 90% is watched; completion persists and can be undone", async () => {
+  await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true, position: 107 }, now), /NOT_WATCHED/);
+  await saveProgress(db, "buyer", video.id, { completed: true, position: 108 }, now);
   await saveProgress(db, "buyer", video.id, { position: 999 }, now);
   let result = await studentCourse(db, "buyer", course.id, now);
   assert.equal(result.lessons[0].completedAt.toISOString(), now.toISOString());

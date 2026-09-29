@@ -60,3 +60,6 @@ export function accessExpiryFromPayment(paidAt: Date, accessDurationDays: number
   if (!Number.isFinite(expiry.getTime())) throw new Error("Access expiry is outside the supported date range.");
   return expiry;
 }
+
+/** A video counts as watched once 90% of it has played. */
+export const hasWatched = (positionSeconds: number, durationSeconds: number) => positionSeconds >= durationSeconds * 0.9;
