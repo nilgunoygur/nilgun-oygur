@@ -5,8 +5,9 @@ import { emailDeliveries } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 
 /** Encrypted at rest and erased after delivery or expiry. */
-export type EmailMessage = { to: string; subject: string; text: string; html?: string; replyTo?: string; expiresAt?: Date };
-export type DeliverEmail = (message: Omit<EmailMessage, "expiresAt">, key: string) => Promise<string>;
+/** `replacesUnsent` cancels unsent mail with the same recipient and subject. */
+export type EmailMessage = { to: string; subject: string; text: string; html?: string; replyTo?: string; expiresAt?: Date; replacesUnsent?: boolean };
+export type DeliverEmail = (message: Omit<EmailMessage, "expiresAt" | "replacesUnsent">, key: string) => Promise<string>;
 /** Thrown for outages and throttling: the rest of the batch waits for the next run. */
 export class ProviderUnavailableError extends Error {}
 // Retries must stay inside Resend's 24-hour idempotency window.
@@ -16,8 +17,17 @@ export function createEmailOutbox(db: Database, encryptionKey: string) {
   if (encryptionKey.length < 32) throw new Error("EMAIL_ENCRYPTION_KEY must contain at least 32 characters.");
   return {
     async enqueue(message: EmailMessage) {
-      const { expiresAt, ...content } = message;
+      const { expiresAt, replacesUnsent, ...content } = message;
       const payload = JSON.stringify(content);
+      if (replacesUnsent) {
+        const unsent = or(eq(emailDeliveries.status, "pending"), eq(emailDeliveries.status, "failed"));
+        for (const row of await db.select().from(emailDeliveries).where(and(unsent, isNotNull(emailDeliveries.encryptedMessage)))) {
+          const queued: typeof content = JSON.parse(await symmetricDecrypt({ key: encryptionKey, data: row.encryptedMessage! }));
+          if (queued.to === content.to && queued.subject === content.subject) {
+            await db.update(emailDeliveries).set({ status: "expired", encryptedMessage: null }).where(and(eq(emailDeliveries.id, row.id), unsent));
+          }
+        }
+      }
       const deduplicationKey = createHash("sha256").update(payload).digest("hex");
       await db.insert(emailDeliveries).values({
         deduplicationKey,

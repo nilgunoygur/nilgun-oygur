@@ -1,4 +1,6 @@
 // Dependency-free so emails can import it without parsing reference.json.
+/** Origin mail clients can fetch assets from. */
+export const publicOrigin = "https://www.nilgunoygur.com";
 export const bookingUrl = "https://calendly.com/butunselsifaakademi/meetings";
 export const email = "butunselsifaakademi@gmail.com";
 export const socials = [

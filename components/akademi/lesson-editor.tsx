@@ -1,7 +1,7 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Reorder, useDragControls } from "motion/react";
+import { LazyMotion, Reorder, domMax, useDragControls } from "motion/react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -50,20 +50,21 @@ export function CourseEditor({ courseId, rows, muxConfigured }: { courseId: stri
         : visibleRows.map(row => <EditorCard key={row.lesson.id} row={row} index={rows.indexOf(row)} muxConfigured={muxConfigured} />)}</Accordion>}
   </div>;
 }
+
 function SortableLessons({ courseId, rows, muxConfigured }: { courseId: string; rows: Row[]; muxConfigured: boolean }) {
   const serverOrder = rows.map(row => row.lesson.id);
+  const serverKey = serverOrder.join();
   const [draft, setDraft] = useState<string[] | null>(null);
-  // A new server order (after saving, adding or deleting lessons) replaces the local drag state.
-  const [synced, setSynced] = useState(serverOrder.join());
-  if (synced !== serverOrder.join()) { setSynced(serverOrder.join()); setDraft(null); }
+  // A new server order replaces the drag draft.
+  const [synced, setSynced] = useState(serverKey);
+  if (synced !== serverKey) { setSynced(serverKey); setDraft(null); }
   const order = draft ?? serverOrder;
-  const latest = useRef(order);
   const save = useMutation({
-    mutationFn: async (ids: string[]) => { const result = await saveLessonOrder(courseId, ids); if (result.status === "error") throw new Error(result.message); },
-    onSuccess: () => toast.success("Ders sırası kaydedildi."),
+    mutationFn: async (ids: string[]) => { const result = await saveLessonOrder(courseId, ids); if (result.status === "error") throw new Error(result.message); return result.message; },
+    onSuccess: message => toast.success(message),
     onError: error => { setDraft(null); toast.error(error.message); },
   });
-  const commit = (ids = latest.current) => { if (ids.join() !== serverOrder.join()) save.mutate(ids); };
+  const commit = (ids: string[]) => { if (ids.join() !== serverKey) save.mutate(ids); };
   const move = (id: string, step: number) => {
     const ids = [...order], from = ids.indexOf(id), to = from + step;
     if (to < 0 || to >= ids.length) return;
@@ -72,18 +73,21 @@ function SortableLessons({ courseId, rows, muxConfigured }: { courseId: string; 
     commit(ids);
   };
   const byId = new Map(rows.map(row => [row.lesson.id, row]));
-  return <Reorder.Group as="div" axis="y" values={order} onReorder={ids => { latest.current = ids; setDraft(ids); }} className="grid gap-4">
-    {order.map((id, index) => <SortableLesson key={id} id={id} onPick={() => { latest.current = order; }} onDrop={() => commit()} onMove={step => move(id, step)}>
-      {handle => <EditorCard row={byId.get(id)!} index={index} handle={handle} muxConfigured={muxConfigured} />}
-    </SortableLesson>)}
-  </Reorder.Group>;
+  // Drag needs motion's full feature set; scoped to this admin-only list.
+  return <LazyMotion features={domMax}>
+    <Reorder.Group as="div" axis="y" values={order} onReorder={setDraft} className="grid gap-4">
+      {order.map((id, index) => <SortableLesson key={id} row={byId.get(id)!} index={index} muxConfigured={muxConfigured} onDrop={() => commit(order)} onMove={step => move(id, step)} />)}
+    </Reorder.Group>
+  </LazyMotion>;
 }
 
-function SortableLesson({ id, onPick, onDrop, onMove, children }: { id: string; onPick: () => void; onDrop: () => void; onMove: (step: number) => void; children: (handle: React.ReactNode) => React.ReactNode }) {
+function SortableLesson({ row, index, muxConfigured, onDrop, onMove }: { row: Row; index: number; muxConfigured: boolean; onDrop: () => void; onMove: (step: number) => void }) {
   const controls = useDragControls();
-  const handle = <button type="button" aria-label="Dersi taşı (yukarı/aşağı ok tuşları)" className="flex cursor-grab touch-none items-center self-stretch rounded-l-[22px] pl-3 text-stone hover:text-forest focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
-    onPointerDown={event => { onPick(); controls.start(event); }} onKeyDown={event => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); onMove(event.key === "ArrowUp" ? -1 : 1); } }}><GripVertical size={18} /></button>;
-  return <Reorder.Item as="div" value={id} dragListener={false} dragControls={controls} onDragEnd={onDrop} layout="position">{children(handle)}</Reorder.Item>;
+  const handle = <button type="button" aria-label="Dersi taşı (yukarı/aşağı ok tuşları)" className="flex cursor-grab touch-none items-center rounded-l-[22px] pl-3 text-stone outline-none hover:text-forest focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+    onPointerDown={event => controls.start(event)} onKeyDown={event => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); onMove(event.key === "ArrowUp" ? -1 : 1); } }}><GripVertical size={18} /></button>;
+  return <Reorder.Item as="div" value={row.lesson.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} layout="position">
+    <EditorCard row={row} index={index} handle={handle} muxConfigured={muxConfigured} />
+  </Reorder.Item>;
 }
 
 const visibility = { draft: "Taslak", published: "Yayında" };
@@ -103,19 +107,17 @@ function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: nu
     const result = await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.");
     if (result) toast.success(result.message);
   });
-  return <AccordionItem value={lesson.id} className="rounded-[22px] border border-border bg-white not-last:border-b">
-    <div className="grid grid-cols-[auto_1fr]">
-      {handle ?? <span />}
-      <AccordionTrigger className="items-center gap-4 p-6 hover:no-underline"><div className="min-w-0 flex-1"><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {index + 1}</span><span className="block text-2xl">{lesson.title}</span></div><span className={`rounded-full px-3 py-1 text-xs font-normal ${lesson.status === "published" ? "bg-mist text-forest" : "bg-[#f5ebdd] text-[#82623a]"}`}>{lesson.status === "published" ? "Yayında" : "Taslak"}</span></AccordionTrigger>
+  return <AccordionItem value={lesson.id} className="rounded-[22px] border border-border bg-white">
+    <div className="flex [&>[data-slot=accordion-trigger]]:flex-1 [&>h3]:flex-1">
+      {handle}
+      <AccordionTrigger className="items-center gap-4 p-6 hover:no-underline"><div className="min-w-0 flex-1"><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {index + 1}</span><span className="block text-2xl">{lesson.title}</span></div><Badge variant={lesson.status === "published" ? "secondary" : "outline"}>{visibility[lesson.status]}</Badge></AccordionTrigger>
     </div>
     <AccordionPrimitive.Panel className="h-(--accordion-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0"><div className="border-t border-border p-6">
       {!isLive && <VideoUpload row={row} muxConfigured={muxConfigured} />}
       <FormShell form={form} onSubmit={submit}>
         <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
         <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
-        <div className="grid gap-5 sm:grid-cols-2">
-          <SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" />
-        </div>
+        <div className="sm:w-1/2"><SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" /></div>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
           <TextField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" type="datetime-local" className="bg-white" />
           <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
@@ -149,6 +151,7 @@ function VideoUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
     queryFn: async () => { const result = await checkUpload(lesson.id); if (result.status === "ready") toast.success("Video hazır. Önizleyip dersi yayınlayabilirsiniz."); return result; },
     enabled: muxConfigured && !!asset && !ready && percent === null,
     refetchInterval: query => query.state.data?.status === "processing" && query.state.dataUpdateCount < 90 ? 5000 : false,
+    refetchOnWindowFocus: false,
   });
   const preview = useQuery({
     queryKey: ownerQueryKeys.preview(lesson.id, asset?.signedPlaybackId),

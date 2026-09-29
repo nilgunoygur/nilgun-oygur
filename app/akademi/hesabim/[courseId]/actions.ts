@@ -14,7 +14,7 @@ export async function updateProgress(input: z.infer<typeof progressInput>) {
     await saveProgress(getDatabase(), viewer.user.id, value.lessonId, value);
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error && error.message === "NOT_WATCHED" ? "Dersi tamamlamak için videoyu sonuna kadar izleyin." : "İlerlemeniz kaydedilemedi. Erişiminizi ve bağlantınızı kontrol edip yeniden deneyin." };
+    return { ok: false, error: error instanceof Error && error.message === "NOT_WATCHED" ? "Dersi tamamlamak için önce videoyu izleyin." : "İlerlemeniz kaydedilemedi. Erişiminizi ve bağlantınızı kontrol edip yeniden deneyin." };
   }
 }
 

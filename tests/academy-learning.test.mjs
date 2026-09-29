@@ -20,7 +20,7 @@ before(async () => {
   await db.insert(schema.courseAccess).values({ userId: "buyer", courseId: course.id, grantedBy: "owner", grantReason: "Test fixture", startsAt: new Date("2026-09-22"), expiresAt: new Date("2026-09-24") });
 });
 after(() => client.close());
-const input = (lesson, patch = {}) => ({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: "Lesson notes", position: lesson.position, status: "published", startsAt: "", durationMinutes: 60, joinUrl: "", passcode: "", liveStatus: "scheduled", ...patch });
+const input = (lesson, patch = {}) => ({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: "Lesson notes", status: "published", startsAt: "", durationMinutes: 60, joinUrl: "", passcode: "", liveStatus: "scheduled", ...patch });
 
 test("the four-video + live template is private until published and cannot be duplicated", async () => {
   await createLessons(db, "owner", course.id, "template");

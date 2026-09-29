@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { adminAuditLog, courses, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
@@ -73,7 +73,8 @@ export async function reorderLessons(db: Database, actorId: string, courseId: st
   await db.transaction(async tx => {
     const current = new Set((await tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.courseId, courseId)).for("update")).map(row => row.id));
     if (lessonIds.length !== current.size || !lessonIds.every(id => current.delete(id))) throw new Error("Ders listesi değişmiş. Sayfayı yenileyip yeniden deneyin.");
-    for (const [position, id] of lessonIds.entries()) await tx.update(lessons).set({ position }).where(eq(lessons.id, id));
+    const positions = sql.join(lessonIds.map((id, position) => sql`(${id}::uuid, ${position}::int)`), sql`, `);
+    await tx.execute(sql`update ${lessons} set position = v.position from (values ${positions}) as v(id, position) where ${lessons.id} = v.id and ${lessons.position} <> v.position`);
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.reorder", resourceType: "course", resourceId: courseId, reason: "Ders sırası değiştirildi" });
   });
 }

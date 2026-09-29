@@ -21,9 +21,12 @@ export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
   const done = completed.size;
+  // Latest set, not this render's: two saves can finish back to back.
+  const latest = useRef(completed);
   function complete(id: string, value: boolean) {
-    const next = new Set(completed);
+    const next = new Set(latest.current);
     if (value) next.add(id); else next.delete(id);
+    latest.current = next;
     setCompleted(next);
     if (value && next.size === lessons.length) void celebrate();
   }
@@ -42,8 +45,9 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
   const [destination, setDestination] = useState<{ url: string; passcode: string } | null>(null);
   const isLive = lesson.kind === "live";
   const duration = lesson.durationSeconds ?? 0;
-  const furthest = useRef(lesson.lastPositionSeconds ?? 0);
-  const [watched, setWatched] = useState(isLive || !duration || hasWatched(lesson.lastPositionSeconds ?? 0, duration));
+  const start = lesson.lastPositionSeconds ?? 0;
+  const furthest = useRef(start);
+  const [watched, setWatched] = useState(isLive || !duration || hasWatched(start, duration));
   const locked = !completed && !watched;
   function progress(seconds: number) {
     furthest.current = Math.max(furthest.current, seconds);
@@ -52,7 +56,7 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
   async function mark(value: boolean) {
     setError("");
     try {
-      const result = await updateProgress({ lessonId: lesson.id, completed: value, ...(value && !isLive && { position: Math.floor(furthest.current) }) });
+      const result = await updateProgress({ lessonId: lesson.id, completed: value, position: value && !isLive ? Math.floor(furthest.current) : undefined });
       if (result.ok) onComplete(value); else setError(result.error ?? "Kaydedilemedi.");
     } catch { setError("İlerlemeniz kaydedilemedi. Lütfen yeniden deneyin."); }
   }
@@ -62,7 +66,7 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
       <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {isLive ? "CANLI BULUŞMA" : "VİDEO DERS"}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
       <div className="flex shrink-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
         <label className={cn("flex items-center gap-2 text-sm", locked ? "cursor-not-allowed text-stone" : "cursor-pointer text-forest")} title={locked ? "Videoyu izledikten sonra işaretleyebilirsiniz." : undefined}>
-          <Checkbox className="size-5 rounded-[5px] border-forest/40 bg-white data-checked:border-forest data-checked:bg-forest data-checked:text-white [&_svg]:size-3.5" aria-label={`${lesson.title}: izledim`} checked={completed} disabled={pending || locked} onCheckedChange={value => startTransition(() => mark(value))} />
+          <Checkbox className="size-5 rounded-[5px] border-forest/40 bg-white data-checked:border-forest data-checked:bg-forest data-checked:text-white" aria-label={`${lesson.title}: izledim`} checked={completed} disabled={pending || locked} onCheckedChange={value => startTransition(() => mark(value))} />
           <span className="hidden sm:inline">{pending ? "Kaydediliyor" : completed ? "Tamamlandı" : locked ? "İzleyince açılır" : "İzledim"}</span>
         </label>
         <button type="button" onClick={onOpen} aria-expanded={open} aria-controls={`lesson-${lesson.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm hover:bg-mist">{isLive ? "Detaylar" : "Dersi aç"}<ChevronDown size={15} className={open ? "rotate-180" : ""} /></button>
@@ -71,7 +75,7 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
     {error && <p role="alert" className="px-7 pb-5 text-sm text-destructive">{error}</p>}
     {open && <div id={`lesson-${lesson.id}`} className="border-t border-border p-5 sm:p-7">
       {lesson.description && <p className="mb-6 max-w-[75ch] whitespace-pre-wrap leading-relaxed text-stone">{lesson.description}</p>}
-      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><a href={destination.url} target="_blank" rel="noopener noreferrer" className={pillAction}>Canlı derse katıl <ArrowUpRight size={16} /></a>{destination.passcode && <p className="mt-2 text-sm">Toplantı şifresi: {destination.passcode}</p>}</div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : lesson.videoReady ? <LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={lesson.lastPositionSeconds ?? 0} onTime={progress} onEnded={() => { progress(duration); startTransition(() => mark(true)); }} /> : <p className="rounded-2xl bg-mist p-6 text-stone">Video hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>}
+      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><a href={destination.url} target="_blank" rel="noopener noreferrer" className={pillAction}>Canlı derse katıl <ArrowUpRight size={16} /></a>{destination.passcode && <p className="mt-2 text-sm">Toplantı şifresi: {destination.passcode}</p>}</div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : lesson.videoReady ? <LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={start} onTime={progress} onEnded={() => { progress(duration); startTransition(() => mark(true)); }} /> : <p className="rounded-2xl bg-mist p-6 text-stone">Video hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>}
       {completed && <p className="mt-5 flex items-center gap-2 text-sm text-forest"><Check size={16} />Bu dersi tamamladınız. Dilediğiniz zaman tekrar izleyebilirsiniz.</p>}
     </div>}
   </article>;
@@ -96,8 +100,10 @@ function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: { lessonI
     return () => { active = false; clearInterval(timer); };
   }, [lessonId]);
   function savePosition(time: number) {
-    if (Number.isFinite(time)) { position.current = time; onTime(time); }
-    if (!Number.isFinite(time) || Date.now() - lastSaved.current < 15000) return;
+    if (!Number.isFinite(time)) return;
+    position.current = time;
+    onTime(time);
+    if (Date.now() - lastSaved.current < 15000) return;
     lastSaved.current = Date.now();
     saves.current = saves.current.then(async () => {
       const result = await updateProgress({ lessonId, position: Math.floor(time) });

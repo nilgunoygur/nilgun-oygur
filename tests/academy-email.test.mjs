@@ -79,3 +79,15 @@ test("a provider outage stops the batch instead of retrying every message", asyn
   assert.deepEqual([result.sent, attempts], [0, 1]);
   assert.equal((await db.select().from(schema.emailDeliveries).where(eq(schema.emailDeliveries.status, "pending"))).length, 2);
 });
+
+test("a replacing message cancels unsent mail with the same recipient and subject only", async () => {
+  await db.delete(schema.emailDeliveries);
+  await outbox.enqueue(makeMessage("old reset link"));
+  await outbox.enqueue({ ...makeMessage("other subject"), subject: "Başka" });
+  await outbox.enqueue({ ...makeMessage("new reset link"), replacesUnsent: true });
+  const statuses = (await db.select().from(schema.emailDeliveries)).map(row => row.status).sort();
+  assert.deepEqual(statuses, ["expired", "pending", "pending"]);
+  const delivered = [];
+  await outbox.deliverBatch(async message => { delivered.push(message.text); return "id"; });
+  assert.deepEqual(delivered.sort(), ["new reset link", "other subject"]);
+});

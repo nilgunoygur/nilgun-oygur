@@ -42,13 +42,13 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
   const accessible = await accessibleLesson(db, userId, lessonId, now);
   if (!accessible) throw new Error("FORBIDDEN");
   const duration = accessible.asset?.durationSeconds;
-  if (input.completed && accessible.lesson.kind === "video" && duration) {
+  if (input.completed && duration) {
     const [previous] = await db.select({ position: lessonProgress.lastPositionSeconds }).from(lessonProgress)
       .where(and(eq(lessonProgress.userId, userId), eq(lessonProgress.lessonId, lessonId)));
     if (!hasWatched(Math.max(previous?.position ?? 0, input.position ?? 0), duration)) throw new Error("NOT_WATCHED");
   }
   const completedAt = input.completed === undefined ? undefined : input.completed ? now : null;
-  const position = input.position === undefined ? undefined : Math.min(input.position, accessible.asset?.durationSeconds ?? input.position);
+  const position = input.position === undefined ? undefined : Math.min(input.position, duration ?? input.position);
   await db.insert(lessonProgress).values({ userId, lessonId, completedAt, lastPositionSeconds: position, lastActivityAt: now })
     .onConflictDoUpdate({ target: [lessonProgress.userId, lessonProgress.lessonId], set: { completedAt, lastPositionSeconds: position, lastActivityAt: now } });
 }

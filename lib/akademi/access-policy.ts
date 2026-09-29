@@ -1,4 +1,4 @@
-/** Pure rules for server callers. IDs and grants must come from a verified session/database. */
+/** Pure rules shared by server and client code. IDs and grants must come from a verified session/database. */
 export type AccessGrant = {
   userId: string;
   courseId: string;
