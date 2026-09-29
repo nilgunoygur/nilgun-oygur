@@ -1,13 +1,14 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, lessons, videoAssets } from "@/lib/db/schema";
 import { createLessons, updateLesson } from "@/lib/akademi/lesson-editor";
 import type { lessonInput } from "@/lib/akademi/owner-forms";
-import { muxRequest, videoConfigured } from "@/lib/video/mux";
+import { muxRequest, playbackTokens, videoConfigured } from "@/lib/video/mux";
+import { captionLanguage, describeAsset, newAssetSettings, type MuxAsset } from "@/lib/video/library";
 import { config } from "@/lib/config";
 import type { FormState } from "@/components/akademi/form-status";
 
@@ -40,7 +41,7 @@ export async function startUpload(lessonId: string) {
   const db = getDatabase();
   const [lesson] = await db.select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
   if (!lesson || lesson.kind !== "video" || lesson.status !== "draft") throw new Error("Video değiştirmek için önce dersi taslak olarak kaydedin.");
-  const upload = await muxRequest<{ id: string; url: string }>("uploads", { cors_origin: config().auth.url, new_asset_settings: { playback_policies: ["signed"], video_quality: "basic" } });
+  const upload = await muxRequest<{ id: string; url: string }>("uploads", { cors_origin: config().auth.url, new_asset_settings: newAssetSettings(lesson) });
   await db.transaction(async tx => {
     const [current] = await tx.select().from(lessons).where(eq(lessons.id, lesson.id)).for("update");
     if (current.status !== "draft") throw new Error("Ders taslak olmalıdır.");
@@ -69,4 +70,67 @@ export async function checkUpload(lessonId: string) {
   });
   changed(row.lesson.courseId);
   return { status: "ready" as const };
+}
+
+const assetId = z.string().regex(/^[A-Za-z0-9]{1,128}$/, "Geçersiz video.");
+const hour = () => Math.floor(Date.now() / 1000) + 3600;
+
+/** Videos in the Mux environment, for attaching one uploaded in the Mux dashboard to a lesson. */
+export async function listMuxLibrary() {
+  try {
+    await requireOwner();
+    if (!videoConfigured()) return { error: "Mux bağlantısı kurulmadan video kütüphanesi görüntülenemez." };
+    const assets = (await muxRequest<MuxAsset[]>("assets?limit=50")).map(describeAsset);
+    const ids = assets.map(asset => asset.id);
+    const used = ids.length ? await getDatabase().select({ muxAssetId: videoAssets.muxAssetId, lesson: lessons.title }).from(videoAssets).innerJoin(lessons, eq(lessons.videoAssetId, videoAssets.id)).where(inArray(videoAssets.muxAssetId, ids)) : [];
+    const expires = hour();
+    return { assets: assets.map(asset => {
+      const signed = asset.signedPlaybackId, open = asset.publicPlaybackIds[0];
+      const thumbnail = signed ? `https://image.mux.com/${signed}/thumbnail.webp?width=320&token=${playbackTokens(signed, expires).thumbnail}` : open ? `https://image.mux.com/${open}/thumbnail.webp?width=320` : undefined;
+      return { ...asset, thumbnail, usedBy: used.filter(row => row.muxAssetId === asset.id).map(row => row.lesson) };
+    }) };
+  } catch (error) { return { error: report(error).message }; }
+}
+
+/**
+ * Links a ready Mux asset to a draft lesson. Paid lessons must not stay reachable through a public link, so the asset
+ * gets a signed playback ID and loses its public ones; Turkish captions are requested when the asset has none.
+ */
+export async function attachMuxAsset(lessonId: string, rawAssetId: string): Promise<FormState> {
+  try {
+    const viewer = await requireOwner();
+    if (!videoConfigured()) throw new Error("Mux bağlantısı kurulmadan video eklenemez.");
+    const db = getDatabase();
+    const [lesson] = await db.select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
+    if (!lesson || lesson.kind !== "video" || lesson.status !== "draft") throw new Error("Video değiştirmek için önce dersi taslak olarak kaydedin.");
+    const id = assetId.parse(rawAssetId);
+    const raw = await muxRequest<MuxAsset>(`assets/${id}`);
+    const asset = describeAsset(raw);
+    if (!asset.ready) throw new Error("Bu video Mux’ta henüz hazırlanıyor. Hazır olduğunda yeniden deneyin.");
+    const signedPlaybackId = asset.signedPlaybackId ?? (await muxRequest<{ id: string }>(`assets/${id}/playback-ids`, { policy: "signed" })).id;
+    for (const playbackId of asset.publicPlaybackIds) await muxRequest(`assets/${id}/playback-ids/${playbackId}`, undefined, "DELETE");
+    // Best effort: captions and dashboard labels improve the lesson but must not block attaching it.
+    if (asset.captions === "none" && asset.audioTrackId) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
+    if (!raw.meta?.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
+    await db.transaction(async tx => {
+      const [current] = await tx.select().from(lessons).where(eq(lessons.id, lesson.id)).for("update");
+      if (current.status !== "draft") throw new Error("Ders taslak olmalıdır.");
+      const values = { signedPlaybackId, status: "ready" as const, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio };
+      const [row] = await tx.insert(videoAssets).values({ muxAssetId: id, ...values }).onConflictDoUpdate({ target: videoAssets.muxAssetId, set: values }).returning();
+      await tx.update(lessons).set({ videoAssetId: row.id }).where(eq(lessons.id, lesson.id));
+      await tx.insert(adminAuditLog).values({ actorId: viewer.user.id, action: "video.attach", resourceType: "lesson", resourceId: lesson.id, reason: "Mux kütüphanesinden video bağlandı" });
+    });
+    changed(lesson.courseId);
+    return { status: "success", message: asset.captions === "none" ? "Video derse bağlandı. Türkçe altyazı birkaç dakika içinde hazırlanır." : "Video derse bağlandı." };
+  } catch (error) { return report(error); }
+}
+
+/** Owner-only preview with short-lived tokens, so the owner watches exactly what students will see. */
+export async function previewPlayback(lessonId: string) {
+  try {
+    await requireOwner();
+    const [row] = await getDatabase().select({ asset: videoAssets }).from(lessons).innerJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id)).where(eq(lessons.id, z.uuid().parse(lessonId)));
+    if (row?.asset.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Video henüz hazır değil." };
+    return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, hour()) };
+  } catch (error) { return { error: report(error).message }; }
 }
