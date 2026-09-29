@@ -30,7 +30,7 @@ export function createAcademyAuth(dependencies: Dependencies) {
   const sendAuthEmail = async (kind: "verification" | "reset", to: string, url: string) => {
     // Lazy: the renderer is heavy and every lib/auth importer would load it.
     const { authenticationEmail } = await import("../email/templates.tsx");
-    await dependencies.enqueueEmail({ ...await authenticationEmail(kind, to, url), expiresAt: new Date(Date.now() + linkLifetime * 1000) });
+    await dependencies.enqueueEmail({ ...await authenticationEmail(kind, to, url), expiresAt: new Date(Date.now() + linkLifetime * 1000), replacesUnsent: true });
   };
   const claimSafely = async (userId: string, email: string) => {
     try { await dependencies.claimPurchases(userId, email); } catch { console.error("Akademi purchase claim failed; the next sign-in retries it."); }

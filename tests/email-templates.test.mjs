@@ -18,7 +18,9 @@ test("verification and reset emails carry the right action, expiry and site foot
   assert.equal(verify.subject, "Akademi e-posta adresinizi doğrulayın");
   assert.ok(verify.html.includes("E-posta adresimi doğrula"));
   assert.ok(verify.html.includes("1 saat geçerlidir"));
-  assert.ok(verify.html.includes('src="https://nilgunoygur.com/email/welcome.jpg"'), "images load from the site origin");
+  assert.ok(verify.html.includes('src="https://www.nilgunoygur.com/email/welcome.jpg"'), "images load from the public origin");
+  const local = await authenticationEmail("verification", "student@example.com", "http://localhost:3000/api/auth/verify-email?token=t");
+  assert.ok(local.html.includes('src="https://www.nilgunoygur.com/email/welcome.jpg"') && local.html.includes('href="http://localhost:3000/api/auth/verify-email?token=t"'), "local links keep their origin while images stay public");
   assert.ok(verify.html.includes('name="viewport"') && verify.html.includes("prefers-color-scheme: dark"), "mobile and dark-mode rules ship with the email");
   assert.ok(!verify.html.includes("Şifremi yenile"));
 
@@ -27,7 +29,7 @@ test("verification and reset emails carry the right action, expiry and site foot
   assert.ok(reset.html.includes("Şifremi yenile"));
   assert.ok(reset.text.includes("yalnızca bir kez"));
   assert.ok(reset.html.includes('href="https://nilgunoygur.com/api/auth/reset-password/t"'));
-  assert.ok(reset.html.includes('src="https://nilgunoygur.com/email/reset.jpg"'));
+  assert.ok(reset.html.includes('src="https://www.nilgunoygur.com/email/reset.jpg"'));
 });
 
 test("contact messages go only to the configured inbox, with the visitor as Reply-To", async () => {

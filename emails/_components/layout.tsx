@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Body, Button, Column, Container, Head, Heading, Hr, Html, Img, Link, Preview, Row, Section, Text } from "react-email";
-import { nav, socials } from "../../lib/site.ts";
+import { nav, publicOrigin, socials } from "../../lib/site.ts";
 
 // Light values mirror app/globals.css and survive Gmail/Outlook auto-inversion.
 export const colors = { page: "#f5f5f7", card: "#ffffff", panel: "#dfeee5", ink: "#30302e", muted: "#6b6b68", teal: "#4b999c", forest: "#224c40", rule: "#e7e7e7" };
@@ -15,10 +15,10 @@ export const text: CSSProperties = { margin: "0 0 16px", fontFamily: sans, fontS
 const small: CSSProperties = { ...text, fontSize: 13, lineHeight: "20px", color: colors.muted };
 export const kicker: CSSProperties = { margin: 0, fontFamily: sans, fontSize: 11, lineHeight: "18px", fontWeight: 600, letterSpacing: "1.8px", color: colors.ink };
 
-const styles = (siteUrl: string) => `
-@font-face { font-family: Recoleta; font-weight: 400; src: url(${siteUrl}/email/recoleta.woff2) format("woff2"); }
-@font-face { font-family: "General Sans"; font-weight: 400; src: url(${siteUrl}/fonts/general-400.woff2) format("woff2"); }
-@font-face { font-family: "General Sans"; font-weight: 600; src: url(${siteUrl}/fonts/general-600.woff2) format("woff2"); }
+const styles = `
+@font-face { font-family: Recoleta; font-weight: 400; src: url(${publicOrigin}/email/recoleta.woff2) format("woff2"); }
+@font-face { font-family: "General Sans"; font-weight: 400; src: url(${publicOrigin}/fonts/general-400.woff2) format("woff2"); }
+@font-face { font-family: "General Sans"; font-weight: 600; src: url(${publicOrigin}/fonts/general-600.woff2) format("woff2"); }
 :root { color-scheme: light dark; supported-color-schemes: light dark; }
 @media (prefers-color-scheme: dark) {
   .page, .page > table > tbody > tr > td { background-color: ${dark.page} !important; }
@@ -51,7 +51,7 @@ type LayoutProps = {
 };
 
 export function EmailLayout({ preview, siteUrl, hero, headerLink, kicker: label, title, checklist, footnote, children }: LayoutProps) {
-  const asset = (file: string) => `${siteUrl}/email/${file}`;
+  const asset = (file: string) => `${publicOrigin}/email/${file}`;
   return (
     <Html lang="tr">
       <Head>
@@ -59,7 +59,7 @@ export function EmailLayout({ preview, siteUrl, hero, headerLink, kicker: label,
         <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
         <meta name="color-scheme" content="light dark" />
         <meta name="supported-color-schemes" content="light dark" />
-        <style dangerouslySetInnerHTML={{ __html: styles(siteUrl) }} />
+        <style dangerouslySetInnerHTML={{ __html: styles }} />
       </Head>
       {/* Body copies its style onto an inner <td>, hence the ".page > table …" dark rule. */}
       <Body className="page" lang="tr" style={{ margin: 0, padding: 0, backgroundColor: colors.page, fontFamily: sans, color: colors.ink }}>

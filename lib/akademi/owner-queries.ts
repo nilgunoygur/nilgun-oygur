@@ -36,6 +36,9 @@ export const ownerQueryKeys = {
   all: ["owner"] as const,
   catalog: () => [...ownerQueryKeys.all, "catalog"] as const,
   transactions: (from: string, to: string) => [...ownerQueryKeys.all, "transactions", { from, to }] as const,
+  muxLibrary: () => [...ownerQueryKeys.all, "mux-library"] as const,
+  uploadStatus: (lessonId: string) => [...ownerQueryKeys.all, "upload-status", lessonId] as const,
+  preview: (lessonId: string, playbackId?: string | null) => [...ownerQueryKeys.all, "preview", lessonId, playbackId] as const,
 };
 
 async function ownerFetch(url: string, init: RequestInit, fallback: string) {

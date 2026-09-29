@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { studentCourse, accessibleLesson, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
-import { createLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
+import { attachVideo, createLessons, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -20,7 +20,7 @@ before(async () => {
   await db.insert(schema.courseAccess).values({ userId: "buyer", courseId: course.id, grantedBy: "owner", grantReason: "Test fixture", startsAt: new Date("2026-09-22"), expiresAt: new Date("2026-09-24") });
 });
 after(() => client.close());
-const input = (lesson, patch = {}) => ({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: "Lesson notes", position: lesson.position, status: "published", startsAt: "", durationMinutes: 60, joinUrl: "", passcode: "", liveStatus: "scheduled", ...patch });
+const input = (lesson, patch = {}) => ({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: "Lesson notes", status: "published", startsAt: "", durationMinutes: 60, joinUrl: "", passcode: "", liveStatus: "scheduled", ...patch });
 
 test("the four-video + live template is private until published and cannot be duplicated", async () => {
   await createLessons(db, "owner", course.id, "template");
@@ -55,8 +55,9 @@ test("unpaid and expired users cannot read lessons or write progress", async () 
   await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true }, new Date("2026-09-24")), /FORBIDDEN/);
 });
 
-test("completion persists, position saves preserve it, and students can undo it", async () => {
-  await saveProgress(db, "buyer", video.id, { completed: true }, now);
+test("a video completes only once 90% is watched; completion persists and can be undone", async () => {
+  await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true, position: 107 }, now), /NOT_WATCHED/);
+  await saveProgress(db, "buyer", video.id, { completed: true, position: 108 }, now);
   await saveProgress(db, "buyer", video.id, { position: 999 }, now);
   let result = await studentCourse(db, "buyer", course.id, now);
   assert.equal(result.lessons[0].completedAt.toISOString(), now.toISOString());
@@ -85,4 +86,26 @@ test("unpublishing a lesson or its module blocks existing direct links and mutat
   assert.equal(await accessibleLesson(db, "buyer", live.id, now), null);
   assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.length, 0);
   assert.ok((await db.select().from(schema.adminAuditLog)).length >= 5);
+});
+
+test("attaching a library video makes it ready, reuses the asset row, and is audited", async () => {
+  const [first, second] = (await ownerLessons(db, course.id)).filter(row => row.lesson.kind === "video").map(row => row.lesson);
+  const video = { muxAssetId: "library-asset", signedPlaybackId: "library-signed", durationSeconds: 87, aspectRatio: "16:9" };
+  await attachVideo(db, "owner", first.id, video);
+  await attachVideo(db, "owner", second.id, video);
+  const rows = (await ownerLessons(db, course.id)).filter(row => [first.id, second.id].includes(row.lesson.id));
+  assert.equal(new Set(rows.map(row => row.asset.id)).size, 1);
+  assert.deepEqual([rows[0].asset.status, rows[0].asset.durationSeconds], ["ready", 87]);
+  const audits = await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "video.attach"));
+  assert.equal(audits.length, 2);
+});
+
+test("reordering saves the full new order, rejects a stale list, and is audited", async () => {
+  const ids = (await ownerLessons(db, course.id)).map(row => row.lesson.id);
+  const reversed = [...ids].reverse();
+  await reorderLessons(db, "owner", course.id, reversed);
+  assert.deepEqual((await ownerLessons(db, course.id)).map(row => row.lesson.id), reversed);
+  await assert.rejects(() => reorderLessons(db, "owner", course.id, reversed.slice(1)), /değişmiş/);
+  await assert.rejects(() => reorderLessons(db, "owner", course.id, [...reversed.slice(1), reversed[1]]), /değişmiş/);
+  assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.reorder"))).length, 1);
 });

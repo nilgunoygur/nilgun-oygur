@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { adminAuditLog, courses, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
@@ -52,9 +52,29 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
         await tx.insert(liveSessions).values({ lessonId: lesson.id, ...values }).onConflictDoUpdate({ target: liveSessions.lessonId, set: values });
       }
     }
-    await tx.update(lessons).set({ title: input.title, description: input.description, position: input.position, status: input.status }).where(eq(lessons.id, lesson.id));
+    await tx.update(lessons).set({ title: input.title, description: input.description, status: input.status }).where(eq(lessons.id, lesson.id));
     if (input.status === "published") await tx.update(modules).set({ status: "published" }).where(eq(modules.id, lesson.moduleId));
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.update", resourceType: "lesson", resourceId: lesson.id, reason: input.status === "published" ? "Ders yayınlandı / güncellendi" : "Taslak kaydedildi" });
   });
   return input;
+}
+
+export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string }) {
+  const { muxAssetId, ...values } = video;
+  await db.transaction(async tx => {
+    const [asset] = await tx.insert(videoAssets).values({ muxAssetId, ...values, status: "ready" })
+      .onConflictDoUpdate({ target: videoAssets.muxAssetId, set: { ...values, status: "ready" } }).returning();
+    await tx.update(lessons).set({ videoAssetId: asset.id }).where(eq(lessons.id, lessonId));
+    await tx.insert(adminAuditLog).values({ actorId, action: "video.attach", resourceType: "lesson", resourceId: lessonId, reason: "Mux kütüphanesinden video bağlandı" });
+  });
+}
+
+export async function reorderLessons(db: Database, actorId: string, courseId: string, lessonIds: string[]) {
+  await db.transaction(async tx => {
+    const current = new Set((await tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.courseId, courseId)).for("update")).map(row => row.id));
+    if (lessonIds.length !== current.size || !lessonIds.every(id => current.delete(id))) throw new Error("Ders listesi değişmiş. Sayfayı yenileyip yeniden deneyin.");
+    const positions = sql.join(lessonIds.map((id, position) => sql`(${id}::uuid, ${position}::int)`), sql`, `);
+    await tx.execute(sql`update ${lessons} set position = v.position from (values ${positions}) as v(id, position) where ${lessons.id} = v.id and ${lessons.position} <> v.position`);
+    await tx.insert(adminAuditLog).values({ actorId, action: "lesson.reorder", resourceType: "course", resourceId: courseId, reason: "Ders sırası değiştirildi" });
+  });
 }

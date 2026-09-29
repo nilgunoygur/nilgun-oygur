@@ -60,7 +60,6 @@ function ArticleImage({ nodeKey, src, alt }: { nodeKey: NodeKey; src: string; al
     );
   }, [editor, nodeKey]);
 
-  // eslint-disable-next-line @next/next/no-img-element -- rendered exactly as published
   return <img src={src} alt={alt} draggable={false} onClick={event => { if (!event.shiftKey) clearSelection(); setSelected(true); }}
     className={cn("mx-auto max-h-[520px] w-full cursor-pointer rounded-2xl object-cover transition-shadow", selected && "ring-3 ring-primary ring-offset-2")} />;
 }
