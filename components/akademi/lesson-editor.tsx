@@ -32,13 +32,17 @@ type Row = Awaited<ReturnType<typeof ownerLessons>>[number] & { video?: Attached
 const localDate = (date: Date | null | undefined) => date ? new Date(new Date(date).getTime() + 3 * 3600000).toISOString().slice(0, 16) : "";
 
 export function CourseEditor({ courseId, rows, muxConfigured }: { courseId: string; rows: Row[]; muxConfigured: boolean }) {
-  const [state, action, pending] = useActionState(addLessons, idleForm);
+  const [state, action, pending] = useActionState(async (previous: FormState, form: FormData) => {
+    const result = await addLessons(previous, form);
+    if (result.status === "success") toast.success(result.message);
+    return result;
+  }, idleForm);
   const [filter, setFilter] = useState<"all" | "video" | "live" | "draft">("all");
   const publishedCount = rows.filter(row => row.lesson.status === "published").length;
   const draftCount = rows.length - publishedCount;
   const visibleRows = rows.filter(row => filter === "all" || filter === "draft" ? filter !== "draft" || row.lesson.status === "draft" : row.lesson.kind === filter);
   return <div className="grid gap-6">
-    <Card className="border-forest/10 shadow-sm"><CardContent className="p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-5"><div><h2 className="text-xl font-semibold text-forest">Eğitim programı</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve yayınlayın. Taslaklarınızı öğrenciler görmez.</p></div><div className="flex gap-2"><Badge variant="secondary">{publishedCount} yayında</Badge><Badge variant="outline">{draftCount} taslak</Badge></div></div><form action={action} className="mt-5 border-t border-border pt-5"><input type="hidden" name="courseId" value={courseId} /><div className="flex flex-wrap gap-2">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />Örnek program ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div><div className="mt-3" role="status"><FormStatus state={state} /></div></form></CardContent></Card>
+    <Card className="border-forest/10 shadow-sm"><CardContent className="p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-5"><div><h2 className="text-xl font-semibold text-forest">Eğitim programı</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve yayınlayın. Taslaklarınızı öğrenciler görmez.</p></div><div className="flex gap-2"><Badge variant="secondary">{publishedCount} yayında</Badge><Badge variant="outline">{draftCount} taslak</Badge></div></div><form action={action} className="mt-5 border-t border-border pt-5"><input type="hidden" name="courseId" value={courseId} /><div className="flex flex-wrap gap-2">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />Örnek program ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div>{state.status === "error" && <div className="mt-3" role="alert"><FormStatus state={state} /></div>}</form></CardContent></Card>
     {!muxConfigured && <p className="rounded-2xl border border-[#e7d7bc] bg-[#fbf6ed] p-5 text-sm leading-relaxed">Video yükleme henüz bağlanmadı. Ders başlıklarını, açıklamalarını ve canlı buluşmaları hazırlayabilirsiniz. Kayıtlı videoları yükleyip yayınlamak için Mux bağlantısını tamamlayın.</p>}
     <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={filter} onValueChange={value => { if (value === "all" || value === "video" || value === "live" || value === "draft") setFilter(value); }}><TabsList className="h-auto flex-wrap"><TabsTrigger value="all">Tüm dersler <span className="ml-1 text-xs text-muted-foreground">{rows.length}</span></TabsTrigger><TabsTrigger value="video">Video <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "video").length}</span></TabsTrigger><TabsTrigger value="live">Canlı ders <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "live").length}</span></TabsTrigger><TabsTrigger value="draft">Taslaklar <span className="ml-1 text-xs text-muted-foreground">{draftCount}</span></TabsTrigger></TabsList></Tabs><p className="text-xs text-muted-foreground">{filter === "all" ? "Sıralamak için dersleri tutamacından sürükleyin." : "Sıralamak için “Tüm dersler” sekmesine geçin."}</p></div>
     {visibleRows.length === 0 ? <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">{rows.length === 0 ? "Programınız henüz boş. İlk dersinizi ekleyerek başlayın." : "Bu grupta gösterilecek ders yok."}</div>
@@ -56,6 +60,7 @@ function SortableLessons({ courseId, rows, muxConfigured }: { courseId: string; 
   const latest = useRef(order);
   const save = useMutation({
     mutationFn: async (ids: string[]) => { const result = await saveLessonOrder(courseId, ids); if (result.status === "error") throw new Error(result.message); },
+    onSuccess: () => toast.success("Ders sırası kaydedildi."),
     onError: error => { setDraft(null); toast.error(error.message); },
   });
   const commit = (ids = latest.current) => { if (ids.join() !== serverOrder.join()) save.mutate(ids); };
@@ -87,7 +92,6 @@ const liveStatuses = { scheduled: "Planlandı", rescheduled: "Yeniden planlandı
 function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: number; handle?: React.ReactNode; muxConfigured: boolean }) {
   const { lesson, live } = row;
   const isLive = lesson.kind === "live";
-  const [saved, setSaved] = useState<FormState>(idleForm);
   const form = useForm({
     resolver: zodResolver(lessonFormSchema), mode: "onTouched",
     defaultValues: {
@@ -96,7 +100,8 @@ function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: nu
     },
   });
   const submit = form.handleSubmit(async (values) => {
-    setSaved(await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.") ?? idleForm);
+    const result = await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.");
+    if (result) toast.success(result.message);
   });
   return <AccordionItem value={lesson.id} className="rounded-[22px] border border-border bg-white not-last:border-b">
     <div className="grid grid-cols-[auto_1fr]">
@@ -118,7 +123,7 @@ function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: nu
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
           <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
         </div>}
-        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><div role="status"><FormMessage status={saved} /></div></div>
+        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><FormMessage /></div>
       </FormShell>
     </div></AccordionPrimitive.Panel>
   </AccordionItem>;
@@ -141,7 +146,7 @@ function VideoUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
   // Mux takes a minute or two to prepare an upload; checkUpload revalidates the page once it is ready.
   const status = useQuery({
     queryKey: ownerQueryKeys.uploadStatus(lesson.id),
-    queryFn: () => checkUpload(lesson.id),
+    queryFn: async () => { const result = await checkUpload(lesson.id); if (result.status === "ready") toast.success("Video hazır. Önizleyip dersi yayınlayabilirsiniz."); return result; },
     enabled: muxConfigured && !!asset && !ready && percent === null,
     refetchInterval: query => query.state.data?.status === "processing" && query.state.dataUpdateCount < 90 ? 5000 : false,
   });
@@ -216,8 +221,8 @@ function LibraryPicker({ lessonId, currentAssetId, onAttached }: { lessonId: str
     staleTime: 5 * 60_000,
   });
   const attach = useMutation({
-    mutationFn: async (assetId: string) => { const result = await attachMuxAsset(lessonId, assetId); if (result.status === "error") throw new Error(result.message); },
-    onSuccess: () => { void client.invalidateQueries({ queryKey: ownerQueryKeys.muxLibrary() }); onAttached(); },
+    mutationFn: async (assetId: string) => { const result = await attachMuxAsset(lessonId, assetId); if (result.status === "error") throw new Error(result.message); return result.message; },
+    onSuccess: message => { toast.success(message); void client.invalidateQueries({ queryKey: ownerQueryKeys.muxLibrary() }); onAttached(); },
   });
   const needle = search.trim().toLocaleLowerCase("tr-TR");
   const assets = (library.data ?? []).filter(asset => asset.label.toLocaleLowerCase("tr-TR").includes(needle))

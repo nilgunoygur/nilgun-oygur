@@ -83,7 +83,7 @@ export function SelectField<T extends FieldValues, U = T>({ options, disabled, c
   return <ControlledField {...frame}>
     {(field, id, invalid) => <Select items={options} value={field.value} onValueChange={field.onChange} disabled={disabled}>
       <SelectTrigger id={id} ref={field.ref} className={cn("w-full", className)} aria-invalid={invalid}><SelectValue /></SelectTrigger>
-      <SelectContent>{Object.entries(options).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
+      <SelectContent alignItemWithTrigger={false}>{Object.entries(options).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}</SelectContent>
     </Select>}
   </ControlledField>;
 }
