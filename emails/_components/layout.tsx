@@ -50,8 +50,11 @@ type LayoutProps = {
   children: ReactNode;
 };
 
+// Mail clients fetch images through their own servers, which cannot reach a local dev origin.
+const assetOrigin = (siteUrl: string) => /^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(siteUrl) ? "https://www.nilgunoygur.com" : siteUrl;
+
 export function EmailLayout({ preview, siteUrl, hero, headerLink, kicker: label, title, checklist, footnote, children }: LayoutProps) {
-  const asset = (file: string) => `${siteUrl}/email/${file}`;
+  const asset = (file: string) => `${assetOrigin(siteUrl)}/email/${file}`;
   return (
     <Html lang="tr">
       <Head>
@@ -59,7 +62,7 @@ export function EmailLayout({ preview, siteUrl, hero, headerLink, kicker: label,
         <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
         <meta name="color-scheme" content="light dark" />
         <meta name="supported-color-schemes" content="light dark" />
-        <style dangerouslySetInnerHTML={{ __html: styles(siteUrl) }} />
+        <style dangerouslySetInnerHTML={{ __html: styles(assetOrigin(siteUrl)) }} />
       </Head>
       {/* Body copies its style onto an inner <td>, hence the ".page > table …" dark rule. */}
       <Body className="page" lang="tr" style={{ margin: 0, padding: 0, backgroundColor: colors.page, fontFamily: sans, color: colors.ink }}>

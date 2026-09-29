@@ -49,7 +49,7 @@ test("registration is neutral and cannot set ownership or MFA fields", async () 
   assert.equal(messages[0].to, account.email);
   assert.equal(messages[0].subject, verifyCopy.subject);
   assert.ok(messages[0].html.includes(`href="${messageUrl(messages[0]).replaceAll("&", "&amp;")}"`), "HTML button uses the same verification link");
-  assert.ok(Math.abs(messages[0].expiresAt - Date.now() - 3_600_000) < 60_000, "queued only as long as the link lives");
+  assert.ok(Math.abs(messages[0].expiresAt - Date.now() - 900_000) < 60_000, "retried only briefly, so a stale link never arrives late");
   const [user] = await db.select().from(schema.user).where(eq(schema.user.email, account.email));
   assert.equal(user.twoFactorEnabled, false);
   assert.deepEqual([user.phone, user.city, user.district, user.postcode], ["+905321234567", "İstanbul", "Kadıköy", "34710"], "contact is stored normalized");
