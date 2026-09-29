@@ -52,7 +52,6 @@ export const articleStatus = z.enum(["draft", "published"]);
 export const lessonFormSchema = z.object({
   title: z.string().trim().min(1, "Ders başlığını yazın.").max(160, "Başlık en fazla 160 karakter olabilir."),
   description: z.string().trim().max(10000, "Açıklama en fazla 10.000 karakter olabilir."),
-  position: number("Sıra", 0, 1000, "integer"),
   status: z.enum(["draft", "published"]),
   startsAt: z.string(),
   durationMinutes: number("Süre", 1, 1440, "integer"),

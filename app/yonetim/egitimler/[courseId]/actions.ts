@@ -5,7 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, lessons, videoAssets } from "@/lib/db/schema";
-import { attachVideo, createLessons, updateLesson } from "@/lib/akademi/lesson-editor";
+import { attachVideo, createLessons, reorderLessons, updateLesson } from "@/lib/akademi/lesson-editor";
 import type { lessonInput } from "@/lib/akademi/owner-forms";
 import { muxLibrary, muxRequest, ownerTokenExpiry, playbackTokens, thumbnailUrl, videoConfigured } from "@/lib/video/mux";
 import { captionLanguage, describeAsset, newAssetSettings, type AssetInfo, type MuxAsset } from "@/lib/video/library";
@@ -34,6 +34,15 @@ export async function saveLesson(values: z.input<typeof lessonInput>): Promise<F
     const input = await updateLesson(getDatabase(), viewer.user.id, values);
     changed(input.courseId);
     return { status: "success", message: input.status === "published" ? "Ders öğrencilerinize açıldı." : "Taslak kaydedildi." };
+  } catch (error) { return report(error); }
+}
+export async function saveLessonOrder(courseId: string, lessonIds: string[]): Promise<FormState> {
+  try {
+    const viewer = await requireOwner();
+    const id = z.uuid().parse(courseId);
+    await reorderLessons(getDatabase(), viewer.user.id, id, z.array(z.uuid()).max(1000).parse(lessonIds));
+    changed(id);
+    return { status: "success", message: "Ders sırası kaydedildi." };
   } catch (error) { return report(error); }
 }
 export async function startUpload(lessonId: string) {

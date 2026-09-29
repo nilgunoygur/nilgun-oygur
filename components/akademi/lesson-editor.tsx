@@ -1,11 +1,15 @@
 "use client";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Reorder, useDragControls } from "motion/react";
+import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
+import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { createUpload, type UpChunk } from "@mux/upchunk";
-import { CalendarDays, Check, CirclePlay, Eye, Library, Plus, Replace, Search, Upload, type LucideIcon } from "lucide-react";
+import { CalendarDays, Check, CirclePlay, Eye, GripVertical, Library, Plus, Replace, Search, Upload, type LucideIcon } from "lucide-react";
+import { Accordion, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -13,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { addLessons, attachMuxAsset, checkUpload, listMuxLibrary, previewPlayback, saveLesson, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
+import { addLessons, attachMuxAsset, checkUpload, listMuxLibrary, previewPlayback, saveLesson, saveLessonOrder, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
 import { FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
@@ -36,36 +40,75 @@ export function CourseEditor({ courseId, rows, muxConfigured }: { courseId: stri
   return <div className="grid gap-6">
     <Card className="border-forest/10 shadow-sm"><CardContent className="p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-5"><div><h2 className="text-xl font-semibold text-forest">Eğitim programı</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve yayınlayın. Taslaklarınızı öğrenciler görmez.</p></div><div className="flex gap-2"><Badge variant="secondary">{publishedCount} yayında</Badge><Badge variant="outline">{draftCount} taslak</Badge></div></div><form action={action} className="mt-5 border-t border-border pt-5"><input type="hidden" name="courseId" value={courseId} /><div className="flex flex-wrap gap-2">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />Örnek program ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div><div className="mt-3" role="status"><FormStatus state={state} /></div></form></CardContent></Card>
     {!muxConfigured && <p className="rounded-2xl border border-[#e7d7bc] bg-[#fbf6ed] p-5 text-sm leading-relaxed">Video yükleme henüz bağlanmadı. Ders başlıklarını, açıklamalarını ve canlı buluşmaları hazırlayabilirsiniz. Kayıtlı videoları yükleyip yayınlamak için Mux bağlantısını tamamlayın.</p>}
-    <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={filter} onValueChange={value => { if (value === "all" || value === "video" || value === "live" || value === "draft") setFilter(value); }}><TabsList className="h-auto flex-wrap"><TabsTrigger value="all">Tüm dersler <span className="ml-1 text-xs text-muted-foreground">{rows.length}</span></TabsTrigger><TabsTrigger value="video">Video <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "video").length}</span></TabsTrigger><TabsTrigger value="live">Canlı ders <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "live").length}</span></TabsTrigger><TabsTrigger value="draft">Taslaklar <span className="ml-1 text-xs text-muted-foreground">{draftCount}</span></TabsTrigger></TabsList></Tabs><p className="text-xs text-muted-foreground">Sıra numarası en küçük ders önce gösterilir.</p></div>
-    {visibleRows.length ? visibleRows.map(row => <EditorCard key={row.lesson.id} row={row} muxConfigured={muxConfigured} />) : <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">{rows.length === 0 ? "Programınız henüz boş. İlk dersinizi ekleyerek başlayın." : "Bu grupta gösterilecek ders yok."}</div>}
+    <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={filter} onValueChange={value => { if (value === "all" || value === "video" || value === "live" || value === "draft") setFilter(value); }}><TabsList className="h-auto flex-wrap"><TabsTrigger value="all">Tüm dersler <span className="ml-1 text-xs text-muted-foreground">{rows.length}</span></TabsTrigger><TabsTrigger value="video">Video <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "video").length}</span></TabsTrigger><TabsTrigger value="live">Canlı ders <span className="ml-1 text-xs text-muted-foreground">{rows.filter(row => row.lesson.kind === "live").length}</span></TabsTrigger><TabsTrigger value="draft">Taslaklar <span className="ml-1 text-xs text-muted-foreground">{draftCount}</span></TabsTrigger></TabsList></Tabs><p className="text-xs text-muted-foreground">{filter === "all" ? "Sıralamak için dersleri tutamacından sürükleyin." : "Sıralamak için “Tüm dersler” sekmesine geçin."}</p></div>
+    {visibleRows.length === 0 ? <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">{rows.length === 0 ? "Programınız henüz boş. İlk dersinizi ekleyerek başlayın." : "Bu grupta gösterilecek ders yok."}</div>
+      : <Accordion multiple className="gap-4">{filter === "all" ? <SortableLessons courseId={courseId} rows={rows} muxConfigured={muxConfigured} />
+        : visibleRows.map(row => <EditorCard key={row.lesson.id} row={row} index={rows.indexOf(row)} muxConfigured={muxConfigured} />)}</Accordion>}
   </div>;
 }
+function SortableLessons({ courseId, rows, muxConfigured }: { courseId: string; rows: Row[]; muxConfigured: boolean }) {
+  const serverOrder = rows.map(row => row.lesson.id);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  // A new server order (after saving, adding or deleting lessons) replaces the local drag state.
+  const [synced, setSynced] = useState(serverOrder.join());
+  if (synced !== serverOrder.join()) { setSynced(serverOrder.join()); setDraft(null); }
+  const order = draft ?? serverOrder;
+  const latest = useRef(order);
+  const save = useMutation({
+    mutationFn: async (ids: string[]) => { const result = await saveLessonOrder(courseId, ids); if (result.status === "error") throw new Error(result.message); },
+    onError: error => { setDraft(null); toast.error(error.message); },
+  });
+  const commit = (ids = latest.current) => { if (ids.join() !== serverOrder.join()) save.mutate(ids); };
+  const move = (id: string, step: number) => {
+    const ids = [...order], from = ids.indexOf(id), to = from + step;
+    if (to < 0 || to >= ids.length) return;
+    ids.splice(to, 0, ...ids.splice(from, 1));
+    setDraft(ids);
+    commit(ids);
+  };
+  const byId = new Map(rows.map(row => [row.lesson.id, row]));
+  return <Reorder.Group as="div" axis="y" values={order} onReorder={ids => { latest.current = ids; setDraft(ids); }} className="grid gap-4">
+    {order.map((id, index) => <SortableLesson key={id} id={id} onPick={() => { latest.current = order; }} onDrop={() => commit()} onMove={step => move(id, step)}>
+      {handle => <EditorCard row={byId.get(id)!} index={index} handle={handle} muxConfigured={muxConfigured} />}
+    </SortableLesson>)}
+  </Reorder.Group>;
+}
+
+function SortableLesson({ id, onPick, onDrop, onMove, children }: { id: string; onPick: () => void; onDrop: () => void; onMove: (step: number) => void; children: (handle: React.ReactNode) => React.ReactNode }) {
+  const controls = useDragControls();
+  const handle = <button type="button" aria-label="Dersi taşı (yukarı/aşağı ok tuşları)" className="flex cursor-grab touch-none items-center self-stretch rounded-l-[22px] pl-3 text-stone hover:text-forest focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
+    onPointerDown={event => { onPick(); controls.start(event); }} onKeyDown={event => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); onMove(event.key === "ArrowUp" ? -1 : 1); } }}><GripVertical size={18} /></button>;
+  return <Reorder.Item as="div" value={id} dragListener={false} dragControls={controls} onDragEnd={onDrop} layout="position">{children(handle)}</Reorder.Item>;
+}
+
 const visibility = { draft: "Taslak", published: "Yayında" };
 const liveStatuses = { scheduled: "Planlandı", rescheduled: "Yeniden planlandı", cancelled: "İptal edildi", completed: "Tamamlandı" };
 
-function EditorCard({ row, muxConfigured }: { row: Row; muxConfigured: boolean }) {
+function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: number; handle?: React.ReactNode; muxConfigured: boolean }) {
   const { lesson, live } = row;
   const isLive = lesson.kind === "live";
   const [saved, setSaved] = useState<FormState>(idleForm);
   const form = useForm({
     resolver: zodResolver(lessonFormSchema), mode: "onTouched",
     defaultValues: {
-      title: lesson.title, description: lesson.description, position: String(lesson.position), status: lesson.status,
+      title: lesson.title, description: lesson.description, status: lesson.status,
       startsAt: localDate(live?.startsAt), durationMinutes: String(live?.durationMinutes ?? 60), joinUrl: live?.zoomJoinUrl ?? "", passcode: live?.zoomPasscode ?? "", liveStatus: live?.status ?? "scheduled",
     },
   });
   const submit = form.handleSubmit(async (values) => {
     setSaved(await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.") ?? idleForm);
   });
-  return <details className="group rounded-[22px] border border-border bg-white">
-    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-6"><div><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {lesson.position + 1}</span><h3 className="text-2xl">{lesson.title}</h3></div><span className={`rounded-full px-3 py-1 text-xs ${lesson.status === "published" ? "bg-mist text-forest" : "bg-[#f5ebdd] text-[#82623a]"}`}>{lesson.status === "published" ? "Yayında" : "Taslak"}</span></summary>
-    <div className="border-t border-border p-6">
+  return <AccordionItem value={lesson.id} className="rounded-[22px] border border-border bg-white not-last:border-b">
+    <div className="grid grid-cols-[auto_1fr]">
+      {handle ?? <span />}
+      <AccordionTrigger className="items-center gap-4 p-6 hover:no-underline"><div className="min-w-0 flex-1"><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{isLive ? "CANLI DERS" : "VİDEO DERS"} · SIRA {index + 1}</span><span className="block text-2xl">{lesson.title}</span></div><span className={`rounded-full px-3 py-1 text-xs font-normal ${lesson.status === "published" ? "bg-mist text-forest" : "bg-[#f5ebdd] text-[#82623a]"}`}>{lesson.status === "published" ? "Yayında" : "Taslak"}</span></AccordionTrigger>
+    </div>
+    <AccordionPrimitive.Panel className="h-(--accordion-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0"><div className="border-t border-border p-6">
       {!isLive && <VideoUpload row={row} muxConfigured={muxConfigured} />}
       <FormShell form={form} onSubmit={submit}>
         <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
         <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
         <div className="grid gap-5 sm:grid-cols-2">
-          <TextField control={form.control} name="position" label="Sıra (0 ilk ders)" type="number" inputMode="numeric" min={0} max={1000} />
           <SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" />
         </div>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
@@ -77,8 +120,8 @@ function EditorCard({ row, muxConfigured }: { row: Row; muxConfigured: boolean }
         </div>}
         <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><div role="status"><FormMessage status={saved} /></div></div>
       </FormShell>
-    </div>
-  </details>;
+    </div></AccordionPrimitive.Panel>
+  </AccordionItem>;
 }
 
 const captionLabels = { ready: "Türkçe altyazı hazır", preparing: "Altyazı hazırlanıyor", failed: "Altyazı oluşturulamadı", none: "Altyazı yok" };

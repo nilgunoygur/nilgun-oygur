@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { studentCourse, accessibleLesson, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
-import { attachVideo, createLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
+import { attachVideo, createLessons, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -97,4 +97,14 @@ test("attaching a library video makes it ready, reuses the asset row, and is aud
   assert.deepEqual([rows[0].asset.status, rows[0].asset.durationSeconds], ["ready", 87]);
   const audits = await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "video.attach"));
   assert.equal(audits.length, 2);
+});
+
+test("reordering saves the full new order, rejects a stale list, and is audited", async () => {
+  const ids = (await ownerLessons(db, course.id)).map(row => row.lesson.id);
+  const reversed = [...ids].reverse();
+  await reorderLessons(db, "owner", course.id, reversed);
+  assert.deepEqual((await ownerLessons(db, course.id)).map(row => row.lesson.id), reversed);
+  await assert.rejects(() => reorderLessons(db, "owner", course.id, reversed.slice(1)), /değişmiş/);
+  await assert.rejects(() => reorderLessons(db, "owner", course.id, [...reversed.slice(1), reversed[1]]), /değişmiş/);
+  assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.reorder"))).length, 1);
 });

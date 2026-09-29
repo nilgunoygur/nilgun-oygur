@@ -52,7 +52,7 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
         await tx.insert(liveSessions).values({ lessonId: lesson.id, ...values }).onConflictDoUpdate({ target: liveSessions.lessonId, set: values });
       }
     }
-    await tx.update(lessons).set({ title: input.title, description: input.description, position: input.position, status: input.status }).where(eq(lessons.id, lesson.id));
+    await tx.update(lessons).set({ title: input.title, description: input.description, status: input.status }).where(eq(lessons.id, lesson.id));
     if (input.status === "published") await tx.update(modules).set({ status: "published" }).where(eq(modules.id, lesson.moduleId));
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.update", resourceType: "lesson", resourceId: lesson.id, reason: input.status === "published" ? "Ders yayınlandı / güncellendi" : "Taslak kaydedildi" });
   });
@@ -66,5 +66,14 @@ export async function attachVideo(db: Database, actorId: string, lessonId: strin
       .onConflictDoUpdate({ target: videoAssets.muxAssetId, set: { ...values, status: "ready" } }).returning();
     await tx.update(lessons).set({ videoAssetId: asset.id }).where(eq(lessons.id, lessonId));
     await tx.insert(adminAuditLog).values({ actorId, action: "video.attach", resourceType: "lesson", resourceId: lessonId, reason: "Mux kütüphanesinden video bağlandı" });
+  });
+}
+
+export async function reorderLessons(db: Database, actorId: string, courseId: string, lessonIds: string[]) {
+  await db.transaction(async tx => {
+    const current = new Set((await tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.courseId, courseId)).for("update")).map(row => row.id));
+    if (lessonIds.length !== current.size || !lessonIds.every(id => current.delete(id))) throw new Error("Ders listesi değişmiş. Sayfayı yenileyip yeniden deneyin.");
+    for (const [position, id] of lessonIds.entries()) await tx.update(lessons).set({ position }).where(eq(lessons.id, id));
+    await tx.insert(adminAuditLog).values({ actorId, action: "lesson.reorder", resourceType: "course", resourceId: courseId, reason: "Ders sırası değiştirildi" });
   });
 }
