@@ -76,7 +76,8 @@ const assetId = z.string().regex(/^[A-Za-z0-9]{1,128}$/, "Geçersiz video.");
 const hour = () => Math.floor(Date.now() / 1000) + 3600;
 
 /** Videos in the Mux environment, for attaching one uploaded in the Mux dashboard to a lesson. */
-export async function listMuxLibrary() {
+type LibraryAsset = ReturnType<typeof describeAsset> & { thumbnail?: string; usedBy: string[] };
+export async function listMuxLibrary(): Promise<{ assets: LibraryAsset[] } | { error: string }> {
   try {
     await requireOwner();
     if (!videoConfigured()) return { error: "Mux bağlantısı kurulmadan video kütüphanesi görüntülenemez." };
@@ -93,7 +94,7 @@ export async function listMuxLibrary() {
 }
 
 /**
- * Links a ready Mux asset to a draft lesson. Paid lessons must not stay reachable through a public link, so the asset
+ * Links a ready Mux asset to a video lesson, draft or published. Paid lessons must not stay reachable through a public link, so the asset
  * gets a signed playback ID and loses its public ones; Turkish captions are requested when the asset has none.
  */
 export async function attachMuxAsset(lessonId: string, rawAssetId: string): Promise<FormState> {
@@ -102,7 +103,8 @@ export async function attachMuxAsset(lessonId: string, rawAssetId: string): Prom
     if (!videoConfigured()) throw new Error("Mux bağlantısı kurulmadan video eklenemez.");
     const db = getDatabase();
     const [lesson] = await db.select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
-    if (!lesson || lesson.kind !== "video" || lesson.status !== "draft") throw new Error("Video değiştirmek için önce dersi taslak olarak kaydedin.");
+    // Published lessons may switch too: the chosen asset must already be ready, so students never lose playback.
+    if (!lesson || lesson.kind !== "video") throw new Error("Ders bulunamadı.");
     const id = assetId.parse(rawAssetId);
     const raw = await muxRequest<MuxAsset>(`assets/${id}`);
     const asset = describeAsset(raw);
@@ -113,8 +115,7 @@ export async function attachMuxAsset(lessonId: string, rawAssetId: string): Prom
     if (asset.captions === "none" && asset.audioTrackId) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
     if (!raw.meta?.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
     await db.transaction(async tx => {
-      const [current] = await tx.select().from(lessons).where(eq(lessons.id, lesson.id)).for("update");
-      if (current.status !== "draft") throw new Error("Ders taslak olmalıdır.");
+      await tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.id, lesson.id)).for("update");
       const values = { signedPlaybackId, status: "ready" as const, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio };
       const [row] = await tx.insert(videoAssets).values({ muxAssetId: id, ...values }).onConflictDoUpdate({ target: videoAssets.muxAssetId, set: values }).returning();
       await tx.update(lessons).set({ videoAssetId: row.id }).where(eq(lessons.id, lesson.id));

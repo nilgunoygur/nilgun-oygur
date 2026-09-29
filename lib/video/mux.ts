@@ -1,6 +1,7 @@
 import "server-only";
 import { signPlaybackTokens } from "./playback-token";
 import { config } from "@/lib/config";
+import { describeAsset, type CaptionState, type MuxAsset } from "./library";
 
 export function videoConfigured() {
   const v = config().video;
@@ -24,4 +25,19 @@ export function playbackTokens(playbackId: string, expiresAt: number) {
   const v = config().video;
   if (!v.signingKeyId || !v.signingPrivateKey) throw new Error("Video hizmeti henüz bağlanmadı.");
   return signPlaybackTokens(playbackId, expiresAt, v.signingKeyId, v.signingPrivateKey);
+}
+
+export type AttachedVideo = { title?: string; captions?: CaptionState; thumbnail: string };
+
+/** Mux title, caption state and a signed thumbnail for the videos on a course's lessons, keyed by Mux asset ID. */
+export async function attachedVideos(videos: { assetId: string; playbackId: string }[]): Promise<Record<string, AttachedVideo>> {
+  if (!videos.length || !videoConfigured()) return {};
+  const expires = Math.floor(Date.now() / 1000) + 3600;
+  const entries = await Promise.all(videos.map(async ({ assetId, playbackId }) => {
+    const thumbnail = `https://image.mux.com/${playbackId}/thumbnail.webp?width=320&token=${playbackTokens(playbackId, expires).thumbnail}`;
+    // The card still shows the thumbnail when Mux is briefly unreachable.
+    const asset = await muxRequest<MuxAsset>(`assets/${encodeURIComponent(assetId)}`).then(describeAsset, () => undefined);
+    return [assetId, { title: asset?.title, captions: asset?.captions, thumbnail }] as const;
+  }));
+  return Object.fromEntries(entries);
 }
