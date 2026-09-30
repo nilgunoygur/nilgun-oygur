@@ -8,16 +8,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { createUpload, type UpChunk } from "@mux/upchunk";
-import { CalendarDays, Check, CirclePlay, Eye, GripVertical, Library, Plus, Replace, Search, Upload, type LucideIcon } from "lucide-react";
+import { CalendarDays, Check, CirclePlay, Eye, GripVertical, Library, Plus, Replace, Search, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { Accordion, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { addLessons, attachMuxAsset, checkUpload, listMuxLibrary, previewPlayback, saveLesson, saveLessonOrder, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
+import { addLessons, attachMuxAsset, checkUpload, listMuxLibrary, previewPlayback, removeLesson, saveLesson, saveLessonOrder, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
 import { FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
@@ -125,10 +125,32 @@ function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: nu
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
           <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
         </div>}
-        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><FormMessage /></div>
+        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><FormMessage /><DeleteLesson lesson={lesson} /></div>
       </FormShell>
     </div></AccordionPrimitive.Panel>
   </AccordionItem>;
+}
+
+function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
+  const [open, setOpen] = useState(false);
+  const remove = useMutation({
+    mutationFn: async () => { const result = await removeLesson(lesson.courseId, lesson.id); if (result.status === "error") throw new Error(result.message); return result.message; },
+    onSuccess: message => { toast.success(message); setOpen(false); },
+  });
+  return <>
+    <Button type="button" variant="destructive" size="pill" className="ml-auto" onClick={() => { remove.reset(); setOpen(true); }}><Trash2 />Dersi sil</Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>“{lesson.title}” silinsin mi?</DialogTitle><DialogDescription>Ders kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video etkilenmez.</DialogDescription></DialogHeader>
+        {lesson.status === "published" && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
+        {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
+        <DialogFooter>
+          <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={() => setOpen(false)}>Vazgeç</Button>
+          <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>;
 }
 
 const captionLabels = { ready: "Türkçe altyazı hazır", preparing: "Altyazı hazırlanıyor", failed: "Altyazı oluşturulamadı", none: "Altyazı yok" };
