@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { studentCourse, accessibleLesson, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
-import { attachVideo, createLessons, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
+import { attachVideo, createLessons, deleteLesson, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -108,4 +108,19 @@ test("reordering saves the full new order, rejects a stale list, and is audited"
   await assert.rejects(() => reorderLessons(db, "owner", course.id, reversed.slice(1)), /değişmiş/);
   await assert.rejects(() => reorderLessons(db, "owner", course.id, [...reversed.slice(1), reversed[1]]), /değişmiş/);
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.reorder"))).length, 1);
+});
+
+test("only draft lessons can be deleted; their live session and progress go with them and it is audited", async () => {
+  await createLessons(db, "owner", course.id, "live");
+  const rows = await ownerLessons(db, course.id);
+  const extra = rows.at(-1).lesson;
+  const published = rows.find(row => row.lesson.status === "published").lesson;
+  await db.insert(schema.liveSessions).values({ lessonId: extra.id, startsAt: now, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/1", zoomPasscode: "" });
+  await db.insert(schema.lessonProgress).values({ userId: "buyer", lessonId: extra.id });
+  await assert.rejects(() => deleteLesson(db, "owner", course.id, published.id), /taslağa/);
+  await assert.rejects(() => deleteLesson(db, "owner", crypto.randomUUID(), extra.id), /bulunamadı/);
+  await deleteLesson(db, "owner", course.id, extra.id);
+  assert.deepEqual((await ownerLessons(db, course.id)).map(row => row.lesson.id), rows.slice(0, -1).map(row => row.lesson.id));
+  assert.equal((await db.select().from(schema.liveSessions).where(eq(schema.liveSessions.lessonId, extra.id))).length, 0);
+  assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.delete"))).length, 1);
 });
