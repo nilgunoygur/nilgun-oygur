@@ -138,13 +138,13 @@ function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
     mutationFn: async () => { const result = await removeLesson(lesson.courseId, lesson.id); if (result.status === "error") throw new Error(result.message); return result.message; },
     onSuccess: message => { toast.success(message); setOpen(false); router.refresh(); },
   });
-  // Published lessons must go back to draft first, so students never lose a lesson they can see.
-  if (lesson.status === "published") return null;
+  const published = lesson.status === "published";
   return <>
     <Button type="button" variant="destructive" size="pill" className="ml-auto" onClick={() => { remove.reset(); setOpen(true); }}><Trash2 />Dersi sil</Button>
     <Dialog open={open} onOpenChange={next => { if (!remove.isPending) setOpen(next); }}>
       <DialogContent>
         <DialogHeader><DialogTitle>“{lesson.title}” silinsin mi?</DialogTitle><DialogDescription>Ders, açıklaması{lesson.kind === "live" ? " ve canlı buluşma bilgileri" : ""} kalıcı olarak silinir. {lesson.kind === "video" ? "Bağlı video Mux kütüphanenizde kalır. " : ""}Bu işlem geri alınamaz.</DialogDescription></DialogHeader>
+        {published && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
         {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={() => setOpen(false)}>Vazgeç</Button>

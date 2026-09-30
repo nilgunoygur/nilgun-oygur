@@ -59,16 +59,15 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   return input;
 }
 
-// Only drafts can be deleted, so students never lose a lesson they can see. The Mux video stays in the library.
+// Removes the lesson with its live session and student progress. The Mux video stays in the library.
 export async function deleteLesson(db: Database, actorId: string, courseId: string, lessonId: string) {
   await db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId))).for("update");
     if (!lesson) throw new Error("Ders bulunamadı.");
-    if (lesson.status !== "draft") throw new Error("Yayındaki bir dersi silmeden önce taslağa alın.");
     await tx.delete(liveSessions).where(eq(liveSessions.lessonId, lesson.id));
     await tx.delete(lessonProgress).where(eq(lessonProgress.lessonId, lesson.id));
     await tx.delete(lessons).where(eq(lessons.id, lesson.id));
-    await tx.insert(adminAuditLog).values({ actorId, action: "lesson.delete", resourceType: "course", resourceId: courseId, reason: `“${lesson.title}” dersi silindi` });
+    await tx.insert(adminAuditLog).values({ actorId, action: "lesson.delete", resourceType: "course", resourceId: courseId, reason: `${lesson.status === "published" ? "Yayındaki" : "Taslak"} “${lesson.title}” dersi silindi` });
   });
 }
 
