@@ -110,19 +110,16 @@ test("reordering saves the full new order, rejects a stale list, and is audited"
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.reorder"))).length, 1);
 });
 
-test("deleting a draft or published lesson removes its live session and progress and is audited", async () => {
+test("deleting a draft or published lesson removes it with its live session and progress, and is audited", async () => {
   await createLessons(db, "owner", course.id, "live");
   const rows = await ownerLessons(db, course.id);
-  const extra = rows.at(-1).lesson;
-  const published = rows.find(row => row.lesson.status === "published").lesson;
-  await db.insert(schema.liveSessions).values({ lessonId: extra.id, startsAt: now, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/1", zoomPasscode: "" });
-  await db.insert(schema.lessonProgress).values({ userId: "buyer", lessonId: extra.id });
-  await assert.rejects(() => deleteLesson(db, "owner", crypto.randomUUID(), extra.id), /bulunamadı/);
-  await deleteLesson(db, "owner", course.id, extra.id);
-  assert.equal((await db.select().from(schema.liveSessions).where(eq(schema.liveSessions.lessonId, extra.id))).length, 0);
-  await db.insert(schema.lessonProgress).values({ userId: "buyer", lessonId: published.id }).onConflictDoNothing();
-  await deleteLesson(db, "owner", course.id, published.id);
+  const [draft, published] = [rows.at(-1).lesson, rows.find(row => row.lesson.status === "published").lesson];
+  await db.insert(schema.liveSessions).values({ lessonId: draft.id, startsAt: now, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/1", zoomPasscode: "" });
+  await db.insert(schema.lessonProgress).values([draft, published].map(lesson => ({ userId: "buyer", lessonId: lesson.id })));
+  await assert.rejects(() => deleteLesson(db, "owner", crypto.randomUUID(), draft.id), /bulunamadı/);
+  for (const lesson of [draft, published]) await deleteLesson(db, "owner", course.id, lesson.id);
+  const remaining = (await ownerLessons(db, course.id)).map(row => row.lesson.id);
+  assert.deepEqual(remaining, rows.map(row => row.lesson.id).filter(id => id !== draft.id && id !== published.id));
   assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.some(row => row.id === published.id), false);
-  assert.deepEqual((await ownerLessons(db, course.id)).map(row => row.lesson.id), rows.slice(0, -1).map(row => row.lesson.id).filter(id => id !== published.id));
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.delete"))).length, 2);
 });

@@ -132,19 +132,17 @@ function EditorCard({ row, index, handle, muxConfigured }: { row: Row; index: nu
 }
 
 function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const remove = useMutation({
     mutationFn: async () => { const result = await removeLesson(lesson.courseId, lesson.id); if (result.status === "error") throw new Error(result.message); return result.message; },
-    onSuccess: message => { toast.success(message); setOpen(false); router.refresh(); },
+    onSuccess: message => { toast.success(message); setOpen(false); },
   });
-  const published = lesson.status === "published";
   return <>
     <Button type="button" variant="destructive" size="pill" className="ml-auto" onClick={() => { remove.reset(); setOpen(true); }}><Trash2 />Dersi sil</Button>
-    <Dialog open={open} onOpenChange={next => { if (!remove.isPending) setOpen(next); }}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent>
-        <DialogHeader><DialogTitle>“{lesson.title}” silinsin mi?</DialogTitle><DialogDescription>Ders, açıklaması{lesson.kind === "live" ? " ve canlı buluşma bilgileri" : ""} kalıcı olarak silinir. {lesson.kind === "video" ? "Bağlı video Mux kütüphanenizde kalır. " : ""}Bu işlem geri alınamaz.</DialogDescription></DialogHeader>
-        {published && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
+        <DialogHeader><DialogTitle>“{lesson.title}” silinsin mi?</DialogTitle><DialogDescription>Ders kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video etkilenmez.</DialogDescription></DialogHeader>
+        {lesson.status === "published" && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
         {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={() => setOpen(false)}>Vazgeç</Button>
