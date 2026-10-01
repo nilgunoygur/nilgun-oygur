@@ -13,12 +13,9 @@ const controls = "mt-6 flex items-center justify-center gap-4 [&_button]:rounded
 export function PhotoCarousel({
   images,
   label = "Etkinlik fotoğrafları",
-  book = false,
 }: {
   images: string[];
   label?: string;
-  /** Book preview: taller pages on a muted background. */
-  book?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const reduced = useReducedMotion();
@@ -28,7 +25,7 @@ export function PhotoCarousel({
       aria-roledescription="slayt gösterisi"
       aria-label={label}
     >
-      <div className={cn("relative h-[470px] overflow-hidden rounded-[22px] bg-[#ffffff70] max-tablet:h-[350px]", book && "bg-muted")}>
+      <div className="relative h-[470px] overflow-hidden rounded-[22px] bg-[#ffffff70] max-tablet:h-[350px]">
         <AnimatePresence initial={false}>
           <m.div
             key={index}
@@ -36,7 +33,7 @@ export function PhotoCarousel({
             animate={{ opacity: 1 }}
             exit={{ opacity: reduced ? 1 : 0 }}
             transition={{ duration: 0.25 }}
-            className={cn("relative", book ? "h-[620px] max-tablet:h-[430px]" : "h-[470px] max-tablet:h-80")}
+            className="relative h-[470px] max-tablet:h-80"
             style={{ position: "absolute", inset: 0 }}
           >
             <Image
