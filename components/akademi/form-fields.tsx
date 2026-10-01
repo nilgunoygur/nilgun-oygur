@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { Controller, FormProvider, useFormState, type Control, type ControllerRenderProps, type FieldPath, type FieldValues, type UseFormReturn } from "react-hook-form";
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { authErrorMessage } from "@/lib/auth/navigation";
@@ -110,6 +110,15 @@ export function PasswordField<T extends FieldValues, U = T>({ autoComplete, ...f
       </InputGroupAddon>
     </InputGroup>}
   </ControlledField>;
+}
+
+/** A button that opens the file chooser; the same file can be chosen again. */
+export function FileButton({ accept, multiple, onFiles, ...button }: Omit<ComponentProps<typeof Button>, "onClick" | "type"> & { accept: string; multiple?: boolean; onFiles: (files: File[]) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return <>
+    <Button type="button" {...button} onClick={() => input.current?.click()} />
+    <input ref={input} className="sr-only" type="file" accept={accept} multiple={multiple} tabIndex={-1} onChange={event => { const files = [...(event.target.files ?? [])]; event.target.value = ""; if (files.length) onFiles(files); }} />
+  </>;
 }
 
 type RootErrors = { setError: (name: "root", error: { message: string }) => void };

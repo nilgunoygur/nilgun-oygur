@@ -1,8 +1,8 @@
 import { and, asc, count, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { courses, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { isCourseProduct, productDetails, type ShopierProduct } from "../shopier/api.ts";
-import { descriptionHtml, descriptionText } from "../shopier/description.ts";
+import { isCourseProduct, isEditableProduct, parsePriceKurus, productDetails, type ShopierProduct } from "../shopier/api.ts";
+import { descriptionHtml, descriptionMarkup, descriptionText } from "../shopier/description.ts";
 import { normalizeSlug } from "../route-slug.ts";
 import { courseSlug } from "./slug.ts";
 
@@ -83,18 +83,27 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   return {
     courses: rows.map(row => {
       const product = byId.get(row.productId);
-      return { ...row, title: titleOf(row.productId), priceKurus: product ? saleDetails(product)?.priceKurus ?? null : null, discounted: Boolean(product?.priceData.discount) };
+      const details = product ? saleDetails(product) : null;
+      return {
+        ...row, title: titleOf(row.productId), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
+        // Raw Shopier values for the edit form.
+        product: product && isEditableProduct(product) ? {
+          description: descriptionMarkup(product.description), listPriceKurus: parsePriceKurus(product.priceData.price), image: details?.imageUrl ?? null,
+          hidden: Boolean(product.customListing), inStock: product.stockStatus !== "outOfStock", url: product.url ?? null,
+        } : null,
+      };
     }),
     recentSales: recent.map(sale => ({ ...sale, title: titleOf(sale.productId) })),
   };
 }
 
-async function linkCourse(db: Database, product: ShopierProduct) {
+/** The new course's id, or undefined when the product is already linked. The owner's `settings` win over an existing link. */
+export async function linkCourse(db: Database, product: Pick<ShopierProduct, "id" | "title">, settings?: { accessDurationDays: number; status: "draft" | "published" }) {
   const slug = courseSlug(product.title) || `egitim-${product.id}`;
   const [taken] = await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1);
-  const [row] = await db.insert(courses).values({ slug: taken ? `${slug}-${product.id}` : slug, shopierProductId: product.id, status: "published" })
-    .onConflictDoNothing().returning({ id: courses.id });
-  return !!row;
+  const insert = db.insert(courses).values({ slug: taken ? `${slug}-${product.id}` : slug, shopierProductId: product.id, status: "published", ...settings });
+  const [row] = await (settings ? insert.onConflictDoUpdate({ target: courses.shopierProductId, set: settings }) : insert.onConflictDoNothing()).returning({ id: courses.id });
+  return row?.id;
 }
 
 /** product.created / product.updated: link a new course product. Returns whether the public catalog may have changed. */

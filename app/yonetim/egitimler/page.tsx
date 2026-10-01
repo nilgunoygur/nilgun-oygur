@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
+import { filesConfigured } from "@/lib/files/storage";
 import { OwnerCourseManagement } from "@/components/akademi/owner-course-management";
 import { pageWidth, ownerSection, accountTitle, kicker } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,6 @@ async function Courses() {
 
   return <>
     <header className="mb-8"><p className={kicker}>AKADEMİ YÖNETİMİ</p><h1 className={accountTitle}>Eğitim yönetimi</h1><p className="mt-3 max-w-2xl text-muted-foreground">Eğitim programlarını, satışları ve bekleyen bildirimleri tek yerden takip edin.</p></header>
-    <OwnerCourseManagement initialData={initialData} />
+    <OwnerCourseManagement initialData={initialData} filesConfigured={filesConfigured()} />
   </>;
 }

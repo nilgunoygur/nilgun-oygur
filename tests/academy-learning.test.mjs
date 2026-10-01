@@ -5,8 +5,9 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
-import { studentCourse, accessibleLesson, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
-import { attachVideo, createLessons, deleteLesson, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
+import { studentCourse, accessibleLesson, accessibleFile, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
+import { attachAsset, createLessons, deleteLesson, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
+import { addLessonFile, removeLessonFile } from "../lib/akademi/lesson-files.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -91,8 +92,8 @@ test("unpublishing a lesson or its module blocks existing direct links and mutat
 test("attaching a library video makes it ready, reuses the asset row, and is audited", async () => {
   const [first, second] = (await ownerLessons(db, course.id)).filter(row => row.lesson.kind === "video").map(row => row.lesson);
   const video = { muxAssetId: "library-asset", signedPlaybackId: "library-signed", durationSeconds: 87, aspectRatio: "16:9" };
-  await attachVideo(db, "owner", first.id, video);
-  await attachVideo(db, "owner", second.id, video);
+  await attachAsset(db, "owner", first, video, "Mux kütüphanesinden video bağlandı");
+  await attachAsset(db, "owner", second, video, "Mux kütüphanesinden video bağlandı");
   const rows = (await ownerLessons(db, course.id)).filter(row => [first.id, second.id].includes(row.lesson.id));
   assert.equal(new Set(rows.map(row => row.asset.id)).size, 1);
   assert.deepEqual([rows[0].asset.status, rows[0].asset.durationSeconds], ["ready", 87]);
@@ -122,4 +123,62 @@ test("deleting a draft or published lesson removes it with its live session and 
   assert.deepEqual(remaining, rows.map(row => row.lesson.id).filter(id => id !== draft.id && id !== published.id));
   assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.some(row => row.id === published.id), false);
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.delete"))).length, 2);
+});
+
+const homework = (lessonId, n) => ({ lessonId, name: `Ödev ${n}.pdf`, pathname: `lessons/${lessonId}/d${n}/odev-${n}.pdf`, mime: "application/pdf", sizeBytes: 120_000 });
+
+test("an audio lesson publishes only with a ready recording, which students finish by listening", async () => {
+  await createLessons(db, "owner", course.id, "audio");
+  const audio = (await ownerLessons(db, course.id)).at(-1).lesson;
+  assert.deepEqual([audio.kind, audio.status, audio.title.endsWith("ses dersi")], ["audio", "draft", true]);
+  await assert.rejects(() => updateLesson(db, "owner", input(audio)), /ses kaydını/);
+  const peaks = [10, 80, 40, 100, 0, 55, 20, 90];
+  await attachAsset(db, "owner", audio, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed-1", durationSeconds: 600, peaks }, "Yüklenen ses kaydı derse bağlandı");
+  await updateLesson(db, "owner", input(audio));
+
+  const lesson = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === audio.id);
+  assert.deepEqual([lesson.kind, lesson.durationSeconds, lesson.mediaReady, lesson.peaks], ["audio", 600, true, peaks]);
+  assert.ok(!JSON.stringify(lesson).includes("recording-"), "Mux identifiers never reach the course page");
+  await assert.rejects(() => saveProgress(db, "buyer", audio.id, { completed: true, position: 500 }, now), /NOT_WATCHED/);
+  await saveProgress(db, "buyer", audio.id, { completed: true, position: 540 }, now);
+
+  // Re-attaching the same asset keeps its waveform; a new asset has none.
+  await attachAsset(db, "owner", audio, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed-1", durationSeconds: 600 }, "Mux kütüphanesinden ses kaydı bağlandı");
+  assert.deepEqual((await ownerLessons(db, course.id)).find(row => row.lesson.id === audio.id).asset.peaks, peaks);
+  await attachAsset(db, "owner", audio, { muxAssetId: "recording-2", signedPlaybackId: "recording-signed-2", durationSeconds: 300 }, "Mux kütüphanesinden ses kaydı bağlandı");
+  assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "audio.attach"))).length, 3);
+  const replaced = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === audio.id);
+  assert.deepEqual([replaced.durationSeconds, replaced.peaks], [300, null]);
+});
+
+test("homework PDFs attach to any lesson and open only for students with access to a published lesson", async () => {
+  const rows = await ownerLessons(db, course.id);
+  const lesson = rows.find(row => row.lesson.kind === "video").lesson;
+  await db.update(schema.modules).set({ status: "published" }).where(eq(schema.modules.id, lesson.moduleId));
+  const [asset] = await db.select().from(schema.videoAssets).limit(1);
+  await db.update(schema.lessons).set({ videoAssetId: asset.id, status: "published" }).where(eq(schema.lessons.id, lesson.id));
+  const one = await addLessonFile(db, "owner", homework(lesson.id, 1));
+  const two = await addLessonFile(db, "owner", homework(lesson.id, 2));
+  await assert.rejects(() => addLessonFile(db, "owner", { ...homework(lesson.id, 3), mime: "application/zip" }), /PDF olmalıdır/);
+  await assert.rejects(() => addLessonFile(db, "owner", { ...homework(lesson.id, 3), sizeBytes: 30 * 1024 * 1024 }), /çok büyük/);
+  assert.equal((await addLessonFile(db, "owner", { ...homework(lesson.id, 3), name: ` ${"a".repeat(300)}.pdf ` })).file.name.length, 160, "a long file name is cut, not refused");
+  await removeLessonFile(db, "owner", (await db.select().from(schema.lessonFiles).where(eq(schema.lessonFiles.pathname, homework(lesson.id, 3).pathname)))[0].id);
+  await assert.rejects(() => addLessonFile(db, "owner", homework(crypto.randomUUID(), 1)), /bulunamadı/);
+
+  const shown = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === lesson.id);
+  assert.deepEqual(shown.documents, [{ id: one.file.id, name: "Ödev 1.pdf", sizeBytes: 120_000 }, { id: two.file.id, name: "Ödev 2.pdf", sizeBytes: 120_000 }]);
+  assert.ok(!JSON.stringify(shown).includes("lessons/"), "storage paths never reach the course page");
+  assert.equal((await accessibleFile(db, "buyer", one.file.id, now)).pathname, one.file.pathname);
+  assert.equal(await accessibleFile(db, "other", one.file.id, now), null, "no grant");
+  assert.equal(await accessibleFile(db, "buyer", one.file.id, new Date("2026-09-24")), null, "expired grant");
+  assert.equal(await accessibleFile(db, "buyer", crypto.randomUUID(), now), null);
+  await db.update(schema.lessons).set({ status: "draft" }).where(eq(schema.lessons.id, lesson.id));
+  assert.equal(await accessibleFile(db, "buyer", one.file.id, now), null, "draft lesson");
+
+  assert.equal((await removeLessonFile(db, "owner", one.file.id)).pathname, one.file.pathname);
+  await assert.rejects(() => removeLessonFile(db, "owner", one.file.id), /bulunamadı/);
+  assert.deepEqual(await deleteLesson(db, "owner", course.id, lesson.id), [two.file.pathname], "deleting a lesson hands back its stored files");
+  assert.equal((await db.select().from(schema.lessonFiles).where(eq(schema.lessonFiles.lessonId, lesson.id))).length, 0);
+  const actions = (await db.select().from(schema.adminAuditLog)).map(row => row.action);
+  for (const action of ["file.add", "file.remove"]) assert.ok(actions.includes(action), action);
 });

@@ -1,9 +1,9 @@
 import type { Config } from "../config.ts";
 import type { Database } from "../db/types.ts";
-import type { ShopierClient } from "../shopier/api.ts";
+import type { ProductChanges, ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
 import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalogFromShopier } from "./catalog.ts";
-import { setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCoursePrice, type CourseStatus } from "./owner-commands.ts";
+import { createCourse, setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
 import { createOwnerOverview } from "./dashboard.ts";
 import { ownerUsers, type UserListParams } from "./owner-users.ts";
@@ -13,7 +13,7 @@ import { studentContact } from "./student-contact.ts";
 
 type Dependencies = {
   db: Database;
-  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "updateProductPrice">;
+  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "createProduct" | "updateProduct">;
   config: Pick<Config, "shopier">;
   now?: () => Date;
 };
@@ -70,7 +70,8 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
       users: (params: UserListParams) => ownerUsers(db, params, now()),
       setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
-      updateCoursePrice: (actorId: string, courseId: string, priceKurus: number) => updateCoursePrice(db, actorId, courseId, priceKurus, shopier),
+      updateCourseProduct: (actorId: string, courseId: string, changes: ProductChanges) => updateCourseProduct(db, actorId, courseId, changes, shopier),
+      createCourse: (actorId: string, course: NewCourse) => createCourse(db, actorId, course, shopier),
       syncCatalog: (actorId: string) => syncCatalogAsOwner(db, actorId, syncCatalog),
     },
     webhooks: {

@@ -1,10 +1,11 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import { courses, lessons, modules, lessonProgress, liveSessions, videoAssets } from "../db/schema.ts";
+import { courses, lessonFiles, lessons, modules, lessonProgress, liveSessions, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
+import { lessonDocuments } from "./lesson-files.ts";
 import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
 
-/** Private learning reads never depend on whether the product is still for sale. */
+/** Private learning reads never depend on whether the product is still for sale. Homework PDFs are exposed by id only. */
 export async function studentCourse(db: Database, userId: string, courseId: string, now = new Date()) {
   const grant = await activeGrant(db, userId, courseId, now);
   if (!grant) return null;
@@ -13,7 +14,7 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
   const rows = await db.select({
     id: lessons.id, title: lessons.title, description: lessons.description, kind: lessons.kind,
     moduleTitle: modules.title, durationSeconds: videoAssets.durationSeconds,
-    videoReady: sql<boolean>`${videoAssets.status} = 'ready'`, completedAt: lessonProgress.completedAt,
+    mediaReady: sql<boolean>`${videoAssets.status} = 'ready'`, peaks: videoAssets.peaks, completedAt: lessonProgress.completedAt,
     lastPositionSeconds: lessonProgress.lastPositionSeconds,
     startsAt: liveSessions.startsAt, durationMinutes: liveSessions.durationMinutes, liveStatus: liveSessions.status,
   }).from(lessons).innerJoin(modules, eq(lessons.moduleId, modules.id))
@@ -22,7 +23,8 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
     .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(asc(modules.position), asc(lessons.position), asc(lessons.createdAt));
-  return { course, grant, lessons: rows };
+  const documents = await lessonDocuments(db, rows.map(row => row.id));
+  return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents(row.id) })) };
 }
 
 /** Rechecked by every progress, playback, and live-join request. */
@@ -51,6 +53,11 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
   const position = input.position === undefined ? undefined : Math.min(input.position, duration ?? input.position);
   await db.insert(lessonProgress).values({ userId, lessonId, completedAt, lastPositionSeconds: position, lastActivityAt: now })
     .onConflictDoUpdate({ target: [lessonProgress.userId, lessonProgress.lessonId], set: { completedAt, lastPositionSeconds: position, lastActivityAt: now } });
+}
+
+export async function accessibleFile(db: Database, userId: string, fileId: string, now = new Date()) {
+  const [file] = await db.select().from(lessonFiles).where(eq(lessonFiles.id, fileId));
+  return file && await accessibleLesson(db, userId, file.lessonId, now) ? file : null;
 }
 
 export async function liveDestination(db: Database, userId: string, lessonId: string, now = new Date()) {

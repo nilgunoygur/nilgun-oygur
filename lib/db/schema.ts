@@ -108,7 +108,7 @@ export const bannerSettings = pgTable("banner_settings", {
 
 export const courseStatus = pgEnum("course_status", ["draft", "published", "archived"]);
 export const publicationStatus = pgEnum("publication_status", ["draft", "published"]);
-export const lessonKind = pgEnum("lesson_kind", ["video", "live"]);
+export const lessonKind = pgEnum("lesson_kind", ["video", "live", "audio"]);
 export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "cancelled", "completed"]);
 export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
 export const eventStatus = pgEnum("event_status", ["pending", "processing", "processed", "failed"]);
@@ -130,6 +130,7 @@ export const modules = pgTable("modules", {
   status: publicationStatus("status").notNull().default("draft"),
   ...timestamps(),
 }, (t) => [unique("modules_id_course").on(t.id, t.courseId), index("modules_course_position_idx").on(t.courseId, t.position), check("modules_position_valid", sql`${t.position} >= 0`)]);
+// A Mux asset: the video of a video lesson, or the recording of an audio lesson.
 export const videoAssets = pgTable("video_assets", {
   id: id(),
   muxUploadId: text("mux_upload_id").unique(),
@@ -138,6 +139,8 @@ export const videoAssets = pgTable("video_assets", {
   status: videoStatus("status").notNull().default("waiting"),
   durationSeconds: integer("duration_seconds"),
   aspectRatio: text("aspect_ratio"),
+  // Waveform bar heights (0–100) of a recording, measured in the owner's browser at upload.
+  peaks: jsonb("peaks").$type<number[]>(),
   failureDetails: text("failure_details"),
   ...timestamps(),
 }, (t) => [
@@ -184,6 +187,19 @@ export const liveSessions = pgTable("live_sessions", {
   check("live_duration_valid", sql`${t.durationMinutes} > 0`),
   check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
   index("live_sessions_schedule_idx").on(t.status, t.startsAt),
+]);
+// Homework PDFs of a lesson, kept in a private Vercel Blob store.
+export const lessonFiles = pgTable("lesson_files", {
+  id: id(),
+  lessonId: uuid("lesson_id").notNull().references(() => lessons.id),
+  name: text("name").notNull(),
+  pathname: text("pathname").notNull().unique(),
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: time("created_at").notNull().defaultNow(),
+}, (t) => [
+  check("lesson_files_size_valid", sql`${t.sizeBytes} > 0`),
+  index("lesson_files_lesson_idx").on(t.lessonId, t.createdAt),
 ]);
 // One row per paid Shopier order line for a course, matched to a student by email.
 export const shopierPurchases = pgTable("shopier_purchases", {

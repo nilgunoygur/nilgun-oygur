@@ -7,14 +7,31 @@ const number = (label: string, min: number, max: number, step: "integer" | "pric
     .refine(value => step === "price" || Number.isInteger(value), `${label} tam sayı olmalıdır.`)
     .refine(value => value >= min && value <= max, `${label} ${min} ile ${max.toLocaleString("tr-TR")} arasında olmalıdır.`));
 
-export const coursePriceSchema = z.object({ value: number("Fiyat", 1, 10_000_000, "price") });
-export const courseAccessSchema = z.object({ value: number("Erişim süresi", 1, 3650, "integer") });
+const accessDays = number("Erişim süresi", 1, 3650, "integer");
+export const courseAccessSchema = z.object({ value: accessDays });
 export const courseChangeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("status"), status: z.enum(["draft", "published", "archived"]) }),
-  coursePriceSchema.extend({ kind: z.literal("price") }),
   courseAccessSchema.extend({ kind: z.literal("access") }),
 ]);
 export type CourseChange = z.output<typeof courseChangeSchema>;
+
+// Prices are in lira here and in kuruş past the route.
+const lira = (label: string) => number(label, 1, 10_000_000, "price").refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, `${label} en fazla iki ondalık basamak içerebilir.`);
+const cheaper = (value: { price?: number; discountedPrice?: number | null }) => value.discountedPrice == null || value.price === undefined || value.discountedPrice < value.price;
+const cheaperIssue = { message: "İndirimli fiyat normal fiyattan düşük olmalıdır.", path: ["discountedPrice"] };
+const productFields = {
+  title: z.string().trim().min(3, "Eğitim adı en az 3 karakter olmalıdır.").max(150, "Eğitim adı en fazla 150 karakter olabilir."),
+  description: z.string().trim().max(20_000, "Açıklama en fazla 20.000 karakter olabilir."),
+  price: lira("Fiyat"),
+  discountedPrice: z.union([z.null(), z.literal("").transform(() => null), lira("İndirimli fiyat")]),
+  listed: z.boolean(),
+  inStock: z.boolean(),
+};
+export const productKeys = Object.keys(productFields) as (keyof typeof productFields)[];
+/** One form for create and edit; an edit ignores the course fields. */
+export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean() }).refine(cheaper, cheaperIssue);
+export const productChangeSchema = z.object(productFields).partial().refine(cheaper, cheaperIssue);
+export const coverRules = { types: ["image/jpeg", "image/png"], maxBytes: 4 * 1024 * 1024, hint: "JPG veya PNG; en fazla 4 MB." };
 
 export const linkSchema = z.object({ url: z.string().trim().min(1, "Bir bağlantı yazın.").max(2048) });
 export const imageInsertSchema = z.object({ src: z.string().min(1, "Bir görsel seçin."), alt: z.string().trim().max(160, "Açıklama en fazla 160 karakter olabilir.") });

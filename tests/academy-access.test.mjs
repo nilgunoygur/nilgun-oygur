@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasActiveAccess, playbackExpiresAt, canJoinLiveSession, accessExpiryFromPayment } from "../lib/akademi/access-policy.ts";
+import { hasActiveAccess, playbackExpiresAt, playbackLifetimeMs, canJoinLiveSession, accessExpiryFromPayment } from "../lib/akademi/access-policy.ts";
 
 const now = new Date("2026-09-15T12:00:00Z");
 const grant = { userId: "student-a", courseId: "course-a", startsAt: now, expiresAt: new Date("2027-09-15T12:00:00Z"), revokedAt: null };
@@ -19,11 +19,13 @@ test("access is buyer/course specific, starts inclusively, and expires exclusive
 });
 
 test("playback renewal rechecks revocation and never exceeds ten minutes or expiry", () => {
-  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now), now.getTime() / 1000 + 600);
+  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now, playbackLifetimeMs.video), now.getTime() / 1000 + 600);
   const short = { ...grant, expiresAt: new Date(now.getTime() + 15_999) };
-  assert.equal(playbackExpiresAt(short, "student-a", "course-a", now), now.getTime() / 1000 + 15);
-  assert.equal(playbackExpiresAt({ ...grant, revokedAt: now }, "student-a", "course-a", now), null);
-  assert.equal(playbackExpiresAt(grant, "student-b", "course-a", now), null);
+  assert.equal(playbackExpiresAt(short, "student-a", "course-a", now, playbackLifetimeMs.video), now.getTime() / 1000 + 15);
+  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now, playbackLifetimeMs.audio), now.getTime() / 1000 + 6 * 3600, "a recording's token lasts a sitting");
+  assert.equal(playbackExpiresAt(short, "student-a", "course-a", now, playbackLifetimeMs.audio), now.getTime() / 1000 + 15, "but never past the grant");
+  assert.equal(playbackExpiresAt({ ...grant, revokedAt: now }, "student-a", "course-a", now, playbackLifetimeMs.video), null);
+  assert.equal(playbackExpiresAt(grant, "student-b", "course-a", now, playbackLifetimeMs.video), null);
   assert.equal(playbackExpiresAt(short, "student-a", "course-a", short.expiresAt), null);
   assert.equal(playbackExpiresAt({ ...grant, expiresAt: new Date(now.getTime() + 999) }, "student-a", "course-a", now), null);
 });
