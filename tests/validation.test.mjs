@@ -122,14 +122,12 @@ test("the owner's plain-text description format round-trips what the course page
   assert.equal(descriptionMarkup("Kişiye özel eğitim<br>\r\nOnline Eğitim"), "Kişiye özel eğitim\nOnline Eğitim");
 });
 
-test("lesson files are limited by kind, type and size, and stored under their lesson", async () => {
+test("homework files must be PDFs within the size limit, and are stored under their lesson", async () => {
   const { lessonFileProblem, lessonFileType, lessonFilePath, isLessonFilePath, formatFileSize } = await import("../lib/akademi/lesson-file-rules.ts");
-  assert.equal(lessonFileProblem("audio", { type: "audio/mpeg", size: 30_000_000 }), null);
-  assert.equal(lessonFileProblem("document", { type: "application/pdf", size: 1_000 }), null);
-  assert.match(lessonFileProblem("audio", { type: "application/pdf", size: 1_000 }), /MP3/);
-  assert.match(lessonFileProblem("document", { type: "image/png", size: 1_000 }), /PDF/);
-  assert.match(lessonFileProblem("document", { type: "application/pdf", size: 26 * 1024 * 1024 }), /büyük/);
-  assert.equal(lessonFileType({ name: "Kayıt.M4A", type: "" }), "audio/mp4", "browsers that report no type fall back to the extension");
+  assert.equal(lessonFileProblem({ type: "application/pdf", size: 1_000 }), null);
+  assert.match(lessonFileProblem({ type: "image/png", size: 1_000 }), /PDF/);
+  assert.match(lessonFileProblem({ type: "application/pdf", size: 26 * 1024 * 1024 }), /büyük/);
+  assert.equal(lessonFileType({ name: "Ödev.PDF", type: "" }), "application/pdf", "browsers that report no type fall back to the extension");
   assert.equal(lessonFileType({ name: "x.exe", type: "" }), "");
   const lesson = "11111111-1111-4111-8111-111111111111";
   const path = lessonFilePath(lesson, "key", "Ödev 1 – Günlük Nefes Takibi.PDF");

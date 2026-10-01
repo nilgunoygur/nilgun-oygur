@@ -7,10 +7,11 @@ export type CaptionState = "ready" | "preparing" | "failed" | "none";
 
 export const captionLanguage = { language_code: "tr", name: "Türkçe (otomatik)" } as const;
 
-export const newAssetSettings = (lesson: { id: string; title: string }) => ({
+/** Captions are only shown on videos, so a recording is not transcribed. */
+export const newAssetSettings = (lesson: { id: string; title: string; kind: "video" | "audio" | "live" }) => ({
   playback_policies: ["signed"], video_quality: "basic", passthrough: lesson.id,
   meta: { title: lesson.title.slice(0, 512), external_id: lesson.id },
-  inputs: [{ generated_subtitles: [captionLanguage] }],
+  ...(lesson.kind === "video" && { inputs: [{ generated_subtitles: [captionLanguage] }] }),
 });
 
 export function describeAsset(asset: MuxAsset) {
@@ -18,10 +19,13 @@ export function describeAsset(asset: MuxAsset) {
   const has = (status: string) => text.some(track => track.status === status);
   const captions: CaptionState = has("ready") ? "ready" : has("preparing") ? "preparing" : has("errored") ? "failed" : "none";
   const title = asset.meta?.title?.trim() || undefined;
+  const audioOnly = !!asset.tracks?.length && !asset.tracks.some(track => track.type === "video");
   return {
     id: asset.id,
     title,
-    label: title ?? `Video · ${new Date(Number(asset.created_at) * 1000).toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul" })}`,
+    label: title ?? `${audioOnly ? "Ses kaydı" : "Video"} · ${new Date(Number(asset.created_at) * 1000).toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul" })}`,
+    // Mux makes an audio-only asset from a file without a picture; a recording for an audio lesson must be one.
+    audioOnly,
     ready: asset.status === "ready",
     failed: asset.status === "errored",
     durationSeconds: Math.ceil(asset.duration ?? 0),

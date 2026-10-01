@@ -31,9 +31,19 @@ test("the Mux title and signed playback ID are used when present", () => {
 });
 
 test("lesson uploads are signed-only with Turkish auto-captions and the lesson as Mux metadata", () => {
-  const settings = newAssetSettings({ id: "lesson-1", title: "1. video dersi" });
+  const settings = newAssetSettings({ id: "lesson-1", title: "1. video dersi", kind: "video" });
   assert.deepEqual(settings.playback_policies, ["signed"]);
   assert.deepEqual(settings.inputs, [{ generated_subtitles: [{ language_code: "tr", name: "Türkçe (otomatik)" }] }]);
   assert.deepEqual(settings.meta, { title: "1. video dersi", external_id: "lesson-1" });
   assert.equal(settings.passthrough, "lesson-1");
+});
+
+test("a recording is uploaded signed-only without captions, and an asset without a picture is a recording", () => {
+  const settings = newAssetSettings({ id: "lesson-2", title: "1. ses dersi", kind: "audio" });
+  assert.deepEqual([settings.playback_policies, settings.passthrough, "inputs" in settings], [["signed"], "lesson-2", false]);
+  assert.equal(describeAsset(asset()).audioOnly, false);
+  const recording = describeAsset(asset({ aspect_ratio: undefined, tracks: [{ id: "a1", type: "audio", status: "ready" }] }));
+  assert.equal(recording.audioOnly, true);
+  assert.match(recording.label, /^Ses kaydı · /);
+  assert.equal(describeAsset(asset({ status: "preparing", tracks: undefined })).audioOnly, false, "unknown until Mux has read the file");
 });

@@ -13,10 +13,7 @@ export async function ownerLessons(db: Database, courseId: string) {
     .leftJoin(liveSessions, eq(liveSessions.lessonId, lessons.id)).leftJoin(videoAssets, eq(videoAssets.id, lessons.videoAssetId))
     .where(eq(lessons.courseId, courseId)).orderBy(asc(lessons.position), asc(lessons.createdAt));
   const files = await ownerLessonFiles(db, rows.map(row => row.lesson.id));
-  return rows.map(row => {
-    const own = files.filter(file => file.lessonId === row.lesson.id);
-    return { ...row, audio: own.find(file => file.kind === "audio") ?? null, documents: own.filter(file => file.kind === "document") };
-  });
+  return rows.map(row => ({ ...row, documents: files.filter(file => file.lessonId === row.lesson.id) }));
 }
 
 export async function createLessons(db: Database, actorId: string, courseId: string, kind: "video" | "live" | "audio" | "template") {
@@ -42,13 +39,9 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   await db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.courseId, input.courseId))).for("update");
     if (!lesson) throw new Error("Ders bulunamadı.");
-    if (lesson.kind === "video" && input.status === "published") {
+    if (lesson.kind !== "live" && input.status === "published") {
       const [asset] = lesson.videoAssetId ? await tx.select().from(videoAssets).where(eq(videoAssets.id, lesson.videoAssetId)) : [];
-      if (asset?.status !== "ready" || !asset.signedPlaybackId) throw new Error("Yayınlamadan önce videoyu yükleyin ve hazırlanmasını bekleyin.");
-    }
-    if (lesson.kind === "audio" && input.status === "published") {
-      const [recording] = await tx.select({ id: lessonFiles.id }).from(lessonFiles).where(and(eq(lessonFiles.lessonId, lesson.id), eq(lessonFiles.kind, "audio")));
-      if (!recording) throw new Error("Yayınlamadan önce ses kaydını yükleyin.");
+      if (asset?.status !== "ready" || !asset.signedPlaybackId) throw new Error(`Yayınlamadan önce ${lesson.kind === "audio" ? "ses kaydını" : "videoyu"} yükleyin ve hazırlanmasını bekleyin.`);
     }
     if (lesson.kind === "live") {
       const validUrl = z.url({ protocol: /^https$/ }).safeParse(input.joinUrl);
@@ -69,8 +62,8 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   return input;
 }
 
-// Also removes the lesson's live session, files and student progress; the Mux video is kept.
-// Returns the pathnames of the removed files, for the caller to delete from storage.
+// Also removes the lesson's live session, homework PDFs and student progress; the Mux video or recording is kept.
+// Returns the pathnames of the removed PDFs, for the caller to delete from storage.
 export async function deleteLesson(db: Database, actorId: string, courseId: string, lessonId: string) {
   return db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId))).for("update");
@@ -84,7 +77,8 @@ export async function deleteLesson(db: Database, actorId: string, courseId: stri
   });
 }
 
-export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string }, reason = "Mux kütüphanesinden video bağlandı") {
+/** Attaches a ready Mux asset (a video or a recording) to a lesson; `peaks` is kept when none is given. */
+export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string; peaks?: number[] }, reason = "Mux kütüphanesinden video bağlandı") {
   const { muxAssetId, ...values } = video;
   await db.transaction(async tx => {
     const [asset] = await tx.insert(videoAssets).values({ muxAssetId, ...values, status: "ready" })

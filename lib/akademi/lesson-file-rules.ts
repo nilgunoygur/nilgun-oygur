@@ -1,37 +1,23 @@
 import { courseSlug } from "./slug.ts";
 
-// What an audio lesson's recording and a homework PDF may be; shared by the upload form and the server.
-export type LessonFileKind = "audio" | "document";
-
+// What a homework PDF may be; shared by the upload form and the server.
 export const lessonFileRules = {
-  audio: {
-    accept: ".mp3,.m4a,.aac,.wav,audio/mpeg,audio/mp4,audio/aac,audio/wav",
-    types: ["audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/wav", "audio/x-wav"],
-    maxBytes: 250 * 1024 * 1024,
-    hint: "MP3, M4A veya WAV; en fazla 250 MB.",
-  },
-  document: {
-    accept: ".pdf,application/pdf",
-    types: ["application/pdf"],
-    maxBytes: 25 * 1024 * 1024,
-    hint: "Yalnızca PDF; dosya başına en fazla 25 MB.",
-  },
-} satisfies Record<LessonFileKind, { accept: string; types: string[]; maxBytes: number; hint: string }>;
+  accept: ".pdf,application/pdf",
+  types: ["application/pdf"],
+  maxBytes: 25 * 1024 * 1024,
+  hint: "Yalnızca PDF; dosya başına en fazla 25 MB.",
+};
 
 /** Homework PDFs per lesson. */
 export const maxLessonDocuments = 20;
-/** Waveform bars stored per recording. */
-export const waveformBars = 240;
 
-const typeByExtension: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", pdf: "application/pdf" };
-/** The browser's type, or the extension's when the browser reports none (some do for .m4a). */
-export const lessonFileType = (file: { name: string; type: string }) => file.type.toLowerCase() || typeByExtension[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
+/** The browser's type, or the extension's when the browser reports none. */
+export const lessonFileType = (file: { name: string; type: string }) => file.type.toLowerCase() || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "");
 
 /** null when the file is acceptable, otherwise the message to show. `type` comes from lessonFileType. */
-export function lessonFileProblem(kind: LessonFileKind, file: { type: string; size: number }): string | null {
-  const rules = lessonFileRules[kind];
-  if (!rules.types.includes(file.type)) return kind === "audio" ? "Ses dosyası MP3, M4A veya WAV olmalıdır." : "Ödev dosyası PDF olmalıdır.";
-  if (file.size <= 0 || file.size > rules.maxBytes) return `Dosya çok büyük. ${rules.hint}`;
+export function lessonFileProblem(file: { type: string; size: number }): string | null {
+  if (!lessonFileRules.types.includes(file.type)) return "Ödev dosyası PDF olmalıdır.";
+  if (file.size <= 0 || file.size > lessonFileRules.maxBytes) return `Dosya çok büyük. ${lessonFileRules.hint}`;
   return null;
 }
 

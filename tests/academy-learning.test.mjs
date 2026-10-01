@@ -125,34 +125,29 @@ test("deleting a draft or published lesson removes it with its live session and 
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.delete"))).length, 2);
 });
 
-const recording = (lessonId, patch = {}) => ({ lessonId, kind: "audio", name: "nefes.m4a", pathname: `lessons/${lessonId}/a/nefes.m4a`, mime: "audio/mp4", sizeBytes: 5_000_000, durationSeconds: 600, peaks: [10, 80, 40, 100, 0, 55, 20, 90], ...patch });
-const homework = (lessonId, n) => ({ lessonId, kind: "document", name: `Ödev ${n}.pdf`, pathname: `lessons/${lessonId}/d${n}/odev-${n}.pdf`, mime: "application/pdf", sizeBytes: 120_000 });
+const homework = (lessonId, n) => ({ lessonId, name: `Ödev ${n}.pdf`, pathname: `lessons/${lessonId}/d${n}/odev-${n}.pdf`, mime: "application/pdf", sizeBytes: 120_000 });
 
-test("an audio lesson publishes only with a recording, which students reach by id and finish by listening", async () => {
+test("an audio lesson publishes only with a ready recording, which students finish by listening", async () => {
   await createLessons(db, "owner", course.id, "audio");
   const audio = (await ownerLessons(db, course.id)).at(-1).lesson;
-  assert.deepEqual([audio.kind, audio.status], ["audio", "draft"]);
+  assert.deepEqual([audio.kind, audio.status, audio.title.endsWith("ses dersi")], ["audio", "draft", true]);
   await assert.rejects(() => updateLesson(db, "owner", input(audio)), /ses kaydını/);
-  await assert.rejects(() => addLessonFile(db, "owner", recording(video.id)), /yalnızca ses derslerine/);
-  await assert.rejects(() => addLessonFile(db, "owner", recording(audio.id, { mime: "video/mp4" })), /kabul edilmiyor/);
-  await assert.rejects(() => addLessonFile(db, "owner", recording(audio.id, { durationSeconds: 0 })));
-  const first = await addLessonFile(db, "owner", recording(audio.id));
-  assert.deepEqual(first.replaced, []);
+  const peaks = [10, 80, 40, 100, 0, 55, 20, 90];
+  await attachVideo(db, "owner", audio.id, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed-1", durationSeconds: 600, peaks }, "Yüklenen ses kaydı derse bağlandı");
   await updateLesson(db, "owner", input(audio));
 
   const lesson = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === audio.id);
-  assert.deepEqual([lesson.kind, lesson.durationSeconds, lesson.audioId, lesson.peaks.length], ["audio", 600, first.file.id, 8]);
-  assert.ok(!JSON.stringify(lesson).includes("lessons/"), "storage paths never reach the student page");
+  assert.deepEqual([lesson.kind, lesson.durationSeconds, lesson.mediaReady, lesson.peaks], ["audio", 600, true, peaks]);
+  assert.ok(!JSON.stringify(lesson).includes("recording-"), "Mux identifiers never reach the course page");
   await assert.rejects(() => saveProgress(db, "buyer", audio.id, { completed: true, position: 500 }, now), /NOT_WATCHED/);
   await saveProgress(db, "buyer", audio.id, { completed: true, position: 540 }, now);
 
-  // A new recording replaces the old one without unpublishing; the published recording itself cannot be removed.
-  const second = await addLessonFile(db, "owner", recording(audio.id, { pathname: `lessons/${audio.id}/b/nefes-2.m4a`, durationSeconds: 300, peaks: null }));
-  assert.deepEqual(second.replaced, [first.file.pathname]);
-  assert.equal((await ownerLessons(db, course.id)).find(row => row.lesson.id === audio.id).audio.id, second.file.id);
-  await assert.rejects(() => removeLessonFile(db, "owner", second.file.id), /Yayındaki/);
-  await updateLesson(db, "owner", input(audio, { status: "draft" }));
-  assert.equal((await removeLessonFile(db, "owner", second.file.id)).pathname, second.file.pathname);
+  // A recording picked again from the library keeps the waveform measured at upload; a new one replaces it in place.
+  await attachVideo(db, "owner", audio.id, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed-1", durationSeconds: 600 });
+  assert.deepEqual((await ownerLessons(db, course.id)).find(row => row.lesson.id === audio.id).asset.peaks, peaks);
+  await attachVideo(db, "owner", audio.id, { muxAssetId: "recording-2", signedPlaybackId: "recording-signed-2", durationSeconds: 300 });
+  const replaced = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === audio.id);
+  assert.deepEqual([replaced.durationSeconds, replaced.peaks], [300, null]);
 });
 
 test("homework PDFs attach to any lesson and open only for students with access to a published lesson", async () => {
@@ -169,6 +164,7 @@ test("homework PDFs attach to any lesson and open only for students with access 
 
   const shown = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === lesson.id);
   assert.deepEqual(shown.documents, [{ id: one.file.id, name: "Ödev 1.pdf", sizeBytes: 120_000 }, { id: two.file.id, name: "Ödev 2.pdf", sizeBytes: 120_000 }]);
+  assert.ok(!JSON.stringify(shown).includes("lessons/"), "storage paths never reach the course page");
   assert.equal((await accessibleFile(db, "buyer", one.file.id, now)).file.pathname, one.file.pathname);
   assert.equal(await accessibleFile(db, "other", one.file.id, now), null, "no grant");
   assert.equal(await accessibleFile(db, "buyer", one.file.id, new Date("2026-09-24")), null, "expired grant");
@@ -181,5 +177,5 @@ test("homework PDFs attach to any lesson and open only for students with access 
   assert.deepEqual(await deleteLesson(db, "owner", course.id, lesson.id), [two.file.pathname], "deleting a lesson hands back its stored files");
   assert.equal((await db.select().from(schema.lessonFiles).where(eq(schema.lessonFiles.lessonId, lesson.id))).length, 0);
   const actions = (await db.select().from(schema.adminAuditLog)).map(row => row.action);
-  for (const action of ["file.audio.add", "file.audio.remove", "file.document.add", "file.document.remove"]) assert.ok(actions.includes(action), action);
+  for (const action of ["file.add", "file.remove"]) assert.ok(actions.includes(action), action);
 });

@@ -9,7 +9,7 @@ import { formatFileSize } from "@/lib/akademi/lesson-file-rules";
 import { hasWatched } from "@/lib/akademi/access-policy";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { LessonAudio } from "./lesson-audio";
+import { LessonAudio, type AudioSource } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
 
 type Lesson = NonNullable<Awaited<ReturnType<typeof studentCourse>>>["lessons"][number];
@@ -85,8 +85,9 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
     {error && <p role="alert" className="px-7 pb-5 text-sm text-destructive">{error}</p>}
     {open && <div id={`lesson-${lesson.id}`} className="border-t border-border p-5 sm:p-7">
       {lesson.description && <p className="mb-6 max-w-[75ch] whitespace-pre-wrap leading-relaxed text-stone">{lesson.description}</p>}
-      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><a href={destination.url} target="_blank" rel="noopener noreferrer" className={pillAction}>Canlı derse katıl <ArrowUpRight size={16} /></a>{destination.passcode && <p className="mt-2 text-sm">Toplantı şifresi: {destination.passcode}</p>}</div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : isAudio ? (lesson.audioId ? <AudioLesson lessonId={lesson.id} fileId={lesson.audioId} title={lesson.title} duration={duration} peaks={lesson.peaks} startTime={start} onTime={progress} onEnded={finish} /> : <p className="rounded-2xl bg-mist p-6 text-stone">Ses kaydı hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>)
-        : lesson.videoReady ? <LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={start} onTime={progress} onEnded={finish} /> : <p className="rounded-2xl bg-mist p-6 text-stone">Video hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>}
+      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><a href={destination.url} target="_blank" rel="noopener noreferrer" className={pillAction}>Canlı derse katıl <ArrowUpRight size={16} /></a>{destination.passcode && <p className="mt-2 text-sm">Toplantı şifresi: {destination.passcode}</p>}</div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : !lesson.mediaReady ? <p className="rounded-2xl bg-mist p-6 text-stone">{isAudio ? "Ses kaydı" : "Video"} hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>
+        : isAudio ? <AudioLesson lessonId={lesson.id} title={lesson.title} duration={duration} peaks={lesson.peaks} startTime={start} onTime={progress} onEnded={finish} />
+        : <LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={start} onTime={progress} onEnded={finish} />}
       {lesson.documents.length > 0 && <Homework documents={lesson.documents} />}
       {completed && <p className="mt-5 flex items-center gap-2 text-sm text-forest"><Check size={16} />Bu dersi tamamladınız. Dilediğiniz zaman {text.again}.</p>}
     </div>}
@@ -115,9 +116,22 @@ function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds:
 
 type PlayerProps = { lessonId: string; title: string; startTime: number; onTime: (seconds: number) => void; onEnded: () => void };
 
-function AudioLesson({ lessonId, fileId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { fileId: string; duration: number; peaks: number[] | null }) {
+type Playback = Awaited<ReturnType<typeof getPlayback>>;
+const audioSource = (playback: Playback): AudioSource | null => playback.playbackId && playback.tokens ? { playbackId: playback.playbackId, token: playback.tokens.playback } : null;
+
+// The token lasts long enough for one sitting; the player asks for another only if playback fails.
+function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { duration: number; peaks: number[] | null }) {
+  const [playback, setPlayback] = useState<Playback | null>(null);
   const { savePosition, progressError } = useSavedPosition(lessonId, startTime, onTime);
-  return <div><LessonAudio src={`/api/lesson-files/${fileId}`} title={title} duration={duration} peaks={peaks} startTime={startTime} onTime={savePosition} onEnded={onEnded} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
+  useEffect(() => {
+    let active = true;
+    getPlayback(lessonId).then(result => { if (active) setPlayback(result); }, () => { if (active) setPlayback({ error: "Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın." }); });
+    return () => { active = false; };
+  }, [lessonId]);
+  const source = playback && audioSource(playback);
+  if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><LoaderCircle className="animate-spin motion-reduce:animate-none" aria-label="Ses kaydı yükleniyor" /></div>;
+  if (!source) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
+  return <div><LessonAudio source={source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => audioSource(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }
 
 type Document = Lesson["documents"][number];
@@ -138,7 +152,7 @@ function Homework({ documents }: { documents: Document[] }) {
 }
 
 function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerProps) {
-  const [playback, setPlayback] = useState<Awaited<ReturnType<typeof getPlayback>> | null>(null);
+  const [playback, setPlayback] = useState<Playback | null>(null);
   const { position, savePosition, progressError, setProgressError } = useSavedPosition(lessonId, startTime, onTime);
   const playing = useRef(false);
   const [resume, setResume] = useState({ time: startTime, playing: false });

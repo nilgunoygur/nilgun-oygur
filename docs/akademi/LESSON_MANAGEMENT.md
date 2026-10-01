@@ -23,42 +23,43 @@ The designated owner account is **butunselsifaakademi@gmail.com**. Owner access 
 3. Start an empty course with **Örnek program ekle**, or add video, audio and live lessons individually. All additions start as drafts.
 4. Open a lesson card and edit its title, notes, and position. Set the visibility to **Yayında** when ready.
 5. For a video lesson, choose **Mux kütüphanesinden seç** or **Bilgisayardan yükle**. An upload goes straight from the browser to Mux and attaches itself when Mux has prepared it; until then the lesson keeps its current video, so a published lesson can be replaced without unpublishing. Publication requires a ready asset with a signed playback ID.
-6. For an audio lesson, choose **Ses dosyası seç** (MP3, M4A or WAV, up to 250 MB). Publication requires a recording. **Değiştir** swaps it in place; a published lesson's recording cannot be removed, only replaced.
+6. For an audio lesson, the same two choices apply to its recording (MP3, M4A or WAV). The Mux library lists only recordings for an audio lesson and only videos for a video lesson, and a file of the wrong kind is refused. Publication requires a ready recording.
 7. Under **Ödev ve materyaller**, add PDFs (up to 25 MB each, 20 per lesson) to any lesson. They are visible to students as soon as the lesson is published.
 8. For a live lesson, set the date/time in Istanbul time, duration, HTTPS meeting link, and optional passcode. The date and link are required to publish.
-9. Save a lesson as **Taslak** to hide it. Deleting a lesson also deletes its recording and PDFs.
+9. Save a lesson as **Taslak** to hide it. Deleting a lesson also deletes its PDFs; its video or recording stays in the Mux library.
 
 Lesson content, live dates, and publishing are managed here. A course's title, description, cover, price, discount, store visibility and stock live in Shopier and are edited from `/yonetim/egitimler` (**Yeni eğitim**, or **Shopier ürününü düzenle** in a course's menu); see [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
-## Video (Mux)
+## Video and audio (Mux)
 
-The editor uploads directly to Mux in chunks, and the student page plays signed assets with Mux Player. Set these server-only environment values:
+Videos and recordings are both Mux assets (`video_assets`); a recording is an audio-only asset, which Mux bills at a tenth of the video rate. The editor uploads directly to Mux in chunks. The student page plays signed videos with Mux Player and signed recordings with the academy's own waveform player on Mux's audio element. Set these server-only environment values:
 
 - `MUX_TOKEN_ID`
 - `MUX_TOKEN_SECRET`
 - `MUX_SIGNING_KEY_ID`
 - `MUX_SIGNING_PRIVATE_KEY` (base64-encoded PEM)
 
-Restart the development server after adding credentials. Uploaded assets use the `signed` playback policy. Browser upload URLs are issued only after owner authorization. No provider keys are sent to the browser.
+Restart the development server after adding credentials. Uploaded assets use the `signed` playback policy; videos also get Turkish auto-captions. Browser upload URLs are issued only after owner authorization. No provider keys are sent to the browser.
 
-Background Mux webhooks are not configured: while the owner's page is open it asks Mux every five seconds whether an upload is ready, for up to ten minutes. If the page is closed first, the video is in the Mux library and can be attached from there. When Mux refuses an upload (for example the free plan's 10-asset limit), the reason is shown on the lesson. The private player renews ten-minute tokens after rechecking course access, preserving the current playback position. Token expiry is capped by the access grant.
+Background Mux webhooks are not configured: while the owner's page is open it asks Mux every five seconds whether an upload is ready, for up to ten minutes. If the page is closed first, the video is in the Mux library and can be attached from there. When Mux refuses an upload (for example the free plan's 10-asset limit), the reason is shown on the lesson. The private video player renews ten-minute tokens after rechecking course access, preserving the current playback position. A recording gets one six-hour token instead, so listening is never interrupted by a reload; if it does expire, the player rechecks access, fetches another and continues from the same position. Token expiry is always capped by the access grant.
+
+A recording's waveform (240 loudness bars) is measured in the owner's browser when the file is uploaded and stored with the asset, so students never download or decode a recording just to draw it. A recording attached from the Mux library, or one too large to decode, gets a neutral waveform.
 
 Provider references: [direct uploads](https://www.mux.com/docs/guides/upload-files-directly), [secured video playback](https://www.mux.com/docs/guides/secure-video-playback), [React player](https://www.mux.com/docs/guides/player-api-reference/react).
 
-## Audio recordings and homework PDFs (Vercel Blob)
+## Homework PDFs (Vercel Blob)
 
-Recordings and PDFs live in a **private** Vercel Blob store and are listed in `lesson_files`. Set the server-only `BLOB_READ_WRITE_TOKEN` (Vercel adds it when the store is connected to the project); without it the upload controls are disabled and everything else works.
+PDFs live in a **private** Vercel Blob store and are listed in `lesson_files`. Set the server-only `BLOB_READ_WRITE_TOKEN` (Vercel adds it when the store is connected to the project); without it the PDF and course-cover upload controls are disabled and everything else works.
 
-- **Upload:** an owner-only server action issues a token for one new pathname (`lessons/<lesson id>/<random>/<file name>`), limited to the allowed types and size. The browser uploads directly to the store, then a second action checks what actually arrived and records it. Nothing is public at any point.
-- **Waveform:** the owner's browser measures the recording at upload (length and 240 loudness bars) and the numbers are stored with the file, so students never download or decode a recording just to draw it. A recording too large to decode gets a neutral waveform.
-- **Reading:** `GET /api/lesson-files/<id>` checks the session and, for students, the published lesson and active grant, then redirects to a link signed for that one file: ten minutes for a PDF, six hours for a recording, never past the end of the student's access. Seeking uses Range requests against the store's CDN. If a link expires mid-lesson the player asks for a new one and continues from the same position.
-- **Cleanup:** replacing or deleting a file, or deleting its lesson, deletes the stored object. An upload abandoned before it is recorded leaves an unreachable object behind.
+- **Upload:** an owner-only server action issues a token for one new pathname (`lessons/<lesson id>/<random>/<file name>`), limited to PDF and 25 MB. The browser uploads directly to the store, then a second action checks what actually arrived and records it. Nothing is public at any point.
+- **Reading:** `GET /api/lesson-files/<id>` checks the session and, for students, the published lesson and active grant, then redirects to a link signed for that one file for ten minutes, never past the end of the student's access.
+- **Cleanup:** deleting a PDF, or its lesson, deletes the stored object. An upload abandoned before it is recorded leaves an unreachable object behind.
 
 ## Authorization and verification
 
-Private page reads, progress writes, token issuance, file links, and live joins check the verified student and active grant. Published lesson and module status are checked independently of public catalog status, so removing a product from sale does not remove an existing buyer's course access. Owner pages/actions require the protected owner row. Owner content changes and upload preparation are audited.
+Private page reads, progress writes, token issuance, PDF links, and live joins check the verified student and active grant. Published lesson and module status are checked independently of public catalog status, so removing a product from sale does not remove an existing buyer's course access. Owner pages/actions require the protected owner row. Owner content changes and upload preparation are audited.
 
-`tests/academy-learning.test.mjs` covers template creation, draft visibility, publication rules, unpaid/expired access, progress, live join windows, unpublishing, audio lessons and lesson files.
+`tests/academy-learning.test.mjs` covers template creation, draft visibility, publication rules, unpaid/expired access, progress, live join windows, unpublishing, audio lessons and homework PDFs.
 
 ## Account menu
 

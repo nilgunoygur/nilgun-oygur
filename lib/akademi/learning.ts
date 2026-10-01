@@ -4,10 +4,7 @@ import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
 import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
 
-// At most one recording per lesson (unique index), so this join never multiplies rows.
-const recordingOf = and(eq(lessonFiles.lessonId, lessons.id), eq(lessonFiles.kind, "audio"));
-
-/** Private learning reads never depend on whether the product is still for sale. Files are exposed by id only. */
+/** Private learning reads never depend on whether the product is still for sale. Homework PDFs are exposed by id only. */
 export async function studentCourse(db: Database, userId: string, courseId: string, now = new Date()) {
   const grant = await activeGrant(db, userId, courseId, now);
   if (!grant) return null;
@@ -15,28 +12,26 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
   if (!course) return null;
   const rows = await db.select({
     id: lessons.id, title: lessons.title, description: lessons.description, kind: lessons.kind,
-    moduleTitle: modules.title, durationSeconds: sql<number | null>`coalesce(${videoAssets.durationSeconds}, ${lessonFiles.durationSeconds})`,
-    videoReady: sql<boolean>`${videoAssets.status} = 'ready'`, audioId: lessonFiles.id, peaks: lessonFiles.peaks, completedAt: lessonProgress.completedAt,
+    moduleTitle: modules.title, durationSeconds: videoAssets.durationSeconds,
+    mediaReady: sql<boolean>`${videoAssets.status} = 'ready'`, peaks: videoAssets.peaks, completedAt: lessonProgress.completedAt,
     lastPositionSeconds: lessonProgress.lastPositionSeconds,
     startsAt: liveSessions.startsAt, durationMinutes: liveSessions.durationMinutes, liveStatus: liveSessions.status,
   }).from(lessons).innerJoin(modules, eq(lessons.moduleId, modules.id))
     .leftJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id))
-    .leftJoin(lessonFiles, recordingOf)
     .leftJoin(liveSessions, eq(lessons.id, liveSessions.lessonId))
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
     .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(asc(modules.position), asc(lessons.position), asc(lessons.createdAt));
   const documents = rows.length ? await db.select({ id: lessonFiles.id, lessonId: lessonFiles.lessonId, name: lessonFiles.name, sizeBytes: lessonFiles.sizeBytes }).from(lessonFiles)
-    .where(and(inArray(lessonFiles.lessonId, rows.map(row => row.id)), eq(lessonFiles.kind, "document"))).orderBy(asc(lessonFiles.createdAt)) : [];
+    .where(inArray(lessonFiles.lessonId, rows.map(row => row.id))).orderBy(asc(lessonFiles.createdAt)) : [];
   return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents.filter(file => file.lessonId === row.id).map(({ id, name, sizeBytes }) => ({ id, name, sizeBytes })) })) };
 }
 
 /** Rechecked by every progress, playback, and live-join request. */
 export async function accessibleLesson(db: Database, userId: string, lessonId: string, now = new Date()) {
-  const [row] = await db.select({ lesson: lessons, asset: videoAssets, audio: lessonFiles, live: liveSessions }).from(lessons)
+  const [row] = await db.select({ lesson: lessons, asset: videoAssets, live: liveSessions }).from(lessons)
     .innerJoin(modules, eq(lessons.moduleId, modules.id))
     .leftJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id))
-    .leftJoin(lessonFiles, recordingOf)
     .leftJoin(liveSessions, eq(lessons.id, liveSessions.lessonId))
     .where(and(eq(lessons.id, lessonId), eq(lessons.status, "published"), eq(modules.status, "published")));
   if (!row) return null;
@@ -48,7 +43,7 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
   if (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0 || input.position > 604800)) throw new Error("INVALID_POSITION");
   const accessible = await accessibleLesson(db, userId, lessonId, now);
   if (!accessible) throw new Error("FORBIDDEN");
-  const duration = accessible.asset?.durationSeconds ?? accessible.audio?.durationSeconds;
+  const duration = accessible.asset?.durationSeconds;
   if (input.completed && duration) {
     const [previous] = await db.select({ position: lessonProgress.lastPositionSeconds }).from(lessonProgress)
       .where(and(eq(lessonProgress.userId, userId), eq(lessonProgress.lessonId, lessonId)));
@@ -60,7 +55,7 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
     .onConflictDoUpdate({ target: [lessonProgress.userId, lessonProgress.lessonId], set: { completedAt, lastPositionSeconds: position, lastActivityAt: now } });
 }
 
-/** A recording or homework PDF of a published lesson, for a student with active access to its course. */
+/** A homework PDF of a published lesson, for a student with active access to its course. */
 export async function accessibleFile(db: Database, userId: string, fileId: string, now = new Date()) {
   const [file] = await db.select().from(lessonFiles).where(eq(lessonFiles.id, fileId));
   const lesson = file && await accessibleLesson(db, userId, file.lessonId, now);

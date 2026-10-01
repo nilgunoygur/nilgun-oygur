@@ -1,19 +1,10 @@
-// Runs in the owner's browser at upload: the recording's length and the bar heights of its waveform.
+// Runs in the owner's browser at upload: the bar heights of a recording's waveform.
 // Students get the stored numbers, so nobody downloads or decodes a whole recording just to draw it.
 
+/** Waveform bars stored per recording. */
+export const waveformBars = 240;
 /** Above this the decode is skipped (memory) and the player draws a neutral waveform instead. */
 const maxDecodeBytes = 200 * 1024 * 1024;
-
-function metadataDuration(file: File): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const audio = new Audio(), url = URL.createObjectURL(file);
-    const done = (seconds: number) => { URL.revokeObjectURL(url); if (Number.isFinite(seconds) && seconds > 0) resolve(seconds); else reject(new Error("unreadable")); };
-    audio.preload = "metadata";
-    audio.onloadedmetadata = () => done(audio.duration);
-    audio.onerror = () => done(NaN);
-    audio.src = url;
-  });
-}
 
 /** Loudness (RMS) per bar, scaled so typical speech fills the height: integers 0–100. */
 export function peaksFromSamples(samples: Float32Array, bars: number): number[] {
@@ -28,13 +19,12 @@ export function peaksFromSamples(samples: Float32Array, bars: number): number[] 
   return levels.map(level => Math.round(Math.min(1, level / reference) * 100));
 }
 
-export async function measureAudio(file: File, bars: number): Promise<{ durationSeconds: number; peaks: number[] | null }> {
-  if (file.size <= maxDecodeBytes && typeof OfflineAudioContext !== "undefined") {
-    try {
-      // 8 kHz is plenty for a loudness outline and keeps an hour of audio around a hundred megabytes.
-      const buffer = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await file.arrayBuffer());
-      return { durationSeconds: Math.max(1, Math.round(buffer.duration)), peaks: peaksFromSamples(buffer.getChannelData(0), bars) };
-    } catch { /* fall through: unsupported codec or not enough memory */ }
-  }
-  return { durationSeconds: Math.max(1, Math.round(await metadataDuration(file))), peaks: null };
+/** The bars of a recording, or null when this browser can't decode it; Mux measures the length itself. */
+export async function measureAudio(file: File, bars = waveformBars): Promise<number[] | null> {
+  if (file.size > maxDecodeBytes || typeof OfflineAudioContext === "undefined") return null;
+  try {
+    // 8 kHz is plenty for a loudness outline and keeps an hour of audio around a hundred megabytes.
+    const buffer = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(await file.arrayBuffer());
+    return peaksFromSamples(buffer.getChannelData(0), bars);
+  } catch { return null; }
 }

@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { LoaderCircle, Pause, Play, RotateCcw, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Mux's <audio>: plays the signed HLS stream in every browser and reports to Mux Data.
+const MuxAudio = dynamic(() => import("@mux/mux-audio-react"), { ssr: false });
 
 const clock = (seconds: number) => {
   const total = Math.max(0, Math.floor(seconds)), hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60);
@@ -11,15 +15,23 @@ const speeds = [1, 1.25, 1.5, 2, 0.75];
 // Recordings uploaded without a measurable waveform still get a calm, repeatable outline.
 const neutralPeaks = Array.from({ length: 96 }, (_, i) => Math.round(38 + 26 * Math.sin(i * 0.55) + 18 * Math.sin(i * 1.9 + 1)));
 
+/** A signed Mux playback: the recording's playback ID and its playback token. */
+export type AudioSource = { playbackId: string; token: string };
 type Props = {
-  src: string; title: string; duration: number; peaks?: number[] | null; startTime?: number; className?: string;
+  source: AudioSource; title: string; duration: number; peaks?: number[] | null; startTime?: number; className?: string;
+  metadata?: { video_id: string; video_title: string; viewer_user_id?: string };
+  /** A fresh source after the token has expired; asked for once per failure. */
+  refresh?: () => Promise<AudioSource | null>;
   onTime?: (seconds: number) => void; onEnded?: () => void;
 };
 
 /** Audio lesson player with a waveform scrubber; the owner preview and student lessons must look the same. */
-export function LessonAudio({ src, title, duration: knownDuration, peaks, startTime = 0, className, onTime, onEnded }: Props) {
-  const audio = useRef<HTMLAudioElement>(null);
+export function LessonAudio({ source: first, title, duration: knownDuration, peaks, startTime = 0, className, metadata, refresh, onTime, onEnded }: Props) {
+  const holder = useRef<HTMLDivElement>(null);
+  const element = () => holder.current?.querySelector("audio") ?? null;
   const resumeAt = useRef(startTime);
+  // Replaced when the token expires mid-lesson; the element restarts where the listener was.
+  const [source, setSource] = useState({ ...first, startTime, play: false });
   const [playing, setPlaying] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [time, setTime] = useState(startTime);
@@ -32,36 +44,36 @@ export function LessonAudio({ src, title, duration: knownDuration, peaks, startT
     const next = Math.min(Math.max(seconds, 0), duration);
     setTime(next);
     resumeAt.current = next;
-    if (audio.current) audio.current.currentTime = next;
+    const audio = element();
+    if (audio) audio.currentTime = next;
   };
   const toggle = () => {
-    const element = audio.current;
-    if (!element) return;
+    const audio = element();
+    if (!audio) return;
     setError("");
-    if (element.paused) element.play().catch(() => setError("Ses kaydı başlatılamadı. Bağlantınızı kontrol edip yeniden deneyin."));
-    else element.pause();
+    if (audio.paused) audio.play().catch(() => setError("Ses kaydı başlatılamadı. Bağlantınızı kontrol edip yeniden deneyin."));
+    else audio.pause();
   };
   const cycleSpeed = () => {
     const next = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
     setSpeed(next);
-    if (audio.current) audio.current.playbackRate = next;
+    const audio = element();
+    if (audio) audio.playbackRate = next;
   };
-  // A signed link can expire mid-lesson: ask for a fresh one once, then continue where the listener was.
-  const recover = () => {
-    const element = audio.current;
-    if (!element || retried.current) { setPlaying(false); setWaiting(false); setError("Ses kaydı yüklenemedi. Dersi kapatıp yeniden açın."); return; }
+  // A token can expire mid-lesson: ask for a fresh one once, then continue where the listener was.
+  const recover = async () => {
+    const next = retried.current || !refresh ? null : await refresh().catch(() => null);
     retried.current = true;
-    element.src = `${src}?r=${Date.now()}`;
-    element.load();
-    if (playing) element.play().catch(() => setPlaying(false));
+    if (next) setSource({ ...next, startTime: resumeAt.current, play: playing });
+    else { setPlaying(false); setWaiting(false); setError("Ses kaydı yüklenemedi. Dersi kapatıp yeniden açın."); }
   };
 
   return <div className={cn("rounded-[22px] bg-forest p-5 text-white shadow-[0_18px_40px_-28px_rgba(34,76,64,0.9)] sm:p-7", className)}>
-    <audio ref={audio} src={src} preload="metadata" className="hidden"
-      onLoadedMetadata={event => { const element = event.currentTarget; if (Number.isFinite(element.duration) && element.duration > 0) setDuration(element.duration); if (resumeAt.current > 0) element.currentTime = Math.min(resumeAt.current, element.duration || resumeAt.current); element.playbackRate = speed; }}
+    <div ref={holder} className="hidden"><MuxAudio key={source.token} playbackId={source.playbackId} tokens={{ playback: source.token }} startTime={source.startTime} streamType="on-demand" preload="metadata" metadata={metadata}
+      onLoadedMetadata={event => { const audio = event.currentTarget; if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration); audio.playbackRate = speed; if (source.play) audio.play().catch(() => setPlaying(false)); }}
       onTimeUpdate={event => { const seconds = event.currentTarget.currentTime; setTime(seconds); resumeAt.current = seconds; retried.current = false; onTime?.(seconds); }}
       onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onWaiting={() => setWaiting(true)} onPlaying={() => setWaiting(false)} onCanPlay={() => setWaiting(false)}
-      onEnded={() => { setPlaying(false); onEnded?.(); }} onError={recover} />
+      onEnded={() => { setPlaying(false); onEnded?.(); }} onError={() => void recover()} /></div>
     <div className="flex items-center gap-4 sm:gap-6">
       <button type="button" onClick={toggle} aria-label={playing ? `${title}: duraklat` : `${title}: oynat`} className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-forest transition-transform duration-200 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white active:scale-95 motion-reduce:transition-none sm:size-16">
         {waiting && playing ? <LoaderCircle className="size-6 animate-spin motion-reduce:animate-none" /> : playing ? <Pause className="size-6 fill-current" /> : <Play className="ml-1 size-6 fill-current" />}

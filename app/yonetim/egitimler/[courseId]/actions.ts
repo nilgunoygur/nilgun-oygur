@@ -10,6 +10,7 @@ import { attachVideo, createLessons, deleteLesson, reorderLessons, updateLesson 
 import type { lessonInput } from "@/lib/akademi/owner-forms";
 import { addLessonFile, removeLessonFile } from "@/lib/akademi/lesson-files";
 import { isLessonFilePath, lessonFilePath, lessonFileProblem, lessonFileRules } from "@/lib/akademi/lesson-file-rules";
+import { waveformBars } from "@/lib/audio-peaks";
 import { deleteStoredFiles, filesConfigured, storedFile, uploadToken } from "@/lib/files/storage";
 import { muxLibrary, muxRequest, ownerTokenExpiry, playbackTokens, thumbnailUrl, videoConfigured } from "@/lib/video/mux";
 import { captionLanguage, describeAsset, newAssetSettings, type AssetInfo, type MuxAsset } from "@/lib/video/library";
@@ -59,29 +60,36 @@ export async function removeLesson(courseId: string, lessonId: string): Promise<
     return { status: "success", message: "Ders silindi." };
   } catch (error) { return report(error); }
 }
-// An upload never touches the lesson until Mux has a playable asset, so a published lesson keeps its current video meanwhile.
+// A video or audio lesson; the other kinds have nothing in Mux.
+async function mediaLesson(lessonId: string) {
+  const [lesson] = await getDatabase().select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
+  if (!lesson || lesson.kind === "live") throw new Error("Ders bulunamadı.");
+  return lesson;
+}
+/** null when the asset suits the lesson: a recording has no picture, a video has one. */
+const wrongKind = (lesson: { kind: string }, asset: AssetInfo) => asset.audioOnly === (lesson.kind === "audio") ? null
+  : lesson.kind === "audio" ? "Bu dosya bir video. Ses dersine yalnızca ses dosyası eklenebilir." : "Bu dosyada görüntü yok. Video dersine bir video dosyası ekleyin.";
+
+// An upload never touches the lesson until Mux has a playable asset, so a published lesson keeps its current video or recording meanwhile.
 export async function startUpload(lessonId: string) {
   const viewer = await requireOwner();
-  if (!videoConfigured()) throw new Error("Video yüklemek için Mux bağlantısının kurulması gerekiyor.");
-  const db = getDatabase();
-  const [lesson] = await db.select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
-  if (!lesson || lesson.kind !== "video") throw new Error("Ders bulunamadı.");
+  if (!videoConfigured()) throw new Error("Dosya yüklemek için Mux bağlantısının kurulması gerekiyor.");
+  const lesson = await mediaLesson(lessonId);
   const upload = await muxRequest<{ id: string; url: string }>("uploads", { cors_origin: config().auth.url, new_asset_settings: newAssetSettings(lesson) });
-  await db.insert(adminAuditLog).values({ actorId: viewer.user.id, action: "video.upload", resourceType: "lesson", resourceId: lesson.id, reason: "Video yüklemesi başlatıldı" });
+  await getDatabase().insert(adminAuditLog).values({ actorId: viewer.user.id, action: `${lesson.kind}.upload`, resourceType: "lesson", resourceId: lesson.id, reason: lesson.kind === "audio" ? "Ses kaydı yüklemesi başlatıldı" : "Video yüklemesi başlatıldı" });
   return { url: upload.url, uploadId: upload.id };
 }
 
 type MuxUpload = { status: string; asset_id?: string; error?: { message?: string }; new_asset_settings?: { passthrough?: string } };
 const uploadFailure = (upload: MuxUpload) => /limited to \d+ assets/i.test(upload.error?.message ?? "")
-  ? "Mux ücretsiz planındaki 10 video sınırı doldu. Yeni video yüklemek için Mux hesabınıza ödeme yöntemi ekleyin veya Mux panelinden kullanılmayan bir videoyu silin."
-  : upload.status === "timed_out" ? "Yükleme zaman aşımına uğradı. Dosyayı yeniden seçin." : "Video işlenemedi. Dosyayı yeniden yükleyin.";
+  ? "Mux ücretsiz planındaki 10 dosya sınırı doldu. Yeni dosya yüklemek için Mux hesabınıza ödeme yöntemi ekleyin veya Mux panelinden kullanılmayan bir dosyayı silin."
+  : upload.status === "timed_out" ? "Yükleme zaman aşımına uğradı. Dosyayı yeniden seçin." : "Dosya işlenemedi. Yeniden yükleyin.";
+const waveform = z.array(z.number().int().min(0).max(100)).min(8).max(waveformBars).optional();
 
-/** Attaches the uploaded video once Mux has prepared it. */
-export async function checkUpload(lessonId: string, uploadId: string): Promise<{ status: "processing" | "ready" } | { status: "failed"; message: string }> {
+/** Attaches the uploaded file once Mux has prepared it; `peaks` is the waveform the owner's browser measured for a recording. */
+export async function checkUpload(lessonId: string, uploadId: string, peaks?: number[]): Promise<{ status: "processing" | "ready" } | { status: "failed"; message: string }> {
   const viewer = await requireOwner();
-  const db = getDatabase();
-  const [lesson] = await db.select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
-  if (!lesson || lesson.kind !== "video") throw new Error("Ders bulunamadı.");
+  const lesson = await mediaLesson(lessonId);
   const upload = await muxRequest<MuxUpload>(`uploads/${encodeURIComponent(assetId.parse(uploadId))}`);
   if (upload.new_asset_settings?.passthrough && upload.new_asset_settings.passthrough !== lesson.id) throw new Error("Yükleme bulunamadı.");
   if (["errored", "timed_out", "cancelled"].includes(upload.status)) return { status: "failed", message: uploadFailure(upload) };
@@ -89,49 +97,52 @@ export async function checkUpload(lessonId: string, uploadId: string): Promise<{
   const asset = describeAsset(await muxRequest<MuxAsset>(`assets/${encodeURIComponent(upload.asset_id)}`));
   if (asset.failed) return { status: "failed", message: uploadFailure(upload) };
   if (!asset.ready || !asset.signedPlaybackId) return { status: "processing" };
-  await attachVideo(db, viewer.user.id, lesson.id, { muxAssetId: asset.id, signedPlaybackId: asset.signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio }, "Yüklenen video derse bağlandı");
+  const problem = wrongKind(lesson, asset);
+  if (problem) return { status: "failed", message: `${problem} Yüklenen dosya Mux kütüphanenizde duruyor.` };
+  await attachVideo(getDatabase(), viewer.user.id, lesson.id, { muxAssetId: asset.id, signedPlaybackId: asset.signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio, peaks: lesson.kind === "audio" ? waveform.safeParse(peaks).data : undefined },
+    lesson.kind === "audio" ? "Yüklenen ses kaydı derse bağlandı" : "Yüklenen video derse bağlandı");
   changed(lesson.courseId);
   return { status: "ready" };
 }
 
-const assetId = z.string().regex(/^[A-Za-z0-9]{1,128}$/, "Geçersiz video.");
+const assetId = z.string().regex(/^[A-Za-z0-9]{1,128}$/, "Geçersiz dosya.");
 
 export async function listMuxLibrary(): Promise<{ assets: (AssetInfo & { thumbnail?: string; usedBy: string[] })[] } | { error: string }> {
   try {
     await requireOwner();
-    if (!videoConfigured()) return { error: "Mux bağlantısı kurulmadan video kütüphanesi görüntülenemez." };
+    if (!videoConfigured()) return { error: "Mux bağlantısı kurulmadan kütüphane görüntülenemez." };
     const assets = await muxLibrary();
     const used = assets.length ? await getDatabase().select({ muxAssetId: videoAssets.muxAssetId, lesson: lessons.title })
       .from(videoAssets).innerJoin(lessons, eq(lessons.videoAssetId, videoAssets.id))
       .where(inArray(videoAssets.muxAssetId, assets.map(asset => asset.id))) : [];
     return { assets: assets.map(asset => ({
       ...asset,
-      thumbnail: asset.signedPlaybackId ? thumbnailUrl(asset.signedPlaybackId) : asset.publicPlaybackIds[0] && thumbnailUrl(asset.publicPlaybackIds[0], false),
+      // A recording has no picture to take a thumbnail from.
+      thumbnail: asset.audioOnly ? undefined : asset.signedPlaybackId ? thumbnailUrl(asset.signedPlaybackId) : asset.publicPlaybackIds[0] && thumbnailUrl(asset.publicPlaybackIds[0], false),
       usedBy: used.filter(row => row.muxAssetId === asset.id).map(row => row.lesson),
     })) };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 
-// Paid lessons stay signed-only: add a signed playback ID, drop public ones, request Turkish captions if missing.
+// Paid lessons stay signed-only: add a signed playback ID, drop public ones, request Turkish captions for a video without them.
 export async function attachMuxAsset(lessonId: string, rawAssetId: string): Promise<FormState> {
   try {
     const viewer = await requireOwner();
-    if (!videoConfigured()) throw new Error("Mux bağlantısı kurulmadan video eklenemez.");
+    if (!videoConfigured()) throw new Error("Mux bağlantısı kurulmadan dosya eklenemez.");
     const id = assetId.parse(rawAssetId);
-    const [[lesson], asset] = await Promise.all([
-      getDatabase().select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId))),
-      muxRequest<MuxAsset>(`assets/${id}`).then(describeAsset),
-    ]);
-    if (!lesson || lesson.kind !== "video") throw new Error("Ders bulunamadı.");
-    if (!asset.ready) throw new Error("Bu video Mux’ta henüz hazırlanıyor. Hazır olduğunda yeniden deneyin.");
+    const [lesson, asset] = await Promise.all([mediaLesson(lessonId), muxRequest<MuxAsset>(`assets/${id}`).then(describeAsset)]);
+    if (!asset.ready) throw new Error("Bu dosya Mux’ta henüz hazırlanıyor. Hazır olduğunda yeniden deneyin.");
+    const problem = wrongKind(lesson, asset);
+    if (problem) throw new Error(problem);
     const signedPlaybackId = asset.signedPlaybackId ?? (await muxRequest<{ id: string }>(`assets/${id}/playback-ids`, { policy: "signed" })).id;
     for (const playbackId of asset.publicPlaybackIds) await muxRequest(`assets/${id}/playback-ids/${playbackId}`, undefined, "DELETE");
+    const audio = lesson.kind === "audio", captioning = !audio && asset.captions === "none" && !!asset.audioTrackId;
     // Best effort; must not block attaching.
-    if (asset.captions === "none" && asset.audioTrackId) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
+    if (captioning) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
     if (!asset.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
-    await attachVideo(getDatabase(), viewer.user.id, lesson.id, { muxAssetId: id, signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio });
+    await attachVideo(getDatabase(), viewer.user.id, lesson.id, { muxAssetId: id, signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio }, audio ? "Mux kütüphanesinden ses kaydı bağlandı" : undefined);
     changed(lesson.courseId);
-    return { status: "success", message: asset.captions === "none" ? "Video derse bağlandı. Türkçe altyazı birkaç dakika içinde hazırlanır." : "Video derse bağlandı." };
+    return { status: "success", message: audio ? "Ses kaydı derse bağlandı." : captioning ? "Video derse bağlandı. Türkçe altyazı birkaç dakika içinde hazırlanır." : "Video derse bağlandı." };
   } catch (error) { return report(error); }
 }
 
@@ -139,44 +150,41 @@ export async function previewPlayback(lessonId: string) {
   try {
     await requireOwner();
     const [row] = await getDatabase().select({ asset: videoAssets }).from(lessons).innerJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id)).where(eq(lessons.id, z.uuid().parse(lessonId)));
-    if (row?.asset.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Video henüz hazır değil." };
+    if (row?.asset.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Dosya henüz hazır değil." };
     return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, ownerTokenExpiry()) };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 
-const fileKind = z.enum(["audio", "document"]);
-const filesMissing = "Dosya yüklemek için depolama bağlantısının (Vercel Blob) kurulması gerekiyor.";
+const filesMissing = "PDF yüklemek için dosya depolama bağlantısının (Vercel Blob) kurulması gerekiyor.";
 
-/** Step 1 of a file upload: a token that lets this browser upload exactly one file to a fresh private pathname. */
-export async function prepareLessonFile(input: { lessonId: string; kind: "audio" | "document"; name: string; type: string; size: number }): Promise<{ pathname: string; token: string } | { error: string }> {
+/** Step 1 of a homework PDF upload: a token that lets this browser upload exactly one file to a fresh private pathname. */
+export async function prepareLessonFile(input: { lessonId: string; name: string; type: string; size: number }): Promise<{ pathname: string; token: string } | { error: string }> {
   try {
     await requireOwner();
     if (!filesConfigured()) return { error: filesMissing };
-    const file = z.object({ lessonId: z.uuid(), kind: fileKind, name: z.string().min(1).max(300), type: z.string().max(100), size: z.number().int().positive() }).parse(input);
-    const problem = lessonFileProblem(file.kind, file);
+    const file = z.object({ lessonId: z.uuid(), name: z.string().min(1).max(300), type: z.string().max(100), size: z.number().int().positive() }).parse(input);
+    const problem = lessonFileProblem(file);
     if (problem) return { error: problem };
-    const [lesson] = await getDatabase().select({ kind: lessons.kind }).from(lessons).where(eq(lessons.id, file.lessonId));
-    if (!lesson || (file.kind === "audio" && lesson.kind !== "audio")) return { error: "Ders bulunamadı." };
+    const [lesson] = await getDatabase().select({ id: lessons.id }).from(lessons).where(eq(lessons.id, file.lessonId));
+    if (!lesson) return { error: "Ders bulunamadı." };
     const pathname = lessonFilePath(file.lessonId, randomUUID(), file.name);
-    return { pathname, token: await uploadToken(pathname, lessonFileRules[file.kind]) };
+    return { pathname, token: await uploadToken(pathname, lessonFileRules) };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 
-/** Step 2: records the uploaded file after checking what actually reached the store. */
-export async function saveLessonFile(input: { lessonId: string; kind: "audio" | "document"; pathname: string; name: string; durationSeconds?: number; peaks?: number[] | null }): Promise<FormState> {
+/** Step 2: records the uploaded PDF after checking what actually reached the store. */
+export async function saveLessonFile(input: { lessonId: string; pathname: string; name: string }): Promise<FormState> {
   try {
     const viewer = await requireOwner();
     if (!filesConfigured()) throw new Error(filesMissing);
-    const lessonId = z.uuid().parse(input.lessonId), kind = fileKind.parse(input.kind);
+    const lessonId = z.uuid().parse(input.lessonId);
     if (!isLessonFilePath(lessonId, input.pathname)) throw new Error("Geçersiz dosya.");
     const stored = await storedFile(input.pathname);
     if (!stored) throw new Error("Yüklenen dosya bulunamadı. Lütfen yeniden yükleyin.");
-    const base = { lessonId, pathname: input.pathname, name: input.name, mime: stored.contentType, sizeBytes: stored.size };
-    const saved = await addLessonFile(getDatabase(), viewer.user.id, kind === "audio" ? { ...base, kind, durationSeconds: input.durationSeconds ?? 0, peaks: input.peaks ?? null } : { ...base, kind })
+    const saved = await addLessonFile(getDatabase(), viewer.user.id, { lessonId, pathname: input.pathname, name: input.name, mime: stored.contentType, sizeBytes: stored.size })
       .catch(async error => { await deleteStoredFiles([input.pathname]); throw error; });
-    await deleteStoredFiles(saved.replaced);
     changed(saved.courseId);
-    return { status: "success", message: kind === "audio" ? "Ses kaydı derse eklendi." : "PDF derse eklendi." };
+    return { status: "success", message: "PDF derse eklendi." };
   } catch (error) { return report(error); }
 }
 
@@ -186,6 +194,6 @@ export async function deleteLessonFile(fileId: string): Promise<FormState> {
     const removed = await removeLessonFile(getDatabase(), viewer.user.id, z.uuid().parse(fileId));
     if (filesConfigured()) await deleteStoredFiles([removed.pathname]);
     changed(removed.courseId);
-    return { status: "success", message: "Dosya silindi." };
+    return { status: "success", message: "PDF silindi." };
   } catch (error) { return report(error); }
 }

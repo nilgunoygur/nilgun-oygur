@@ -130,6 +130,7 @@ export const modules = pgTable("modules", {
   status: publicationStatus("status").notNull().default("draft"),
   ...timestamps(),
 }, (t) => [unique("modules_id_course").on(t.id, t.courseId), index("modules_course_position_idx").on(t.courseId, t.position), check("modules_position_valid", sql`${t.position} >= 0`)]);
+// A Mux asset: the video of a video lesson, or the recording of an audio lesson.
 export const videoAssets = pgTable("video_assets", {
   id: id(),
   muxUploadId: text("mux_upload_id").unique(),
@@ -138,6 +139,8 @@ export const videoAssets = pgTable("video_assets", {
   status: videoStatus("status").notNull().default("waiting"),
   durationSeconds: integer("duration_seconds"),
   aspectRatio: text("aspect_ratio"),
+  // Waveform bar heights (0–100) of a recording, measured in the owner's browser at upload.
+  peaks: jsonb("peaks").$type<number[]>(),
   failureDetails: text("failure_details"),
   ...timestamps(),
 }, (t) => [
@@ -185,24 +188,17 @@ export const liveSessions = pgTable("live_sessions", {
   check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
   index("live_sessions_schedule_idx").on(t.status, t.startsAt),
 ]);
-// Private files in Vercel Blob: an audio lesson's recording, and homework PDFs on any lesson.
+// Homework PDFs of a lesson, kept in a private Vercel Blob store.
 export const lessonFiles = pgTable("lesson_files", {
   id: id(),
   lessonId: uuid("lesson_id").notNull().references(() => lessons.id),
-  kind: text("kind", { enum: ["audio", "document"] }).notNull(),
   name: text("name").notNull(),
   pathname: text("pathname").notNull().unique(),
   mime: text("mime").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
-  durationSeconds: integer("duration_seconds"),
-  // Waveform bar heights (0–100), measured in the owner's browser at upload.
-  peaks: jsonb("peaks").$type<number[]>(),
   createdAt: time("created_at").notNull().defaultNow(),
 }, (t) => [
-  check("lesson_files_kind_valid", sql`${t.kind} IN ('audio', 'document')`),
   check("lesson_files_size_valid", sql`${t.sizeBytes} > 0`),
-  check("lesson_files_audio_duration", sql`${t.kind} <> 'audio' OR (${t.durationSeconds} IS NOT NULL AND ${t.durationSeconds} > 0)`),
-  uniqueIndex("lesson_files_one_audio").on(t.lessonId).where(sql`${t.kind} = 'audio'`),
   index("lesson_files_lesson_idx").on(t.lessonId, t.createdAt),
 ]);
 // One row per paid Shopier order line for a course, matched to a student by email.

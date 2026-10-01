@@ -12,9 +12,9 @@
 
 **Claim**: attaching a purchase to a student: automatically by verified email, or by order number plus the Shopier email ("Siparişimi ekle").
 
-**Lesson**: one step of a course: a video (Mux), an audio recording, or a live session. Published lessons are what students see.
+**Lesson**: one step of a course: a video, an audio recording (both Mux assets, played with signed tokens), or a live session. Published lessons are what students see.
 
-**Lesson file**: a private file of a lesson: the recording of an audio lesson (one per lesson, with its waveform), or a homework PDF (any lesson, several). Readable only through a short-lived signed link issued after an access check.
+**Homework PDF** (lesson file): a private PDF attached to a lesson of any kind, several per lesson. Readable only through a short-lived signed link issued after an access check.
 
 **Viewer**: the verified student behind a request, with owner status.
 
