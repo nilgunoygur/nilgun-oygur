@@ -1,7 +1,7 @@
 import { pageMetadata } from "@/lib/seo";
 import { pages, asset } from "@/lib/content";
 import { buttonVariants } from "@/components/ui/button";
-import { Book3D, SpineText } from "@/components/book-3d";
+import { Book3D } from "@/components/book-3d";
 import { Reveal } from "@/components/reveal";
 import { PhotoCarousel } from "@/components/sliders";
 import { SectionHeading } from "@/components/site";
@@ -44,20 +44,19 @@ export default function Books() {
           <Book3D
             front={asset(page.images[1])}
             alt="Bütüncül Şifa — Taşların Gizil Gücüyle Şifalanma Sanatı, Nilgün Oygur"
-            spine={<SpineText
-              start={<span className="text-[calc(var(--t)*0.42)] text-[#3b4a57]">Nilgün Oygur</span>}
-              title={<span className="font-display text-[calc(var(--t)*0.54)] tracking-[0.12em] text-[#2b6cb3]">BÜTÜNCÜL ŞİFA</span>}
-              end={<span className="text-[calc(var(--t)*0.4)] font-semibold text-[#3b4a57]">satori</span>}
-            />}
-          >
-            {/* Typeset from the book's own blurb until the publisher's back-cover artwork is on the site. */}
-            <div className="flex size-full flex-col px-[9%] pt-[11%] pb-[7%] text-left text-[#3b4a57]">
+            spine={<>
+              <span className="text-[calc(var(--t)*0.42)] text-[#3b4a57]">Nilgün Oygur</span>
+              <span className="font-display text-[calc(var(--t)*0.54)] tracking-[0.12em] text-[#2b6cb3]">BÜTÜNCÜL ŞİFA</span>
+              <span className="text-[calc(var(--t)*0.4)] font-semibold text-[#3b4a57]">satori</span>
+            </>}
+            // Typeset from the book's own blurb: there is no back-cover artwork on the site.
+            back={<div className="flex size-full flex-col px-[9%] pt-[11%] pb-[7%] text-left text-[#3b4a57]">
               <span aria-hidden className="mb-[9%] aspect-square w-[19%] rounded-full border-[calc(var(--h)*0.009)] border-[#2b6cb3]" />
               <p className="text-[calc(var(--h)*0.0275)] leading-[1.6]">{page.text[start + 1].text}</p>
               <p className="mt-auto font-display text-[calc(var(--h)*0.045)] text-[#2b6cb3]">Nilgün Oygur</p>
               <p className="mt-[3%] flex justify-between text-[calc(var(--h)*0.021)]"><span className="font-semibold">satori</span><span>ISBN 9786057098313</span></p>
-            </div>
-          </Book3D>
+            </div>}
+          />
         </Reveal>
       </section>
       <section className={cn(pageWidth, "max-w-[950px] py-[60px] max-tablet:py-[45px]")}>
