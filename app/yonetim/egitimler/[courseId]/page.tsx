@@ -9,6 +9,7 @@ import { courses } from "@/lib/db/schema";
 import { ownerLessons } from "@/lib/akademi/lesson-editor";
 import { courseCards } from "@/lib/akademi/server";
 import { attachedVideos, videoConfigured } from "@/lib/video/mux";
+import { filesConfigured } from "@/lib/files/storage";
 import { CourseEditor } from "@/components/akademi/lesson-editor";
 import { ownerSection, accountTitle, kicker, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -29,5 +30,5 @@ async function Content({ params }: { params: Promise<{ courseId: string }> }) {
     return rows.map(row => ({ ...row, video: row.asset?.muxAssetId ? videos[row.asset.muxAssetId] : undefined }));
   });
   const [rows, cards] = await Promise.all([lessonsWithVideos, courseCards()]);
-  return <><Link className="mb-8 inline-block text-sm underline underline-offset-4" href="/yonetim/egitimler">← Eğitimler ve satışlar</Link><header className="mb-9"><p className={kicker}>AKADEMİ YÖNETİMİ · DERS İÇERİKLERİ</p><h1 className={accountTitle}>{cards[course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir.</p></header><CourseEditor courseId={courseId} rows={rows} muxConfigured={videoConfigured()} /></>;
+  return <><Link className="mb-8 inline-block text-sm underline underline-offset-4" href="/yonetim/egitimler">← Eğitimler ve satışlar</Link><header className="mb-9"><p className={kicker}>AKADEMİ YÖNETİMİ · DERS İÇERİKLERİ</p><h1 className={accountTitle}>{cards[course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir.</p></header><CourseEditor courseId={courseId} rows={rows} muxConfigured={videoConfigured()} filesConfigured={filesConfigured()} /></>;
 }

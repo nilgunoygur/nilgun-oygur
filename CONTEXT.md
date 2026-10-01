@@ -1,6 +1,6 @@
 # Nilgün Oygur Akademi — domain terms
 
-**Course**: a Shopier product linked to the site (`courses` row: slug, access duration, owner status). Title, description, image and price live in Shopier.
+**Course**: a Shopier product linked to the site (`courses` row: slug, access duration, owner status). Title, description, image and price live in Shopier; the owner can edit them from the site, which writes to Shopier.
 
 **Sellable course**: a published course whose product is visible (or hidden where `SHOPIER_SHOW_HIDDEN_PRODUCTS=true`), in stock, digital and priced in TRY above zero. Decided only by the Catalog module.
 
@@ -11,6 +11,10 @@
 **Active access**: an unrevoked grant with `startsAt <= now < expiresAt`. Decided only by the Course Access module.
 
 **Claim**: attaching a purchase to a student: automatically by verified email, or by order number plus the Shopier email ("Siparişimi ekle").
+
+**Lesson**: one step of a course: a video (Mux), an audio recording, or a live session. Published lessons are what students see.
+
+**Lesson file**: a private file of a lesson: the recording of an audio lesson (one per lesson, with its waveform), or a homework PDF (any lesson, several). Readable only through a short-lived signed link issued after an access check.
 
 **Viewer**: the verified student behind a request, with owner status.
 

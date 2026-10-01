@@ -108,7 +108,7 @@ export const bannerSettings = pgTable("banner_settings", {
 
 export const courseStatus = pgEnum("course_status", ["draft", "published", "archived"]);
 export const publicationStatus = pgEnum("publication_status", ["draft", "published"]);
-export const lessonKind = pgEnum("lesson_kind", ["video", "live"]);
+export const lessonKind = pgEnum("lesson_kind", ["video", "live", "audio"]);
 export const liveStatus = pgEnum("live_status", ["scheduled", "rescheduled", "cancelled", "completed"]);
 export const videoStatus = pgEnum("video_status", ["waiting", "processing", "ready", "failed"]);
 export const eventStatus = pgEnum("event_status", ["pending", "processing", "processed", "failed"]);
@@ -184,6 +184,26 @@ export const liveSessions = pgTable("live_sessions", {
   check("live_duration_valid", sql`${t.durationMinutes} > 0`),
   check("calendar_sequence_valid", sql`${t.calendarSequence} >= 0`),
   index("live_sessions_schedule_idx").on(t.status, t.startsAt),
+]);
+// Private files in Vercel Blob: an audio lesson's recording, and homework PDFs on any lesson.
+export const lessonFiles = pgTable("lesson_files", {
+  id: id(),
+  lessonId: uuid("lesson_id").notNull().references(() => lessons.id),
+  kind: text("kind", { enum: ["audio", "document"] }).notNull(),
+  name: text("name").notNull(),
+  pathname: text("pathname").notNull().unique(),
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  durationSeconds: integer("duration_seconds"),
+  // Waveform bar heights (0–100), measured in the owner's browser at upload.
+  peaks: jsonb("peaks").$type<number[]>(),
+  createdAt: time("created_at").notNull().defaultNow(),
+}, (t) => [
+  check("lesson_files_kind_valid", sql`${t.kind} IN ('audio', 'document')`),
+  check("lesson_files_size_valid", sql`${t.sizeBytes} > 0`),
+  check("lesson_files_audio_duration", sql`${t.kind} <> 'audio' OR (${t.durationSeconds} IS NOT NULL AND ${t.durationSeconds} > 0)`),
+  uniqueIndex("lesson_files_one_audio").on(t.lessonId).where(sql`${t.kind} = 'audio'`),
+  index("lesson_files_lesson_idx").on(t.lessonId, t.createdAt),
 ]);
 // One row per paid Shopier order line for a course, matched to a student by email.
 export const shopierPurchases = pgTable("shopier_purchases", {

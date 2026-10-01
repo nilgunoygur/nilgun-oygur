@@ -1,8 +1,8 @@
 import { and, asc, count, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { courses, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { isCourseProduct, productDetails, type ShopierProduct } from "../shopier/api.ts";
-import { descriptionHtml, descriptionText } from "../shopier/description.ts";
+import { isCourseProduct, parsePriceKurus, productDetails, type ShopierProduct } from "../shopier/api.ts";
+import { descriptionHtml, descriptionMarkup, descriptionText } from "../shopier/description.ts";
 import { normalizeSlug } from "../route-slug.ts";
 import { courseSlug } from "./slug.ts";
 
@@ -83,10 +83,27 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   return {
     courses: rows.map(row => {
       const product = byId.get(row.productId);
-      return { ...row, title: titleOf(row.productId), priceKurus: product ? saleDetails(product)?.priceKurus ?? null : null, discounted: Boolean(product?.priceData.discount) };
+      const details = product ? saleDetails(product) : null;
+      return {
+        ...row, title: titleOf(row.productId), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
+        // What the owner edits: the raw Shopier values, or null when the product is gone or not a TRY digital product.
+        product: product && product.type === "digital" && product.priceData.currency === "TRY" ? {
+          description: descriptionMarkup(product.description), listPriceKurus: parsePriceKurus(product.priceData.price), image: details?.imageUrl ?? null,
+          hidden: Boolean(product.customListing), inStock: product.stockStatus !== "outOfStock", url: product.url ?? null,
+        } : null,
+      };
     }),
     recentSales: recent.map(sale => ({ ...sale, title: titleOf(sale.productId) })),
   };
+}
+
+/** A course the owner created from the site: linked right away with their settings, even if Shopier's webhook linked it first. */
+export async function linkOwnerCourse(db: Database, product: Pick<ShopierProduct, "id" | "title">, settings: { accessDurationDays: number; status: "draft" | "published" }) {
+  const slug = courseSlug(product.title) || `egitim-${product.id}`;
+  const [taken] = await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1);
+  const [row] = await db.insert(courses).values({ slug: taken ? `${slug}-${product.id}` : slug, shopierProductId: product.id, ...settings })
+    .onConflictDoUpdate({ target: courses.shopierProductId, set: settings }).returning({ id: courses.id });
+  return row.id;
 }
 
 async function linkCourse(db: Database, product: ShopierProduct) {

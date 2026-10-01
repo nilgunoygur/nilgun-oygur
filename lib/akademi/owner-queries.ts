@@ -8,6 +8,7 @@ const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
   priceKurus: z.number().nullable(), discounted: z.boolean(), accessDurationDays: z.number(),
   sales: z.number(), claimed: z.number(), status: z.enum(["published", "draft", "archived"]),
+  product: z.object({ description: z.string(), listPriceKurus: z.number().nullable(), image: z.string().nullable(), hidden: z.boolean(), inStock: z.boolean(), url: z.string().nullable() }).nullable(),
 });
 const saleSchema = z.object({
   id: z.string(), order: z.string(), productId: z.string(), email: z.string(), amount: z.number(),
@@ -37,7 +38,7 @@ export const ownerQueryKeys = {
   catalog: () => [...ownerQueryKeys.all, "catalog"] as const,
   transactions: (from: string, to: string) => [...ownerQueryKeys.all, "transactions", { from, to }] as const,
   muxLibrary: () => [...ownerQueryKeys.all, "mux-library"] as const,
-  uploadStatus: (lessonId: string) => [...ownerQueryKeys.all, "upload-status", lessonId] as const,
+  uploadStatus: (lessonId: string, uploadId: string | null) => [...ownerQueryKeys.all, "upload-status", lessonId, uploadId] as const,
   preview: (lessonId: string, playbackId?: string | null) => [...ownerQueryKeys.all, "preview", lessonId, playbackId] as const,
 };
 
@@ -58,6 +59,11 @@ export function ownerTransactionsQueryOptions(from: string, to: string) {
 
 export const updateOwnerCourse = (courseId: string, change: CourseChange) => ownerFetch(`/api/yonetim/courses/${courseId}`,
   { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) }, "Değişiklik kaydedilemedi.");
+const productBody = (data: unknown, image: File | null) => { const body = new FormData(); body.set("data", JSON.stringify(data)); if (image) body.set("image", image); return body; };
+export const updateOwnerProduct = (courseId: string, changes: Record<string, unknown>, image: File | null) => ownerFetch(`/api/yonetim/courses/${courseId}/product`,
+  { method: "PUT", body: productBody(changes, image) }, "Shopier ürünü güncellenemedi.");
+export const createOwnerCourse = async (course: Record<string, unknown>, image: File | null): Promise<{ courseId: string }> =>
+  (await ownerFetch("/api/yonetim/courses", { method: "POST", body: productBody(course, image) }, "Eğitim oluşturulamadı.")).json();
 export const syncOwnerCatalog = () => ownerFetch("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.");
 
 export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {

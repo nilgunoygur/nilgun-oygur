@@ -50,6 +50,7 @@ export const shopierProductSchema = z.object({
   description: z.string().nullish().transform(value => value ?? ""),
   type: z.string(),
   customListing: z.boolean().nullish(),
+  url: z.string().nullish(),
   media: z.array(z.object({ url: z.string(), placement: z.coerce.number().optional() })).nullish(),
   priceData: z.object({
     currency: z.string(),
@@ -60,6 +61,46 @@ export const shopierProductSchema = z.object({
   stockStatus: z.string().nullish(),
 });
 export type ShopierProduct = z.output<typeof shopierProductSchema>;
+
+/** What the owner can change on a product; a missing key is left as it is on Shopier. */
+export type ProductChanges = {
+  title?: string;
+  /** HTML. */
+  description?: string;
+  /** Price and discount travel together: Shopier drops the discount when a price arrives alone and rejects a discount without a price. */
+  priceKurus?: number;
+  /** null means no discount. */
+  discountedPriceKurus?: number | null;
+  /** A JPG/PNG Shopier can download; replaces the product's images with this one. */
+  imageUrl?: string;
+  /** Hidden products (Shopier's "custom listing") are reachable by link only. */
+  hidden?: boolean;
+  inStock?: boolean;
+};
+/** Digital products have no real stock; this matches what the Shopier panel sets. */
+const digitalStock = 10_000;
+const validPrice = (kurus: number) => Number.isSafeInteger(kurus) && kurus >= 100 && kurus <= 1_000_000_000;
+const amount = (kurus: number) => (kurus / 100).toFixed(2);
+
+/** The PUT /products body for these changes; POST adds the fields only creation needs. */
+export function productBody(changes: ProductChanges) {
+  if (changes.title !== undefined && !changes.title.trim()) throw new Error("Invalid Shopier product title.");
+  for (const price of [changes.priceKurus, changes.discountedPriceKurus]) if (price != null && !validPrice(price)) throw new Error("Invalid Shopier product price.");
+  if (changes.imageUrl !== undefined && !/^https:\/\/\S+$/.test(changes.imageUrl)) throw new Error("Invalid Shopier product image.");
+  if ((changes.priceKurus === undefined) !== (changes.discountedPriceKurus === undefined)) throw new Error("Shopier needs the price and the discount together.");
+  const priceData = changes.priceKurus === undefined ? undefined : {
+    price: amount(changes.priceKurus),
+    ...(changes.discountedPriceKurus == null ? { discount: false } : { discount: true, discountedPrice: amount(changes.discountedPriceKurus) }),
+  };
+  return {
+    ...(changes.title !== undefined && { title: changes.title.trim() }),
+    ...(changes.description !== undefined && { description: changes.description }),
+    ...(priceData && { priceData }),
+    ...(changes.imageUrl !== undefined && { media: [{ type: "image", url: changes.imageUrl, placement: 1 }] }),
+    ...(changes.hidden !== undefined && { customListing: changes.hidden }),
+    ...(changes.inStock !== undefined && { stockQuantity: changes.inStock ? digitalStock : 0 }),
+  };
+}
 
 export type ShopierProductDetails = {
   title: string;
@@ -123,9 +164,11 @@ export function isValidWebhookSignature(rawBody: string, signature: string | nul
   return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
 }
 
-class ShopierError extends Error {
+export class ShopierError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  /** The start of Shopier's response body, for the owner to read when a write is refused. */
+  readonly detail: string;
+  constructor(status: number, message: string, detail = "") { super(message); this.status = status; this.detail = detail; }
 }
 
 export type ShopierClient = ReturnType<typeof createShopierClient>;
@@ -146,7 +189,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         await new Promise(resolve => setTimeout(resolve, wait * 1000));
         continue;
       }
-      if (!response.ok) throw new ShopierError(response.status, `Shopier ${init.method ?? "GET"} ${path.split("?")[0]} failed with ${response.status}.`);
+      if (!response.ok) throw new ShopierError(response.status, `Shopier ${init.method ?? "GET"} ${path.split("?")[0]} failed with ${response.status}.`, (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 300));
       return response.json() as Promise<T>;
     }
   }
@@ -208,12 +251,20 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
-    async updateProductPrice(id: string, priceKurus: number) {
-      if (!/^\d{1,20}$/.test(id) || !Number.isSafeInteger(priceKurus) || priceKurus < 100) throw new Error("Invalid Shopier product price.");
-      return shopierProductSchema.parse(await call(`/products/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ priceData: { price: (priceKurus / 100).toFixed(2) } }),
+    /** A digital TRY product. Shopier downloads the image itself, so `imageUrl` must be publicly reachable. */
+    async createProduct(product: Required<Pick<ProductChanges, "title" | "description" | "priceKurus" | "imageUrl">> & Pick<ProductChanges, "discountedPriceKurus" | "hidden">) {
+      const body = productBody({ ...product, discountedPriceKurus: product.discountedPriceKurus ?? null });
+      return shopierProductSchema.parse(await call("/products", {
+        method: "POST",
+        body: JSON.stringify({ ...body, type: "digital", priceData: { currency: "TRY", ...body.priceData }, shippingPayer: "sellerPays", stockQuantity: digitalStock }),
       }));
+    },
+    /** Sends only the given fields; everything else on the product is untouched. */
+    async updateProduct(id: string, changes: ProductChanges) {
+      if (!/^\d{1,20}$/.test(id)) throw new Error("Invalid Shopier product.");
+      const body = productBody(changes);
+      if (!Object.keys(body).length) throw new Error("No Shopier product changes.");
+      return shopierProductSchema.parse(await call(`/products/${id}`, { method: "PUT", body: JSON.stringify(body) }));
     },
     /** Every product (hidden ones included). `ids` also covers products that failed validation. */
     async listProducts({ maxPages = 20 } = {}) {

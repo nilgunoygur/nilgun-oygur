@@ -1,19 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { adminAuditLog, courses, lessonProgress, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
+import { adminAuditLog, courses, lessonFiles, lessonProgress, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
+import { ownerLessonFiles } from "./lesson-files.ts";
 import { lessonInput } from "./owner-forms.ts";
 
 // The boundary authorizes an owner before calling these audited commands.
 
 export async function ownerLessons(db: Database, courseId: string) {
-  return db.select({ lesson: lessons, live: liveSessions, asset: videoAssets }).from(lessons)
+  const rows = await db.select({ lesson: lessons, live: liveSessions, asset: videoAssets }).from(lessons)
     .leftJoin(liveSessions, eq(liveSessions.lessonId, lessons.id)).leftJoin(videoAssets, eq(videoAssets.id, lessons.videoAssetId))
     .where(eq(lessons.courseId, courseId)).orderBy(asc(lessons.position), asc(lessons.createdAt));
+  const files = await ownerLessonFiles(db, rows.map(row => row.lesson.id));
+  return rows.map(row => {
+    const own = files.filter(file => file.lessonId === row.lesson.id);
+    return { ...row, audio: own.find(file => file.kind === "audio") ?? null, documents: own.filter(file => file.kind === "document") };
+  });
 }
 
-export async function createLessons(db: Database, actorId: string, courseId: string, kind: "video" | "live" | "template") {
+export async function createLessons(db: Database, actorId: string, courseId: string, kind: "video" | "live" | "audio" | "template") {
   return db.transaction(async tx => {
     const [course] = await tx.select().from(courses).where(eq(courses.id, courseId)).for("update");
     if (!course) throw new Error("Eğitim bulunamadı.");
@@ -25,7 +31,7 @@ export async function createLessons(db: Database, actorId: string, courseId: str
     const offset = existing.length ? Math.max(...existing.map(r => r.position)) + 1 : 0;
     for (const [index, lessonKind] of kinds.entries()) {
       const id = randomUUID();
-      await tx.insert(lessons).values({ id, courseId, moduleId: section.id, slug: id, title: lessonKind === "live" ? "Canlı buluşma" : `${offset + index + 1}. video dersi`, kind: lessonKind, position: offset + index });
+      await tx.insert(lessons).values({ id, courseId, moduleId: section.id, slug: id, title: lessonKind === "live" ? "Canlı buluşma" : `${offset + index + 1}. ${lessonKind === "audio" ? "ses" : "video"} dersi`, kind: lessonKind, position: offset + index });
     }
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.create", resourceType: "course", resourceId: courseId, reason: `${kinds.length} taslak ders eklendi` });
   });
@@ -39,6 +45,10 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
     if (lesson.kind === "video" && input.status === "published") {
       const [asset] = lesson.videoAssetId ? await tx.select().from(videoAssets).where(eq(videoAssets.id, lesson.videoAssetId)) : [];
       if (asset?.status !== "ready" || !asset.signedPlaybackId) throw new Error("Yayınlamadan önce videoyu yükleyin ve hazırlanmasını bekleyin.");
+    }
+    if (lesson.kind === "audio" && input.status === "published") {
+      const [recording] = await tx.select({ id: lessonFiles.id }).from(lessonFiles).where(and(eq(lessonFiles.lessonId, lesson.id), eq(lessonFiles.kind, "audio")));
+      if (!recording) throw new Error("Yayınlamadan önce ses kaydını yükleyin.");
     }
     if (lesson.kind === "live") {
       const validUrl = z.url({ protocol: /^https$/ }).safeParse(input.joinUrl);
@@ -59,25 +69,28 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   return input;
 }
 
-// Also removes the lesson's live session and student progress; the Mux video is kept.
+// Also removes the lesson's live session, files and student progress; the Mux video is kept.
+// Returns the pathnames of the removed files, for the caller to delete from storage.
 export async function deleteLesson(db: Database, actorId: string, courseId: string, lessonId: string) {
-  await db.transaction(async tx => {
+  return db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId))).for("update");
     if (!lesson) throw new Error("Ders bulunamadı.");
     await tx.delete(liveSessions).where(eq(liveSessions.lessonId, lesson.id));
     await tx.delete(lessonProgress).where(eq(lessonProgress.lessonId, lesson.id));
+    const files = await tx.delete(lessonFiles).where(eq(lessonFiles.lessonId, lesson.id)).returning({ pathname: lessonFiles.pathname });
     await tx.delete(lessons).where(eq(lessons.id, lesson.id));
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.delete", resourceType: "course", resourceId: courseId, reason: `“${lesson.title}” dersi silindi (${lesson.status})` });
+    return files.map(file => file.pathname);
   });
 }
 
-export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string }) {
+export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string }, reason = "Mux kütüphanesinden video bağlandı") {
   const { muxAssetId, ...values } = video;
   await db.transaction(async tx => {
     const [asset] = await tx.insert(videoAssets).values({ muxAssetId, ...values, status: "ready" })
       .onConflictDoUpdate({ target: videoAssets.muxAssetId, set: { ...values, status: "ready" } }).returning();
     await tx.update(lessons).set({ videoAssetId: asset.id }).where(eq(lessons.id, lessonId));
-    await tx.insert(adminAuditLog).values({ actorId, action: "video.attach", resourceType: "lesson", resourceId: lessonId, reason: "Mux kütüphanesinden video bağlandı" });
+    await tx.insert(adminAuditLog).values({ actorId, action: "video.attach", resourceType: "lesson", resourceId: lessonId, reason });
   });
 }
 

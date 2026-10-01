@@ -103,3 +103,53 @@ test("every province has its PTT districts, matched however they are spelled", (
   assert.equal(matchDistrict("Iğdır", "Iğdır"), "Merkez", "central districts are listed as Merkez");
   assert.equal(matchDistrict("İzmir", "Kadıköy"), null);
 });
+
+test("the owner's plain-text description format round-trips what the course page shows", async () => {
+  const { descriptionMarkup, markupDescription, descriptionHtml } = await import("../lib/shopier/description.ts");
+  const shopier = "<h3><strong>7 Günlük Çalışma</strong></h3>\r\n\r\n<p><strong>Kalın</strong> ve <em>eğik</em> &amp; düz.</p>\r\n\r\n<p>✔️ Bir<br>\r\n✔️ İki</p>\r\n<ul><li>Madde</li><li>İkinci</li></ul><ol><li>Adım</li></ol><script>x()</script>";
+  const text = descriptionMarkup(shopier);
+  assert.equal(text, "### **7 Günlük Çalışma**\n\n**Kalın** ve *eğik* & düz.\n\n✔️ Bir\n✔️ İki\n\n- Madde\n- İkinci\n\n1. Adım");
+  // Shopier's API drops <br>, so a line break is saved as a paragraph break.
+  const html = markupDescription(text);
+  assert.equal(html, "<h3><strong>7 Günlük Çalışma</strong></h3>\n<p><strong>Kalın</strong> ve <em>eğik</em> &amp; düz.</p>\n<p>✔️ Bir</p>\n<p>✔️ İki</p>\n<ul><li>Madde</li><li>İkinci</li></ul>\n<ol><li>Adım</li></ol>");
+  assert.ok(!html.includes("<br"));
+  assert.equal(descriptionHtml(html), html, "everything written is on the course page's allowlist");
+  const saved = descriptionMarkup(html);
+  assert.equal(saved, text.replace("✔️ Bir\n✔️ İki", "✔️ Bir\n\n✔️ İki"));
+  assert.equal(markupDescription(saved), html, "saving again changes nothing");
+  assert.equal(markupDescription("a < b\n\n<script>alert(1)</script>"), "<p>a &lt; b</p>\n<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>", "typed HTML stays text");
+  assert.equal(markupDescription("  \n\n"), "");
+  assert.equal(descriptionMarkup("Kişiye özel eğitim<br>\r\nOnline Eğitim"), "Kişiye özel eğitim\nOnline Eğitim");
+});
+
+test("lesson files are limited by kind, type and size, and stored under their lesson", async () => {
+  const { lessonFileProblem, lessonFileType, lessonFilePath, isLessonFilePath, formatFileSize } = await import("../lib/akademi/lesson-file-rules.ts");
+  assert.equal(lessonFileProblem("audio", { type: "audio/mpeg", size: 30_000_000 }), null);
+  assert.equal(lessonFileProblem("document", { type: "application/pdf", size: 1_000 }), null);
+  assert.match(lessonFileProblem("audio", { type: "application/pdf", size: 1_000 }), /MP3/);
+  assert.match(lessonFileProblem("document", { type: "image/png", size: 1_000 }), /PDF/);
+  assert.match(lessonFileProblem("document", { type: "application/pdf", size: 26 * 1024 * 1024 }), /büyük/);
+  assert.equal(lessonFileType({ name: "Kayıt.M4A", type: "" }), "audio/mp4", "browsers that report no type fall back to the extension");
+  assert.equal(lessonFileType({ name: "x.exe", type: "" }), "");
+  const lesson = "11111111-1111-4111-8111-111111111111";
+  const path = lessonFilePath(lesson, "key", "Ödev 1 – Günlük Nefes Takibi.PDF");
+  assert.equal(path, `lessons/${lesson}/key/odev-1-gunluk-nefes-takibi.pdf`);
+  assert.equal(lessonFilePath(lesson, "key", "???"), `lessons/${lesson}/key/dosya`);
+  assert.equal(isLessonFilePath(lesson, path), true);
+  assert.equal(isLessonFilePath("22222222-2222-4222-8222-222222222222", path), false, "a file of another lesson");
+  assert.equal(isLessonFilePath(lesson, `lessons/${lesson}/../covers/x.jpg`), false);
+  assert.deepEqual([formatFileSize(500), formatFileSize(482_113), formatFileSize(2_340_000)], ["1 KB", "471 KB", "2,2 MB"]);
+});
+
+test("a recording's waveform is its loudness per bar, scaled so one loud moment doesn't flatten the rest", async () => {
+  const { peaksFromSamples } = await import("../lib/audio-peaks.ts");
+  const samples = new Float32Array(8000);
+  for (let i = 0; i < samples.length; i++) samples[i] = (i < 4000 ? 0.1 : 0.4) * Math.sin(i / 5);
+  samples.fill(1, 7990);
+  const peaks = peaksFromSamples(samples, 80);
+  assert.equal(peaks.length, 80);
+  assert.ok(peaks.every(value => Number.isInteger(value) && value >= 0 && value <= 100));
+  assert.ok(peaks[10] > 15 && peaks[10] < 35, `quiet half ${peaks[10]}`);
+  assert.ok(peaks[60] >= 95, `loud half ${peaks[60]}`);
+  assert.deepEqual(peaksFromSamples(new Float32Array(100), 10), Array(10).fill(0), "silence");
+});
