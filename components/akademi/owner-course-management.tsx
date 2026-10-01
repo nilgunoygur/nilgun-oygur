@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useFormState } from "react-hook-form";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { dateTimeLabel, formatPrice } from "@/lib/akademi/format";
-import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse } from "@/lib/akademi/owner-queries";
+import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type ProductValues } from "@/lib/akademi/owner-queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,8 +19,8 @@ import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/p
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { courseAccessSchema, coverRules, productFormSchema, type CourseChange } from "@/lib/akademi/owner-forms";
-import { CheckboxField, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
+import { courseAccessSchema, coverRules, productFormSchema, productKeys, type CourseChange } from "@/lib/akademi/owner-forms";
+import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
 type Edit = { kind: "access" | "product"; course: OwnerCourse } | { kind: "create" } | null;
@@ -47,7 +47,6 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     },
     onError: (error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error(error.message); },
     onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : "Değişiklik kaydedildi."); },
-    // Refetch only after a rollback.
     onSettled: (_data, error) => error ? invalidate() : undefined,
   });
   const savingId = update.isPending ? update.variables.course.id : null;
@@ -94,7 +93,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     <Dialog open={editing?.kind === "product" || editing?.kind === "create"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>{editing?.kind === "create" ? "Yeni eğitim" : "Shopier ürününü düzenle"}</DialogTitle><DialogDescription>{editing?.kind === "create" ? "Shopier’de dijital bir ürün oluşturulur ve sitede eğitim olarak eklenir." : "Değişiklikler Shopier’deki ürüne kaydedilir; sitedeki eğitim sayfası buradan beslenir."}</DialogDescription></DialogHeader>
       {(editing?.kind === "product" || editing?.kind === "create") && <ProductForm key={editing.kind === "product" ? editing.course.id : "new"} course={editing.kind === "product" ? editing.course : null} filesConfigured={filesConfigured}
-        onSaved={created => { setEditing(null); if (created) { setTab("all"); setPage(1); } return invalidate(); }} />}
+        onSaved={created => { setEditing(null); if (created) { setTab("all"); setPage(1); } }} />}
     </DialogContent></Dialog>
   </>;
 }
@@ -108,42 +107,36 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
 }
 
 const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
-const productKeys = ["title", "description", "price", "discountedPrice", "listed", "inStock"] as const;
 
-/** Creates a course (course === null) or edits the Shopier product of one; an edit sends only what changed. */
-function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse | null; filesConfigured: boolean; onSaved: (created: boolean) => Promise<unknown> }) {
+/** `course === null` creates a course; an edit sends only the fields that changed. */
+function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse | null; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
+  const client = useQueryClient();
   const product = course?.product;
-  const defaults = {
-    title: course?.title ?? "", description: product?.description ?? "", price: lira(product?.listPriceKurus), discountedPrice: course?.discounted ? lira(course.priceKurus) : "",
-    listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false,
-  };
-  const form = useForm({ resolver: zodResolver(productFormSchema), mode: "onTouched", defaultValues: defaults });
+  const form = useForm({
+    resolver: zodResolver(productFormSchema), mode: "onTouched",
+    defaultValues: {
+      title: course?.title ?? "", description: product?.description ?? "", price: lira(product?.listPriceKurus), discountedPrice: course?.discounted ? lira(course.priceKurus) : "",
+      listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false,
+    },
+  });
+  const { dirtyFields } = useFormState({ control: form.control });
+  // Read when saving: the compiler would memoize a list derived from this object during render.
+  const changed = () => productKeys.filter(key => dirtyFields[key]);
   const [image, setImage] = useState<{ file: File; preview: string } | null>(null);
   const [imageError, setImageError] = useState("");
-  const fileInput = useRef<HTMLInputElement>(null);
-  const preview = useRef<string | null>(null);
-  useEffect(() => () => { if (preview.current) URL.revokeObjectURL(preview.current); }, []);
-  function chooseImage(file: File) {
-    if (!coverRules.accept.split(",").includes(file.type) || file.size > coverRules.maxBytes) { setImageError(`Bu görsel kullanılamıyor. ${coverRules.hint}`); return; }
-    if (preview.current) URL.revokeObjectURL(preview.current);
-    preview.current = URL.createObjectURL(file);
-    setImageError("");
-    setImage({ file, preview: preview.current });
-  }
-  const submit = form.handleSubmit(async values => {
-    try {
-      if (!course) {
-        await createOwnerCourse(values, image?.file ?? null);
-        toast.success("Eğitim oluşturuldu. Şimdi derslerini ekleyebilirsiniz.");
-      } else {
-        const before = productFormSchema.safeParse(defaults).data;
-        const changes = Object.fromEntries(productKeys.filter(key => !before || values[key] !== before[key]).map(key => [key, values[key]]));
-        if (!Object.keys(changes).length && !image) { toast.info("Değişiklik yapılmadı."); await onSaved(false); return; }
-        await updateOwnerProduct(course.id, changes, image?.file ?? null);
-        toast.success("Shopier ürünü güncellendi.");
-      }
-      await onSaved(!course);
-    } catch (error) { form.setError("root", { message: error instanceof Error ? error.message : "Değişiklik kaydedilemedi." }); }
+  useEffect(() => () => { if (image) URL.revokeObjectURL(image.preview); }, [image]);
+  const save = useMutation({
+    mutationFn: (values: ProductValues) => course
+      ? updateOwnerProduct(course.id, Object.fromEntries(changed().map(key => [key, values[key]])) as Partial<ProductValues>, image?.file ?? null)
+      : createOwnerCourse(values, image?.file ?? null),
+    onSuccess: () => { toast.success(course ? "Shopier ürünü güncellendi." : "Eğitim oluşturuldu. Şimdi derslerini ekleyebilirsiniz."); onSaved(!course); },
+    onError: error => form.setError("root", { message: error.message }),
+    // A write can reach Shopier before a later step fails, so the catalog is re-read either way.
+    onSettled: () => client.invalidateQueries({ queryKey: ownerQueryKeys.catalog() }),
+  });
+  const submit = form.handleSubmit(values => {
+    if (course && !image && !changed().length) { toast.info("Değişiklik yapılmadı."); onSaved(false); return; }
+    return save.mutateAsync(values).catch(() => undefined);
   });
   const cover = image?.preview ?? product?.image;
   return <FormShell form={form} onSubmit={submit}>
@@ -159,10 +152,13 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
       <div className="flex flex-wrap items-center gap-4">
         {cover ? <img src={cover} alt="" className="aspect-[4/3] w-32 shrink-0 rounded-lg border bg-muted object-cover" /> : <div className="flex aspect-[4/3] w-32 shrink-0 items-center justify-center rounded-lg border border-dashed bg-muted text-muted-foreground"><ImagePlus /></div>}
         <div className="grid gap-2">
-          <Button type="button" variant="outline" size="sm" className="w-fit" disabled={!filesConfigured} onClick={() => fileInput.current?.click()}><ImagePlus /> {cover ? "Görseli değiştir" : "Görsel seç"}</Button>
+          <FileButton variant="outline" size="sm" className="w-fit" disabled={!filesConfigured} accept={coverRules.types.join(",")} onFiles={([file]) => {
+            const usable = coverRules.types.includes(file.type) && file.size <= coverRules.maxBytes;
+            setImageError(usable ? "" : `Bu görsel kullanılamıyor. ${coverRules.hint}`);
+            if (usable) setImage({ file, preview: URL.createObjectURL(file) });
+          }}><ImagePlus /> {cover ? "Görseli değiştir" : "Görsel seç"}</FileButton>
           <p className="max-w-xs text-xs text-muted-foreground">{!filesConfigured ? `Görsel yüklemek için dosya depolama bağlantısı gerekir.${course ? "" : " Şimdilik akademinin varsayılan kapağı kullanılır."}` : `${coverRules.hint}${course ? " Ürünün mevcut görsellerinin yerini alır." : " Seçmezseniz akademinin varsayılan kapağı kullanılır."}`}</p>
         </div>
-        <input ref={fileInput} className="sr-only" type="file" accept={coverRules.accept} tabIndex={-1} aria-label="Kapak görseli" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) chooseImage(file); }} />
       </div>
       {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
     </div>

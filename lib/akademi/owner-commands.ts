@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { adminAuditLog, courses } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { toKurus, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
-import { linkOwnerCourse } from "./catalog.ts";
+import { isEditableProduct, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
+import { linkCourse } from "./catalog.ts";
 
 // Owner Commands: every owner change runs with its audit entry in one transaction, and only when something changed.
 // Callers authorize the owner (verified session and owner row) before calling.
@@ -42,7 +42,7 @@ export async function setAccessDuration(db: Database, actorId: string, courseId:
 
 const changeLabels: Record<keyof ProductChanges, string> = { title: "ad", description: "açıklama", priceKurus: "fiyat", discountedPriceKurus: "indirim", imageUrl: "kapak görseli", hidden: "mağaza görünürlüğü", inStock: "satış durumu" };
 
-/** Shopier cannot share a transaction with Postgres, so an intent is recorded before the external write and its outcome after. */
+/** Shopier cannot share a transaction with Postgres, so the intent is recorded before the write and its outcome after. */
 async function withShopier<T>(db: Database, actorId: string, target: { resourceType: string; resourceId: string }, action: string, what: string, write: () => Promise<T>): Promise<T> {
   const entry = (suffix: string, reason: string) => db.insert(adminAuditLog).values({ actorId, action: `${action}_${suffix}`, ...target, reason });
   await entry("requested", `Shopier’den istendi: ${what}`);
@@ -61,14 +61,13 @@ async function withShopier<T>(db: Database, actorId: string, target: { resourceT
   return result;
 }
 
-/** Title, description, price, discount, cover, visibility and stock live in Shopier; only the given fields change. */
 export async function updateCourseProduct(db: Database, actorId: string, courseId: string, changes: ProductChanges, shopier: Pick<ShopierClient, "getProduct" | "updateProduct">) {
   const changed = (Object.keys(changes) as (keyof ProductChanges)[]).filter(key => changes[key] !== undefined);
   if (!changed.length) throw new OwnerInputError("Değiştirilecek bir alan yok.");
   const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
   if (!course) throw new OwnerInputError("Eğitim bulunamadı.");
   const product = await shopier.getProduct(course.productId);
-  if (!product || product.type !== "digital" || product.priceData.currency !== "TRY") throw new OwnerInputError("Bu Shopier ürünü buradan düzenlenemiyor. Shopier panelinden kontrol edin.");
+  if (!product || !isEditableProduct(product)) throw new OwnerInputError("Bu Shopier ürünü buradan düzenlenemiyor. Shopier panelinden kontrol edin.");
   // A discount is checked against the price it will sit beside, new or current.
   const priceKurus = changes.priceKurus ?? toKurus(product.priceData.price);
   const discountKurus = changes.discountedPriceKurus !== undefined ? changes.discountedPriceKurus : product.priceData.discount && product.priceData.discountedPrice ? toKurus(product.priceData.discountedPrice) : null;
@@ -79,14 +78,12 @@ export async function updateCourseProduct(db: Database, actorId: string, courseI
     () => shopier.updateProduct(course.productId, pricing ? { ...changes, priceKurus, discountedPriceKurus: discountKurus } : changes));
 }
 
-export type NewCourse = Required<Pick<ProductChanges, "title" | "description" | "priceKurus" | "imageUrl">> & Pick<ProductChanges, "discountedPriceKurus" | "hidden"> & { accessDurationDays: number; status: "draft" | "published" };
+export type NewCourse = NewProduct & { accessDurationDays: number; status: "draft" | "published" };
 
-/** Creates the Shopier product, then links it as a course without waiting for Shopier's webhook. */
+/** Links the course right away instead of waiting for Shopier's webhook. */
 export async function createCourse(db: Database, actorId: string, { accessDurationDays, status, ...product }: NewCourse, shopier: Pick<ShopierClient, "createProduct">) {
-  if (!Number.isInteger(accessDurationDays) || accessDurationDays < 1 || accessDurationDays > 3650) throw new Error("Access duration must be 1–3650 whole days.");
-  if (product.discountedPriceKurus != null && product.discountedPriceKurus >= product.priceKurus) throw new OwnerInputError("İndirimli fiyat normal fiyattan düşük olmalıdır.");
   const created = await withShopier(db, actorId, { resourceType: "catalog", resourceId: "shopier" }, "course.create", `yeni ürün “${product.title}”`, () => shopier.createProduct(product));
-  const courseId = await linkOwnerCourse(db, created, { accessDurationDays, status });
+  const courseId = (await linkCourse(db, created, { accessDurationDays, status }))!;
   await db.insert(adminAuditLog).values({ actorId, action: "course.linked", resourceType: "course", resourceId: courseId, reason: `Shopier ürünü ${created.id} eğitim olarak bağlandı (${status})` });
   return { courseId, product: created };
 }

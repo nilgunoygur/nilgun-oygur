@@ -1,12 +1,12 @@
 "use client";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LazyMotion, Reorder, domMax, useDragControls } from "motion/react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { createUpload, type UpChunk } from "@mux/upchunk";
+import { createUpload } from "@mux/upchunk";
 import { put } from "@vercel/blob/client";
 import { CalendarDays, Check, CirclePlay, ExternalLink, Eye, FileText, GripVertical, Headphones, Library, Plus, Replace, Search, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { Accordion, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -19,13 +19,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
-import { FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
+import { FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import type { AttachedVideo } from "@/lib/video/mux";
 import { ownerQueryKeys } from "@/lib/akademi/owner-queries";
 import { formatDuration } from "@/lib/akademi/format";
-import { formatFileSize, lessonFileProblem, lessonFileRules, lessonFileType } from "@/lib/akademi/lesson-file-rules";
+import { formatFileSize, lessonFileProblem, lessonFileRules, lessonFileType, maxLessonDocuments } from "@/lib/akademi/lesson-file-rules";
 import { measureAudio } from "@/lib/audio-peaks";
 import { LessonAudio } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
@@ -36,8 +36,8 @@ const localDate = (date: Date | null | undefined) => date ? new Date(new Date(da
 
 type Services = { muxConfigured: boolean; filesConfigured: boolean };
 const kindLabel = { video: "VİDEO DERS", audio: "SES DERSİ", live: "CANLI DERS" };
-type Filter = "all" | "video" | "audio" | "live" | "draft";
-const filters: Filter[] = ["all", "video", "audio", "live", "draft"];
+const filters = ["all", "video", "audio", "live", "draft"] as const;
+type Filter = typeof filters[number];
 
 export function CourseEditor({ courseId, rows, muxConfigured, filesConfigured }: { courseId: string; rows: Row[] } & Services) {
   const [state, action, pending] = useActionState(async (previous: FormState, form: FormData) => {
@@ -124,7 +124,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
       <AccordionTrigger className="items-center gap-4 p-6 hover:no-underline"><div className="min-w-0 flex-1"><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{kindLabel[lesson.kind]} · SIRA {index + 1}</span><span className="block text-2xl">{lesson.title}</span></div><Badge variant={lesson.status === "published" ? "secondary" : "outline"}>{visibility[lesson.status]}</Badge></AccordionTrigger>
     </div>
     <AccordionPrimitive.Panel className="h-(--accordion-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0"><div className="border-t border-border p-6">
-      {lesson.kind !== "live" && <MediaUpload key={lesson.kind} row={row} kind={lesson.kind} muxConfigured={services.muxConfigured} />}
+      {!isLive && <MediaUpload row={row} muxConfigured={services.muxConfigured} />}
       <Homework row={row} filesConfigured={services.filesConfigured} />
       <FormShell form={form} onSubmit={submit}>
         <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
@@ -143,32 +143,46 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
   </AccordionItem>;
 }
 
+/** The message of a finished action; a failed one is thrown, for useMutation. */
+async function done(action: Promise<FormState>) {
+  const result = await action;
+  if (result.status === "error") throw new Error(result.message);
+  return result.message;
+}
+
+function ConfirmDelete({ title, description, open, onClose, remove, children }: { title: string; description: string; open: boolean; onClose: () => void; remove: { isPending: boolean; error: Error | null; mutate: () => void }; children?: React.ReactNode }) {
+  return <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
+    <DialogContent>
+      <DialogHeader><DialogTitle>“{title}” silinsin mi?</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
+      {children}
+      {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
+      <DialogFooter>
+        <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={onClose}>Vazgeç</Button>
+        <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={remove.mutate}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
+}
+
 function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
   const [open, setOpen] = useState(false);
   const remove = useMutation({
-    mutationFn: async () => { const result = await removeLesson(lesson.courseId, lesson.id); if (result.status === "error") throw new Error(result.message); return result.message; },
+    mutationFn: () => done(removeLesson(lesson.courseId, lesson.id)),
     onSuccess: message => { toast.success(message); setOpen(false); },
   });
   return <>
     <Button type="button" variant="destructive" size="pill" className="ml-auto" onClick={() => { remove.reset(); setOpen(true); }}><Trash2 />Dersi sil</Button>
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>“{lesson.title}” silinsin mi?</DialogTitle><DialogDescription>Ders, ödev PDF’leriyle birlikte kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video veya ses kaydı etkilenmez.</DialogDescription></DialogHeader>
-        {lesson.status === "published" && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
-        {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
-        <DialogFooter>
-          <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={() => setOpen(false)}>Vazgeç</Button>
-          <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDelete title={lesson.title} description="Ders, ödev PDF’leriyle birlikte kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video veya ses kaydı etkilenmez." open={open} onClose={() => setOpen(false)} remove={{ ...remove, mutate: () => remove.mutate() }}>
+      {lesson.status === "published" && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
+    </ConfirmDelete>
   </>;
 }
 
 const captionLabels = { ready: "Türkçe altyazı hazır", preparing: "Altyazı hazırlanıyor", failed: "Altyazı oluşturulamadı", none: "Altyazı yok" };
 const softPill = "border-forest/10 bg-mist text-forest hover:bg-mist/80";
+const problem = "rounded-xl bg-destructive/10 p-3 text-sm text-destructive";
 
-// A video lesson's video and an audio lesson's recording are both Mux assets; only the words and the preview differ.
+// Video and audio lessons share the Mux flow; only the wording and the preview differ.
 type MediaKind = "video" | "audio";
 const media = {
   video: {
@@ -186,35 +200,38 @@ const media = {
     search: "Kayıt adına göre ara…", empty: "Mux hesabınızda henüz ses kaydı yok. Buradan veya Mux panelinden yükledikten sonra görünür.", progress: "Ses kaydı yükleme ilerlemesi",
   },
 };
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-function MediaUpload({ row: { lesson, asset, video }, kind, muxConfigured }: { row: Row; kind: MediaKind; muxConfigured: boolean }) {
-  const text = media[kind], audio = kind === "audio";
-  const upload = useRef<UpChunk | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
+function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Row; muxConfigured: boolean }) {
+  const client = useQueryClient();
+  const audio = lesson.kind === "audio", kind: MediaKind = audio ? "audio" : "video", text = media[kind];
   const [percent, setPercent] = useState<number | null>(null);
-  // Set once the file is with Mux; the lesson keeps its current video or recording until the new one is ready.
-  const [pending, setPending] = useState<{ uploadId: string; peaks?: number[] } | null>(null);
-  const [checks, setChecks] = useState(0);
-  const [error, setError] = useState("");
   const [changing, setChanging] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const ready = asset?.status === "ready";
-  useEffect(() => () => upload.current?.abort(), []);
-  const track = (next: typeof pending) => { setPending(next); setChecks(0); };
-  // Mux takes a minute or two to prepare a file; checkUpload attaches it and revalidates the page once it is ready.
-  useQuery({
-    queryKey: ownerQueryKeys.uploadStatus(lesson.id, pending?.uploadId ?? null),
-    queryFn: async () => {
-      const result = await checkUpload(lesson.id, pending!.uploadId, pending!.peaks);
-      setChecks(count => count + 1);
-      if (result.status === "ready") { track(null); setChanging(false); toast.success(text.ready); }
-      if (result.status === "failed") { track(null); setError(result.message); }
-      return result;
+  // Runs to the end even when the card is closed; the lesson keeps its current asset until the new one is ready.
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const peaks = audio ? await measureAudio(file) ?? undefined : undefined;
+      const started = await startUpload(lesson.id).catch(() => { throw new Error("Yükleme başlatılamadı. Mux bağlantısını ve yönetim oturumunuzu kontrol edin."); });
+      await new Promise<void>((resolve, reject) => {
+        const sending = createUpload({ endpoint: started.url, file, chunkSize: 5120 });
+        sending.on("progress", event => setPercent(Math.round(event.detail)));
+        sending.on("success", () => resolve());
+        sending.on("error", () => reject(new Error("Yükleme tamamlanamadı. Dosyayı yeniden seçin.")));
+      }).finally(() => setPercent(null));
+      // Mux takes a minute or two to prepare a file: a check every five seconds, for ten minutes.
+      for (let check = 0; check < 120; check++) {
+        const result = await checkUpload(lesson.id, started.uploadId, peaks).catch(() => ({ status: "processing" as const }));
+        if (result.status === "ready") return;
+        if (result.status === "failed") throw new Error(result.message);
+        await sleep(5000);
+      }
+      throw new Error("Hazırlık uzun sürüyor. Dosya hazır olduğunda Mux kütüphanesinden seçebilirsiniz.");
     },
-    enabled: muxConfigured && !!pending && percent === null,
-    // Ten minutes of checks; after that the file can still be attached from the library.
-    refetchInterval: query => query.state.data?.status === "processing" && query.state.dataUpdateCount < 120 ? 5000 : false,
-    refetchOnWindowFocus: false, retry: false,
+    onMutate: () => setPreviewing(false),
+    onSuccess: () => { setChanging(false); toast.success(text.ready); },
+    onSettled: () => client.invalidateQueries({ queryKey: ownerQueryKeys.muxLibrary() }),
   });
   const preview = useQuery({
     queryKey: ownerQueryKeys.preview(lesson.id, asset?.signedPlaybackId),
@@ -222,23 +239,9 @@ function MediaUpload({ row: { lesson, asset, video }, kind, muxConfigured }: { r
     enabled: previewing,
     staleTime: 30 * 60_000,
   });
-  async function chooseFile(file: File) {
-    setError("");
-    setPreviewing(false);
-    setPercent(0);
-    try {
-      // The waveform is measured here, while the file is at hand; Mux only stores the sound.
-      const peaks = audio ? await measureAudio(file) ?? undefined : undefined;
-      const started = await startUpload(lesson.id);
-      upload.current = createUpload({ endpoint: started.url, file, chunkSize: 5120 });
-      upload.current.on("progress", event => setPercent(Math.round(event.detail)));
-      upload.current.on("error", () => { setPercent(null); setError("Yükleme tamamlanamadı. Dosyayı yeniden seçin."); });
-      upload.current.on("success", () => { setPercent(null); track({ uploadId: started.uploadId, peaks }); });
-    } catch { setPercent(null); setError("Yükleme başlatılamadı. Mux bağlantısını ve yönetim oturumunuzu kontrol edin."); }
-  }
-  const busy = percent !== null || !!pending;
+  const busy = upload.isPending;
   const details = [asset?.durationSeconds && formatDuration(asset.durationSeconds), !audio && video?.captions && captionLabels[video.captions]].filter(Boolean).join(" · ");
-  const playback = preview.data && !("error" in preview.data) ? preview.data : null;
+  const playback = preview.data && !("error" in preview.data) ? { playbackId: preview.data.playbackId, tokens: preview.data.tokens, metadata: { video_id: lesson.id, video_title: lesson.title, viewer_user_id: "owner-preview" } } : null;
   return <div className="mb-6 grid gap-4 rounded-2xl bg-mist p-5">
     <p className="text-[11px] font-semibold tracking-[1.4px] text-forest">{text.heading}</p>
     {ready ? <div className="flex flex-wrap items-center gap-4 rounded-xl bg-white p-3">
@@ -251,20 +254,19 @@ function MediaUpload({ row: { lesson, asset, video }, kind, muxConfigured }: { r
       </div>
     </div> : !busy && <p className="text-sm">{text.none}</p>}
     {previewing && (!preview.data ? <Spinner /> : !playback ? <p role="alert" className="text-sm text-destructive">{"error" in preview.data ? preview.data.error : ""}</p>
-      : audio ? <LessonAudio source={{ playbackId: playback.playbackId, token: playback.tokens.playback }} title={lesson.title} duration={asset?.durationSeconds ?? 0} peaks={asset?.peaks} metadata={{ video_id: lesson.id, video_title: lesson.title, viewer_user_id: "owner-preview" }} />
-      : <LessonVideo className="aspect-video overflow-hidden rounded-xl" playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lesson.id, video_title: lesson.title, viewer_user_id: "owner-preview" }} />)}
-    {busy && <p className="flex items-center gap-2 text-sm" role="status"><Spinner />{percent !== null ? `Dosya Mux’a yükleniyor… %${percent}` : checks >= 120 ? "Hazırlık uzun sürüyor. Dosya hazır olduğunda Mux kütüphanesinden seçebilirsiniz." : `${text.preparing} ${ready ? text.current : "Bu sayfadan ayrılırsanız dosyayı sonra Mux kütüphanesinden seçebilirsiniz."}`}</p>}
+      : audio ? <LessonAudio {...playback} title={lesson.title} duration={asset?.durationSeconds ?? 0} peaks={asset?.peaks} />
+      : <LessonVideo {...playback} className="aspect-video overflow-hidden rounded-xl" />)}
+    {busy && <p className="flex items-center gap-2 text-sm" role="status"><Spinner />{percent !== null ? `Dosya Mux’a yükleniyor… %${percent}` : `${text.preparing} ${ready ? text.current : "Bu sayfadan ayrılırsanız dosyayı sonra Mux kütüphanesinden seçebilirsiniz."}`}</p>}
     {percent !== null && <progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label={text.progress} />}
     {muxConfigured && !busy && (!ready || changing) && <div className="grid gap-4 sm:grid-cols-2">
       <MediaOption icon={Library} title="Mux kütüphanesinden seç" hint={text.libraryHint}>
         <MuxLibrary lessonId={lesson.id} kind={kind} currentAssetId={asset?.muxAssetId} onAttached={() => setChanging(false)} />
       </MediaOption>
       <MediaOption icon={Upload} title="Bilgisayardan yükle" hint={`${text.uploadHint}${ready ? ` ${text.replaces}` : ""}`}>
-        <Button type="button" variant="outline" size="pill" className={softPill} onClick={() => fileInput.current?.click()}><Upload />Dosya seç</Button>
-        <input ref={fileInput} className="sr-only" type="file" accept={text.accept} tabIndex={-1} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void chooseFile(file); }} />
+        <FileButton variant="outline" size="pill" className={softPill} accept={text.accept} onFiles={([file]) => upload.mutate(file)}><Upload />Dosya seç</FileButton>
       </MediaOption>
     </div>}
-    {error && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+    {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
   </div>;
 }
 
@@ -272,9 +274,9 @@ function MediaOption({ icon: Icon, title, hint, children }: { icon: LucideIcon; 
   return <div className="rounded-xl bg-white p-4 text-sm"><p className="mb-1 flex items-center gap-2 font-medium"><Icon size={16} />{title}</p><p className="mb-3 text-xs text-stone">{hint}</p>{children}</div>;
 }
 
-type Library = { lessonId: string; kind: MediaKind; currentAssetId?: string | null; onAttached: () => void };
+type LibraryProps = { lessonId: string; kind: MediaKind; currentAssetId?: string | null; onAttached: () => void };
 
-function MuxLibrary({ lessonId, kind, currentAssetId, onAttached }: Library) {
+function MuxLibrary({ lessonId, kind, currentAssetId, onAttached }: LibraryProps) {
   const [open, setOpen] = useState(false);
   return <>
     <Button type="button" variant="outline" size="pill" className={softPill} onClick={() => setOpen(true)}><Library />Kütüphaneyi aç</Button>
@@ -287,7 +289,7 @@ function MuxLibrary({ lessonId, kind, currentAssetId, onAttached }: Library) {
   </>;
 }
 
-function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: Library) {
+function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: LibraryProps) {
   const client = useQueryClient();
   const text = media[kind], audio = kind === "audio";
   const [search, setSearch] = useState("");
@@ -297,11 +299,11 @@ function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: Library) 
     staleTime: 5 * 60_000,
   });
   const attach = useMutation({
-    mutationFn: async (assetId: string) => { const result = await attachMuxAsset(lessonId, assetId); if (result.status === "error") throw new Error(result.message); return result.message; },
+    mutationFn: (assetId: string) => done(attachMuxAsset(lessonId, assetId)),
     onSuccess: message => { toast.success(message); void client.invalidateQueries({ queryKey: ownerQueryKeys.muxLibrary() }); onAttached(); },
   });
   const needle = search.trim().toLocaleLowerCase("tr-TR");
-  // A lesson takes its own kind only; an asset still being prepared has no tracks yet, so it is listed for both.
+  // An asset still being prepared has no tracks yet, so it is listed for both kinds.
   const ofKind = (library.data ?? []).filter(asset => !asset.ready || asset.audioOnly === audio);
   const assets = ofKind.filter(asset => asset.label.toLocaleLowerCase("tr-TR").includes(needle))
     .sort((a, b) => Number(b.id === currentAssetId) - Number(a.id === currentAssetId));
@@ -321,50 +323,32 @@ function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: Library) 
   </>;
 }
 
-type Phase = "uploading" | "saving" | null;
-
-/** Uploads a homework PDF straight from the browser to the private store, then records it on the lesson. */
-function usePdfUpload(lessonId: string) {
-  const [phase, setPhase] = useState<Phase>(null);
-  const [percent, setPercent] = useState(0);
-  const [error, setError] = useState("");
-  const abort = useRef<AbortController | null>(null);
-  useEffect(() => () => abort.current?.abort(), []);
-  async function upload(file: File) {
-    const type = lessonFileType(file), problem = lessonFileProblem({ type, size: file.size });
-    if (problem) { setError(`${file.name}: ${problem}`); return false; }
-    setError("");
-    setPercent(0);
-    setPhase("uploading");
-    try {
-      const prepared = await prepareLessonFile({ lessonId, name: file.name, type, size: file.size });
-      if ("error" in prepared) { setError(prepared.error); return false; }
-      abort.current = new AbortController();
-      await put(prepared.pathname, file, { access: "private", token: prepared.token, contentType: type, multipart: file.size > 8 * 1024 * 1024, abortSignal: abort.current.signal, onUploadProgress: event => setPercent(Math.round(event.percentage)) });
-      setPhase("saving");
-      const result = await saveLessonFile({ lessonId, pathname: prepared.pathname, name: file.name });
-      if (result.status === "error") { setError(result.message); return false; }
-      toast.success(result.message);
-      return true;
-    } catch { setError("Dosya yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin."); return false; }
-    finally { setPhase(null); }
-  }
-  return { phase, percent, error, upload };
-}
-
 function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; filesConfigured: boolean }) {
-  const { phase, percent, error, upload } = usePdfUpload(lesson.id);
-  const input = useRef<HTMLInputElement>(null);
+  const [percent, setPercent] = useState(0);
   const [removing, setRemoving] = useState<Row["documents"][number] | null>(null);
+  // Straight from the browser to the private store, then recorded on the lesson.
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const type = lessonFileType(file), invalid = lessonFileProblem({ type, size: file.size });
+      if (invalid) throw new Error(`${file.name}: ${invalid}`);
+      setPercent(0);
+      const prepared = await prepareLessonFile(lesson.id, file.name);
+      if ("error" in prepared) throw new Error(prepared.error);
+      await put(prepared.pathname, file, { access: "private", token: prepared.token, contentType: type, onUploadProgress: event => setPercent(Math.round(event.percentage)) })
+        .catch(() => { throw new Error("Dosya yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin."); });
+      return done(saveLessonFile({ lessonId: lesson.id, pathname: prepared.pathname, name: file.name }));
+    },
+    onSuccess: message => toast.success(message),
+  });
   const remove = useMutation({
-    mutationFn: async (fileId: string) => { const result = await deleteLessonFile(fileId); if (result.status === "error") throw new Error(result.message); return result.message; },
+    mutationFn: () => done(deleteLessonFile(removing!.id)),
     onSuccess: message => { toast.success(message); setRemoving(null); },
   });
   return <div className="mb-6 grid gap-4 rounded-2xl bg-[#fbf6ed] p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-[11px] font-semibold tracking-[1.4px] text-[#82623a]">ÖDEV VE MATERYALLER</p><p className="mt-1 text-xs text-stone">Öğrenciler bu PDF’leri dersin altında görür ve indirebilir. {lessonFileRules.hint}</p></div>
-      <Button type="button" variant="outline" size="pill" className={softPill} disabled={!filesConfigured || !!phase} onClick={() => input.current?.click()}><Plus />PDF ekle</Button>
-      <input ref={input} className="sr-only" type="file" accept={lessonFileRules.accept} multiple tabIndex={-1} onChange={async event => { const files = [...(event.target.files ?? [])]; event.target.value = ""; for (const file of files) if (!await upload(file)) break; }} />
+      <FileButton variant="outline" size="pill" className={softPill} accept={lessonFileRules.accept} multiple disabled={!filesConfigured || upload.isPending || documents.length >= maxLessonDocuments}
+        onFiles={async files => { try { for (const file of files) await upload.mutateAsync(file); } catch { /* shown below */ } }}><Plus />PDF ekle</FileButton>
     </div>
     {documents.length > 0 && <ul className="grid gap-2">{documents.map(file => <li key={file.id} className="flex items-center gap-3 rounded-xl bg-white p-3">
       <FileText className="size-5 shrink-0 text-[#c2553f]" />
@@ -372,17 +356,8 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
       <Button variant="ghost" size="icon" aria-label={`${file.name}: aç`} nativeButton={false} render={<a href={`/api/lesson-files/${file.id}`} target="_blank" rel="noopener noreferrer" />}><ExternalLink /></Button>
       <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${file.name}: sil`} onClick={() => { remove.reset(); setRemoving(file); }}><Trash2 /></Button>
     </li>)}</ul>}
-    {phase && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />{phase === "uploading" ? `Yükleniyor… %${percent}` : "Kaydediliyor…"}</p>{phase === "uploading" && <progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" />}</div>}
-    {error && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-    <Dialog open={!!removing} onOpenChange={open => { if (!open) setRemoving(null); }}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>“{removing?.name}” silinsin mi?</DialogTitle><DialogDescription>PDF kalıcı olarak silinir; öğrencileriniz artık indiremez.</DialogDescription></DialogHeader>
-        {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
-        <DialogFooter>
-          <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={() => setRemoving(null)}>Vazgeç</Button>
-          <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={() => removing && remove.mutate(removing.id)}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    {upload.isPending && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />Yükleniyor… %{percent}</p><progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" /></div>}
+    {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
+    <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={{ ...remove, mutate: () => remove.mutate() }} />
   </div>;
 }

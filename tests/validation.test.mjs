@@ -109,7 +109,6 @@ test("the owner's plain-text description format round-trips what the course page
   const shopier = "<h3><strong>7 Günlük Çalışma</strong></h3>\r\n\r\n<p><strong>Kalın</strong> ve <em>eğik</em> &amp; düz.</p>\r\n\r\n<p>✔️ Bir<br>\r\n✔️ İki</p>\r\n<ul><li>Madde</li><li>İkinci</li></ul><ol><li>Adım</li></ol><script>x()</script>";
   const text = descriptionMarkup(shopier);
   assert.equal(text, "### **7 Günlük Çalışma**\n\n**Kalın** ve *eğik* & düz.\n\n✔️ Bir\n✔️ İki\n\n- Madde\n- İkinci\n\n1. Adım");
-  // Shopier's API drops <br>, so a line break is saved as a paragraph break.
   const html = markupDescription(text);
   assert.equal(html, "<h3><strong>7 Günlük Çalışma</strong></h3>\n<p><strong>Kalın</strong> ve <em>eğik</em> &amp; düz.</p>\n<p>✔️ Bir</p>\n<p>✔️ İki</p>\n<ul><li>Madde</li><li>İkinci</li></ul>\n<ol><li>Adım</li></ol>");
   assert.ok(!html.includes("<br"));

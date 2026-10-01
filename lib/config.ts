@@ -19,7 +19,6 @@ export function parseConfig(env: Env) {
       tokenId: value(env, "MUX_TOKEN_ID"), tokenSecret: value(env, "MUX_TOKEN_SECRET"),
       signingKeyId: value(env, "MUX_SIGNING_KEY_ID"), signingPrivateKey: value(env, "MUX_SIGNING_PRIVATE_KEY"),
     },
-    /** Private Vercel Blob store for homework PDFs and course-cover uploads. */
     files: { token: value(env, "BLOB_READ_WRITE_TOKEN") },
     shopier: {
       token: shopierToken,

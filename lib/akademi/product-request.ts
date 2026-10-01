@@ -2,27 +2,16 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { privateNoStore } from "@/lib/auth/viewer";
-import { filesConfigured, signedFileUrl, storeFile } from "@/lib/files/storage";
-import { ShopierError } from "@/lib/shopier/api";
-import { publicOrigin } from "@/lib/site";
-import { fallbackCover } from "./catalog";
+import { imageMime } from "@/lib/files/image-type";
+import { deleteStoredFiles, filesConfigured, signedFileUrl, storeFile } from "@/lib/files/storage";
+import { productDetails, ShopierError, type ShopierProduct } from "@/lib/shopier/api";
 import { OwnerInputError } from "./owner-commands";
 import { coverRules } from "./owner-forms";
 
-// Shared by the routes that create and edit a course's Shopier product: a multipart body with the
-// form values as JSON in `data` and an optional cover in `image`.
+// For the routes that create and edit a course's Shopier product. Body: the form values as JSON in `data`, an optional cover in `image`.
 
 export const kurus = (lira: number) => Math.round(lira * 100);
-/** Used when a new course has no cover of its own; Shopier needs one image to create a product. */
-export const defaultCover = `${publicOrigin}${fallbackCover}`;
-
 export const refuse = (error: string, status = 400) => Response.json({ error }, { status, headers: privateNoStore });
-
-function coverType(bytes: Uint8Array) {
-  if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value)) return { mime: "image/png", extension: "png" };
-  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return { mime: "image/jpeg", extension: "jpg" };
-  return null;
-}
 
 export async function readProductForm<S extends z.ZodType>(request: Request, schema: S): Promise<{ data: z.output<S>; image: File | null } | Response> {
   const body = await request.formData().catch(() => null);
@@ -37,13 +26,18 @@ export async function readProductForm<S extends z.ZodType>(request: Request, sch
   return { data: parsed.data, image };
 }
 
-/** Shopier downloads product images itself: keeps the cover privately and returns a link that works for a day. */
+/** Shopier downloads product images itself, so it gets a link signed for a day. */
 export async function shareCover(image: File) {
-  const bytes = Buffer.from(await image.arrayBuffer()), type = coverType(bytes);
-  if (!type) throw new OwnerInputError(`Kapak görseli okunamadı. ${coverRules.hint}`);
-  const pathname = `covers/${randomUUID()}.${type.extension}`;
-  await storeFile(pathname, bytes, type.mime);
+  const bytes = Buffer.from(await image.arrayBuffer()), mime = imageMime(bytes);
+  if (!mime || !coverRules.types.includes(mime)) throw new OwnerInputError(`Kapak görseli okunamadı. ${coverRules.hint}`);
+  const pathname = `covers/${randomUUID()}.${mime === "image/png" ? "png" : "jpg"}`;
+  await storeFile(pathname, bytes, mime);
   return { pathname, url: await signedFileUrl(pathname, Date.now() + 24 * 3600_000) };
+}
+
+/** Once Shopier has copied the cover to its own CDN, ours is no longer needed. */
+export async function releaseCover(cover: { pathname: string } | null, product: ShopierProduct) {
+  if (cover && productDetails(product)?.imageUrl) await deleteStoredFiles([cover.pathname]);
 }
 
 export function productFailure(error: unknown) {

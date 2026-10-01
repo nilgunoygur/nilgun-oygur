@@ -6,10 +6,10 @@ import { eq, inArray } from "drizzle-orm";
 import { requireOwner } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { adminAuditLog, lessons, videoAssets } from "@/lib/db/schema";
-import { attachVideo, createLessons, deleteLesson, reorderLessons, updateLesson } from "@/lib/akademi/lesson-editor";
+import { attachAsset, createLessons, deleteLesson, reorderLessons, updateLesson } from "@/lib/akademi/lesson-editor";
 import type { lessonInput } from "@/lib/akademi/owner-forms";
 import { addLessonFile, removeLessonFile } from "@/lib/akademi/lesson-files";
-import { isLessonFilePath, lessonFilePath, lessonFileProblem, lessonFileRules } from "@/lib/akademi/lesson-file-rules";
+import { isLessonFilePath, lessonFilePath, lessonFileRules } from "@/lib/akademi/lesson-file-rules";
 import { waveformBars } from "@/lib/audio-peaks";
 import { deleteStoredFiles, filesConfigured, storedFile, uploadToken } from "@/lib/files/storage";
 import { muxLibrary, muxRequest, ownerTokenExpiry, playbackTokens, thumbnailUrl, videoConfigured } from "@/lib/video/mux";
@@ -54,23 +54,21 @@ export async function removeLesson(courseId: string, lessonId: string): Promise<
   try {
     const viewer = await requireOwner();
     const id = z.uuid().parse(courseId);
-    const files = await deleteLesson(getDatabase(), viewer.user.id, id, z.uuid().parse(lessonId));
-    if (filesConfigured()) await deleteStoredFiles(files);
+    await deleteStoredFiles(await deleteLesson(getDatabase(), viewer.user.id, id, z.uuid().parse(lessonId)));
     changed(id);
     return { status: "success", message: "Ders silindi." };
   } catch (error) { return report(error); }
 }
-// A video or audio lesson; the other kinds have nothing in Mux.
 async function mediaLesson(lessonId: string) {
   const [lesson] = await getDatabase().select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
   if (!lesson || lesson.kind === "live") throw new Error("Ders bulunamadı.");
   return lesson;
 }
-/** null when the asset suits the lesson: a recording has no picture, a video has one. */
+/** null when the asset suits the lesson. */
 const wrongKind = (lesson: { kind: string }, asset: AssetInfo) => asset.audioOnly === (lesson.kind === "audio") ? null
   : lesson.kind === "audio" ? "Bu dosya bir video. Ses dersine yalnızca ses dosyası eklenebilir." : "Bu dosyada görüntü yok. Video dersine bir video dosyası ekleyin.";
 
-// An upload never touches the lesson until Mux has a playable asset, so a published lesson keeps its current video or recording meanwhile.
+// The lesson keeps its current asset until Mux has a playable one.
 export async function startUpload(lessonId: string) {
   const viewer = await requireOwner();
   if (!videoConfigured()) throw new Error("Dosya yüklemek için Mux bağlantısının kurulması gerekiyor.");
@@ -86,11 +84,10 @@ const uploadFailure = (upload: MuxUpload) => /limited to \d+ assets/i.test(uploa
   : upload.status === "timed_out" ? "Yükleme zaman aşımına uğradı. Dosyayı yeniden seçin." : "Dosya işlenemedi. Yeniden yükleyin.";
 const waveform = z.array(z.number().int().min(0).max(100)).min(8).max(waveformBars).optional();
 
-/** Attaches the uploaded file once Mux has prepared it; `peaks` is the waveform the owner's browser measured for a recording. */
+/** Attaches the uploaded file once Mux has prepared it; `peaks` is a recording's waveform. */
 export async function checkUpload(lessonId: string, uploadId: string, peaks?: number[]): Promise<{ status: "processing" | "ready" } | { status: "failed"; message: string }> {
   const viewer = await requireOwner();
-  const lesson = await mediaLesson(lessonId);
-  const upload = await muxRequest<MuxUpload>(`uploads/${encodeURIComponent(assetId.parse(uploadId))}`);
+  const [lesson, upload] = await Promise.all([mediaLesson(lessonId), muxRequest<MuxUpload>(`uploads/${encodeURIComponent(assetId.parse(uploadId))}`)]);
   if (upload.new_asset_settings?.passthrough && upload.new_asset_settings.passthrough !== lesson.id) throw new Error("Yükleme bulunamadı.");
   if (["errored", "timed_out", "cancelled"].includes(upload.status)) return { status: "failed", message: uploadFailure(upload) };
   if (!upload.asset_id) return { status: "processing" };
@@ -99,7 +96,7 @@ export async function checkUpload(lessonId: string, uploadId: string, peaks?: nu
   if (!asset.ready || !asset.signedPlaybackId) return { status: "processing" };
   const problem = wrongKind(lesson, asset);
   if (problem) return { status: "failed", message: `${problem} Yüklenen dosya Mux kütüphanenizde duruyor.` };
-  await attachVideo(getDatabase(), viewer.user.id, lesson.id, { muxAssetId: asset.id, signedPlaybackId: asset.signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio, peaks: lesson.kind === "audio" ? waveform.safeParse(peaks).data : undefined },
+  await attachAsset(getDatabase(), viewer.user.id, lesson, { muxAssetId: asset.id, signedPlaybackId: asset.signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio, peaks: lesson.kind === "audio" ? waveform.safeParse(peaks).data : undefined },
     lesson.kind === "audio" ? "Yüklenen ses kaydı derse bağlandı" : "Yüklenen video derse bağlandı");
   changed(lesson.courseId);
   return { status: "ready" };
@@ -117,14 +114,13 @@ export async function listMuxLibrary(): Promise<{ assets: (AssetInfo & { thumbna
       .where(inArray(videoAssets.muxAssetId, assets.map(asset => asset.id))) : [];
     return { assets: assets.map(asset => ({
       ...asset,
-      // A recording has no picture to take a thumbnail from.
       thumbnail: asset.audioOnly ? undefined : asset.signedPlaybackId ? thumbnailUrl(asset.signedPlaybackId) : asset.publicPlaybackIds[0] && thumbnailUrl(asset.publicPlaybackIds[0], false),
       usedBy: used.filter(row => row.muxAssetId === asset.id).map(row => row.lesson),
     })) };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 
-// Paid lessons stay signed-only: add a signed playback ID, drop public ones, request Turkish captions for a video without them.
+// Paid lessons stay signed-only, so public playback IDs are dropped.
 export async function attachMuxAsset(lessonId: string, rawAssetId: string): Promise<FormState> {
   try {
     const viewer = await requireOwner();
@@ -140,7 +136,7 @@ export async function attachMuxAsset(lessonId: string, rawAssetId: string): Prom
     // Best effort; must not block attaching.
     if (captioning) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
     if (!asset.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
-    await attachVideo(getDatabase(), viewer.user.id, lesson.id, { muxAssetId: id, signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio }, audio ? "Mux kütüphanesinden ses kaydı bağlandı" : undefined);
+    await attachAsset(getDatabase(), viewer.user.id, lesson, { muxAssetId: id, signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio }, `Mux kütüphanesinden ${audio ? "ses kaydı" : "video"} bağlandı`);
     changed(lesson.courseId);
     return { status: "success", message: audio ? "Ses kaydı derse bağlandı." : captioning ? "Video derse bağlandı. Türkçe altyazı birkaç dakika içinde hazırlanır." : "Video derse bağlandı." };
   } catch (error) { return report(error); }
@@ -157,22 +153,19 @@ export async function previewPlayback(lessonId: string) {
 
 const filesMissing = "PDF yüklemek için dosya depolama bağlantısının (Vercel Blob) kurulması gerekiyor.";
 
-/** Step 1 of a homework PDF upload: a token that lets this browser upload exactly one file to a fresh private pathname. */
-export async function prepareLessonFile(input: { lessonId: string; name: string; type: string; size: number }): Promise<{ pathname: string; token: string } | { error: string }> {
+/** Step 1: a token for uploading one PDF to a fresh private pathname; the token enforces type and size. */
+export async function prepareLessonFile(lessonId: string, name: string): Promise<{ pathname: string; token: string } | { error: string }> {
   try {
     await requireOwner();
     if (!filesConfigured()) return { error: filesMissing };
-    const file = z.object({ lessonId: z.uuid(), name: z.string().min(1).max(300), type: z.string().max(100), size: z.number().int().positive() }).parse(input);
-    const problem = lessonFileProblem(file);
-    if (problem) return { error: problem };
-    const [lesson] = await getDatabase().select({ id: lessons.id }).from(lessons).where(eq(lessons.id, file.lessonId));
+    const [lesson] = await getDatabase().select({ id: lessons.id }).from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
     if (!lesson) return { error: "Ders bulunamadı." };
-    const pathname = lessonFilePath(file.lessonId, randomUUID(), file.name);
+    const pathname = lessonFilePath(lesson.id, randomUUID(), z.string().min(1).max(300).parse(name));
     return { pathname, token: await uploadToken(pathname, lessonFileRules) };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 
-/** Step 2: records the uploaded PDF after checking what actually reached the store. */
+/** Step 2: records the PDF after checking what actually reached the store. */
 export async function saveLessonFile(input: { lessonId: string; pathname: string; name: string }): Promise<FormState> {
   try {
     const viewer = await requireOwner();
@@ -192,7 +185,7 @@ export async function deleteLessonFile(fileId: string): Promise<FormState> {
   try {
     const viewer = await requireOwner();
     const removed = await removeLessonFile(getDatabase(), viewer.user.id, z.uuid().parse(fileId));
-    if (filesConfigured()) await deleteStoredFiles([removed.pathname]);
+    await deleteStoredFiles([removed.pathname]);
     changed(removed.courseId);
     return { status: "success", message: "PDF silindi." };
   } catch (error) { return report(error); }

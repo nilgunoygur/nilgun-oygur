@@ -1,6 +1,6 @@
 import { courseSlug } from "./slug.ts";
 
-// What a homework PDF may be; shared by the upload form and the server.
+// What a homework PDF may be: shared by the upload form and the server.
 export const lessonFileRules = {
   accept: ".pdf,application/pdf",
   types: ["application/pdf"],
@@ -8,13 +8,12 @@ export const lessonFileRules = {
   hint: "Yalnızca PDF; dosya başına en fazla 25 MB.",
 };
 
-/** Homework PDFs per lesson. */
 export const maxLessonDocuments = 20;
 
 /** The browser's type, or the extension's when the browser reports none. */
 export const lessonFileType = (file: { name: string; type: string }) => file.type.toLowerCase() || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "");
 
-/** null when the file is acceptable, otherwise the message to show. `type` comes from lessonFileType. */
+/** null when acceptable; `type` comes from lessonFileType. */
 export function lessonFileProblem(file: { type: string; size: number }): string | null {
   if (!lessonFileRules.types.includes(file.type)) return "Ödev dosyası PDF olmalıdır.";
   if (file.size <= 0 || file.size > lessonFileRules.maxBytes) return `Dosya çok büyük. ${lessonFileRules.hint}`;

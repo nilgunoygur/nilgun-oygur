@@ -2,7 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import type { CourseChange } from "./owner-forms";
+import type { CourseChange, productFormSchema } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
@@ -38,7 +38,6 @@ export const ownerQueryKeys = {
   catalog: () => [...ownerQueryKeys.all, "catalog"] as const,
   transactions: (from: string, to: string) => [...ownerQueryKeys.all, "transactions", { from, to }] as const,
   muxLibrary: () => [...ownerQueryKeys.all, "mux-library"] as const,
-  uploadStatus: (lessonId: string, uploadId: string | null) => [...ownerQueryKeys.all, "upload-status", lessonId, uploadId] as const,
   preview: (lessonId: string, playbackId?: string | null) => [...ownerQueryKeys.all, "preview", lessonId, playbackId] as const,
 };
 
@@ -59,11 +58,11 @@ export function ownerTransactionsQueryOptions(from: string, to: string) {
 
 export const updateOwnerCourse = (courseId: string, change: CourseChange) => ownerFetch(`/api/yonetim/courses/${courseId}`,
   { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) }, "Değişiklik kaydedilemedi.");
-const productBody = (data: unknown, image: File | null) => { const body = new FormData(); body.set("data", JSON.stringify(data)); if (image) body.set("image", image); return body; };
-export const updateOwnerProduct = (courseId: string, changes: Record<string, unknown>, image: File | null) => ownerFetch(`/api/yonetim/courses/${courseId}/product`,
-  { method: "PUT", body: productBody(changes, image) }, "Shopier ürünü güncellenemedi.");
-export const createOwnerCourse = async (course: Record<string, unknown>, image: File | null): Promise<{ courseId: string }> =>
-  (await ownerFetch("/api/yonetim/courses", { method: "POST", body: productBody(course, image) }, "Eğitim oluşturulamadı.")).json();
+export type ProductValues = z.output<typeof productFormSchema>;
+const withCover = (data: Partial<ProductValues>, image: File | null) => { const body = new FormData(); body.set("data", JSON.stringify(data)); if (image) body.set("image", image); return body; };
+export const updateOwnerProduct = (courseId: string, changes: Partial<ProductValues>, image: File | null) => ownerFetch(`/api/yonetim/courses/${courseId}/product`,
+  { method: "PUT", body: withCover(changes, image) }, "Shopier ürünü güncellenemedi.");
+export const createOwnerCourse = (course: ProductValues, image: File | null) => ownerFetch("/api/yonetim/courses", { method: "POST", body: withCover(course, image) }, "Eğitim oluşturulamadı.");
 export const syncOwnerCatalog = () => ownerFetch("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.");
 
 export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {

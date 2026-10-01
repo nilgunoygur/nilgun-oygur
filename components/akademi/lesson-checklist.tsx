@@ -9,7 +9,7 @@ import { formatFileSize } from "@/lib/akademi/lesson-file-rules";
 import { hasWatched } from "@/lib/akademi/access-policy";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { LessonAudio, type AudioSource } from "./lesson-audio";
+import { LessonAudio } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
 
 type Lesson = NonNullable<Awaited<ReturnType<typeof studentCourse>>>["lessons"][number];
@@ -18,7 +18,6 @@ async function celebrate() {
   void confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 }, colors: ["#224c40", "#4b999c", "#f1f5e9", "#e7d7bc"], disableForReducedMotion: true });
 }
 const date = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" });
-// Per lesson kind: its label, and how a student is told to finish it.
 const kinds = {
   video: { label: "VİDEO DERS", done: "İzledim", locked: "İzleyince açılır", hint: "Videoyu izledikten sonra işaretleyebilirsiniz.", again: "tekrar izleyebilirsiniz" },
   audio: { label: "SES DERSİ", done: "Dinledim", locked: "Dinleyince açılır", hint: "Kaydı dinledikten sonra işaretleyebilirsiniz.", again: "tekrar dinleyebilirsiniz" },
@@ -94,7 +93,7 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
   </article>;
 }
 
-/** Reports every position to the card and saves it at most every 15 seconds, one save at a time. */
+/** Saves the position at most every 15 seconds, one save at a time. */
 function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds: number) => void) {
   const [progressError, setProgressError] = useState("");
   const lastSaved = useRef(0);
@@ -117,9 +116,9 @@ function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds:
 type PlayerProps = { lessonId: string; title: string; startTime: number; onTime: (seconds: number) => void; onEnded: () => void };
 
 type Playback = Awaited<ReturnType<typeof getPlayback>>;
-const audioSource = (playback: Playback): AudioSource | null => playback.playbackId && playback.tokens ? { playbackId: playback.playbackId, token: playback.tokens.playback } : null;
+const playable = (playback: Playback) => playback.playbackId && playback.tokens ? { playbackId: playback.playbackId, tokens: playback.tokens } : null;
 
-// The token lasts long enough for one sitting; the player asks for another only if playback fails.
+// One token lasts a sitting; the player asks for another only if playback fails.
 function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { duration: number; peaks: number[] | null }) {
   const [playback, setPlayback] = useState<Playback | null>(null);
   const { savePosition, progressError } = useSavedPosition(lessonId, startTime, onTime);
@@ -128,10 +127,10 @@ function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEn
     getPlayback(lessonId).then(result => { if (active) setPlayback(result); }, () => { if (active) setPlayback({ error: "Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın." }); });
     return () => { active = false; };
   }, [lessonId]);
-  const source = playback && audioSource(playback);
+  const source = playback && playable(playback);
   if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><LoaderCircle className="animate-spin motion-reduce:animate-none" aria-label="Ses kaydı yükleniyor" /></div>;
   if (!source) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
-  return <div><LessonAudio source={source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => audioSource(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
+  return <div><LessonAudio {...source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => playable(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }
 
 type Document = Lesson["documents"][number];

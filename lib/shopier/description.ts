@@ -24,9 +24,8 @@ export function descriptionHtml(html: string): string {
   }).join("");
 }
 
-// The owner edits descriptions as plain text with a few marks: one paragraph per line, "### " heading,
-// "- " or "1. " list item, **bold**, *italic*. Shopier's API drops <br> from what it is sent (checked against the
-// live API), so a line break inside a paragraph cannot be saved; every line becomes its own paragraph instead.
+// The owner's plain-text form of a description: "### " heading, "- " or "1. " item, **bold**, *italic*.
+// Shopier's API drops <br> (checked against the live API), so every line becomes its own paragraph.
 
 export function descriptionMarkup(html: string): string {
   let out = "";

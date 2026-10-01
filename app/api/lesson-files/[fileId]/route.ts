@@ -6,26 +6,18 @@ import { lessonFiles } from "@/lib/db/schema";
 import { accessibleFile } from "@/lib/akademi/learning";
 import { filesConfigured, signedFileUrl } from "@/lib/files/storage";
 
-const refuse = (status: number) => new Response(null, { status, headers: privateNoStore });
+const empty = (status: number) => new Response(null, { status, headers: privateNoStore });
 
-// Homework PDFs: checks the student's access on every request, then redirects to a link signed for
-// ten minutes. The owner may open any file to preview it.
+// Access is rechecked on every request; the owner may open any file.
 export async function GET(_: Request, { params }: RouteContext<"/api/lesson-files/[fileId]">) {
   const viewer = await getViewer();
-  if (!viewer) return refuse(401);
+  if (!viewer) return empty(401);
   const id = z.uuid().safeParse((await params).fileId);
-  if (!id.success || !filesConfigured()) return refuse(404);
-  const db = getDatabase(), now = Date.now();
-  let file: typeof lessonFiles.$inferSelect | undefined, accessUntil = Infinity;
-  if (viewer.owner) [file] = await db.select().from(lessonFiles).where(eq(lessonFiles.id, id.data));
-  else {
-    const access = await accessibleFile(db, viewer.user.id, id.data);
-    file = access?.file;
-    if (access) accessUntil = access.grant.expiresAt.getTime();
-  }
-  if (!file) return refuse(404);
-  const validUntil = Math.min(now + 600_000, accessUntil);
+  if (!id.success || !filesConfigured()) return empty(404);
+  const db = getDatabase();
+  const file = viewer.owner ? (await db.select().from(lessonFiles).where(eq(lessonFiles.id, id.data)))[0] : await accessibleFile(db, viewer.user.id, id.data);
+  if (!file) return empty(404);
   try {
-    return new Response(null, { status: 302, headers: { ...privateNoStore, Location: await signedFileUrl(file.pathname, validUntil) } });
-  } catch { return refuse(502); }
+    return new Response(null, { status: 302, headers: { ...privateNoStore, Location: await signedFileUrl(file.pathname, Date.now() + 600_000) } });
+  } catch { return empty(502); }
 }

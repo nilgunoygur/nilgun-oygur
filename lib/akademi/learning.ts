@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { courses, lessonFiles, lessons, modules, lessonProgress, liveSessions, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
+import { lessonDocuments } from "./lesson-files.ts";
 import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
 
 /** Private learning reads never depend on whether the product is still for sale. Homework PDFs are exposed by id only. */
@@ -22,9 +23,8 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
     .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(asc(modules.position), asc(lessons.position), asc(lessons.createdAt));
-  const documents = rows.length ? await db.select({ id: lessonFiles.id, lessonId: lessonFiles.lessonId, name: lessonFiles.name, sizeBytes: lessonFiles.sizeBytes }).from(lessonFiles)
-    .where(inArray(lessonFiles.lessonId, rows.map(row => row.id))).orderBy(asc(lessonFiles.createdAt)) : [];
-  return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents.filter(file => file.lessonId === row.id).map(({ id, name, sizeBytes }) => ({ id, name, sizeBytes })) })) };
+  const documents = await lessonDocuments(db, rows.map(row => row.id));
+  return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents(row.id) })) };
 }
 
 /** Rechecked by every progress, playback, and live-join request. */
@@ -55,11 +55,9 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
     .onConflictDoUpdate({ target: [lessonProgress.userId, lessonProgress.lessonId], set: { completedAt, lastPositionSeconds: position, lastActivityAt: now } });
 }
 
-/** A homework PDF of a published lesson, for a student with active access to its course. */
 export async function accessibleFile(db: Database, userId: string, fileId: string, now = new Date()) {
   const [file] = await db.select().from(lessonFiles).where(eq(lessonFiles.id, fileId));
-  const lesson = file && await accessibleLesson(db, userId, file.lessonId, now);
-  return lesson ? { file, grant: lesson.grant } : null;
+  return file && await accessibleLesson(db, userId, file.lessonId, now) ? file : null;
 }
 
 export async function liveDestination(db: Database, userId: string, lessonId: string, now = new Date()) {

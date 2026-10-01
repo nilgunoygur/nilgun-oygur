@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { adminAuditLog, courses, lessonFiles, lessonProgress, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { ownerLessonFiles } from "./lesson-files.ts";
+import { lessonDocuments } from "./lesson-files.ts";
 import { lessonInput } from "./owner-forms.ts";
 
 // The boundary authorizes an owner before calling these audited commands.
@@ -12,8 +12,8 @@ export async function ownerLessons(db: Database, courseId: string) {
   const rows = await db.select({ lesson: lessons, live: liveSessions, asset: videoAssets }).from(lessons)
     .leftJoin(liveSessions, eq(liveSessions.lessonId, lessons.id)).leftJoin(videoAssets, eq(videoAssets.id, lessons.videoAssetId))
     .where(eq(lessons.courseId, courseId)).orderBy(asc(lessons.position), asc(lessons.createdAt));
-  const files = await ownerLessonFiles(db, rows.map(row => row.lesson.id));
-  return rows.map(row => ({ ...row, documents: files.filter(file => file.lessonId === row.lesson.id) }));
+  const documents = await lessonDocuments(db, rows.map(row => row.lesson.id));
+  return rows.map(row => ({ ...row, documents: documents(row.lesson.id) }));
 }
 
 export async function createLessons(db: Database, actorId: string, courseId: string, kind: "video" | "live" | "audio" | "template") {
@@ -62,8 +62,7 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   return input;
 }
 
-// Also removes the lesson's live session, homework PDFs and student progress; the Mux video or recording is kept.
-// Returns the pathnames of the removed PDFs, for the caller to delete from storage.
+// The Mux asset is kept; returns the removed PDFs' pathnames for the caller to delete from storage.
 export async function deleteLesson(db: Database, actorId: string, courseId: string, lessonId: string) {
   return db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId))).for("update");
@@ -77,14 +76,13 @@ export async function deleteLesson(db: Database, actorId: string, courseId: stri
   });
 }
 
-/** Attaches a ready Mux asset (a video or a recording) to a lesson; `peaks` is kept when none is given. */
-export async function attachVideo(db: Database, actorId: string, lessonId: string, video: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string; peaks?: number[] }, reason = "Mux kütüphanesinden video bağlandı") {
-  const { muxAssetId, ...values } = video;
+/** Attaches a ready Mux asset to a video or audio lesson; stored `peaks` are kept when none are given. */
+export async function attachAsset(db: Database, actorId: string, lesson: { id: string; kind: string }, { muxAssetId, ...values }: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string; peaks?: number[] }, reason: string) {
   await db.transaction(async tx => {
     const [asset] = await tx.insert(videoAssets).values({ muxAssetId, ...values, status: "ready" })
       .onConflictDoUpdate({ target: videoAssets.muxAssetId, set: { ...values, status: "ready" } }).returning();
-    await tx.update(lessons).set({ videoAssetId: asset.id }).where(eq(lessons.id, lessonId));
-    await tx.insert(adminAuditLog).values({ actorId, action: "video.attach", resourceType: "lesson", resourceId: lessonId, reason });
+    await tx.update(lessons).set({ videoAssetId: asset.id }).where(eq(lessons.id, lesson.id));
+    await tx.insert(adminAuditLog).values({ actorId, action: `${lesson.kind}.attach`, resourceType: "lesson", resourceId: lesson.id, reason });
   });
 }
 

@@ -98,7 +98,7 @@ function DropdownMenuItem({
   )
 }
 
-// An item that is a real link. The menu stays mounted while the browser follows it.
+// The menu stays mounted while the browser follows the link.
 function DropdownMenuLinkItem({
   className,
   ...props

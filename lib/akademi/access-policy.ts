@@ -19,7 +19,7 @@ export function hasActiveAccess(
     && now.getTime() < grant.expiresAt.getTime();
 }
 
-/** A video's token is renewed while it plays; a recording gets one long enough to be heard in a single sitting. */
+/** A video's token is renewed while it plays; a recording gets one that lasts a sitting. */
 export const playbackLifetimeMs = { video: 600_000, audio: 6 * 3_600_000 };
 
 /** Whole-second JWT expiry, rounded down so it never extends past the grant. */
@@ -28,7 +28,7 @@ export function playbackExpiresAt(
   userId: string | null,
   courseId: string,
   now: Date,
-  lifetimeMs = playbackLifetimeMs.video,
+  lifetimeMs: number,
 ): number | null {
   if (!grant || !hasActiveAccess(grant, userId, courseId, now)) return null;
   const expiresAt = Math.floor(Math.min(now.getTime() + lifetimeMs, grant.expiresAt.getTime()) / 1000);
