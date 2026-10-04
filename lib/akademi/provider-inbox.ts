@@ -7,7 +7,7 @@ import type { Database } from "../db/types.ts";
 // A short lease prevents concurrent deliveries from applying the same event twice,
 // while allowing a later delivery to reclaim work after a crashed handler.
 
-export type VerifiedEvent = { provider: string; name: string; deliveryId: string | null; rawBody: string };
+export type VerifiedEvent = { provider: string; name: string; deliveryId: string | null; rawBody: string; resourceId?: string };
 export type InboxResult<T> =
   | { status: "processed"; result: T }
   | { status: "duplicate" | "conflicting_duplicate" | "in_progress" }
@@ -23,7 +23,7 @@ export async function receive<T>(db: Database, event: VerifiedEvent, handle: () 
   const leaseExpiresAt = new Date(now.getTime() + LEASE_MS);
 
   const claim = await db.transaction(async (tx) => {
-    await tx.insert(providerEvents).values({ provider: event.provider, eventIdentity, verifiedPayloadHash: payloadHash }).onConflictDoNothing();
+    await tx.insert(providerEvents).values({ provider: event.provider, eventIdentity, resourceId: event.resourceId, verifiedPayloadHash: payloadHash }).onConflictDoNothing();
     const [stored] = await tx.select().from(providerEvents)
       .where(and(eq(providerEvents.provider, event.provider), eq(providerEvents.eventIdentity, eventIdentity)))
       .for("update");

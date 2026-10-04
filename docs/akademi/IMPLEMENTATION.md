@@ -49,6 +49,8 @@ Email verification replay is an idempotent success in Better Auth once the addre
 
 ## Shopier purchases — 21 September 2026
 
+For the current buyer return flow, completed refund handling, subscription upgrade and real-payment sign-off, see [SHOPIER_DELIVERY.md](SHOPIER_DELIVERY.md).
+
 Payment happens on Shopier product pages. The site records purchases from Shopier and grants course access; it has no checkout or payment form of its own.
 
 - **Account capabilities** (personal access token with every scope): products, orders and webhooks all work. Until 22 September 2026, `GET /products` returned 403. Shopier enabled product reads for this account on request (their docs define 403 as a permission they grant).

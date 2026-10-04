@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
-import { dateTimeLabel, formatPrice } from "@/lib/akademi/format";
+import { dateTimeLabel, formatPrice, formatMoney } from "@/lib/akademi/format";
 import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type ProductValues } from "@/lib/akademi/owner-queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
   return <>
     <Tabs defaultValue="courses" className="gap-5">
+      {data.refundReviews.length > 0 && <Card className="mb-6 border-amber-300"><CardHeader><CardTitle>Kısmi iadeleri inceleyin</CardTitle><CardDescription>Shopier kısmi iadelerde eğitim bilgisi göndermez. Öğrencinin hangi eğitime erişeceğini sipariş detaylarıyla kontrol edin; erişim otomatik kapatılmaz.</CardDescription></CardHeader><CardContent><ul className="grid gap-3">{data.refundReviews.map(refund => <li key={refund.id} className="text-sm">Sipariş {refund.orderId} · {formatMoney(refund.amountKurus, refund.currency)} · {dateTimeLabel.format(new Date(refund.at))}</li>)}</ul></CardContent></Card>}
       <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl border border-forest/10 bg-white p-1 sm:w-fit">
         <TabsTrigger value="courses" className="px-4 py-2.5">Eğitimler <span className="ml-1 text-xs text-muted-foreground">{courses.length}</span></TabsTrigger>
         <TabsTrigger value="sales" className="px-4 py-2.5">Satışlar <span className="ml-1 text-xs text-muted-foreground">{data.recentSales.length}</span></TabsTrigger>

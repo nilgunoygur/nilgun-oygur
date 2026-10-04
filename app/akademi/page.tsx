@@ -38,6 +38,7 @@ export default async function Academy() {
           <figcaption className="absolute inset-x-5 bottom-5 rounded-[14px] bg-accent px-[25px] py-5 leading-[1.6]">Nilgün Oygur ile<br /><strong>öğrenmeye alan açın.</strong></figcaption>
         </figure>
       </section>
+      <div className={cn(pageWidth, "flex flex-wrap items-center gap-4 py-6")}><p className="mr-auto text-stone">Shopier’den bir eğitim satın aldınız mı?</p><Link href="/akademi/satin-alim-sonrasi" className={buttonVariants({ variant: "outline" })}>Eğitimime ulaş</Link><Link href="/akademi/egitim-ekleme" className="text-sm text-forest underline underline-offset-4">Nasıl eklenir?</Link></div>
 
       <section className={cn(pageWidth, "grid grid-cols-[.75fr_1.25fr] items-center gap-[60px] pt-[30px] pb-[100px] max-tablet:grid-cols-1 max-tablet:gap-[30px] max-tablet:pt-5 max-tablet:pb-[55px]")}><div><p className={kicker}>BİRKAÇ DAKİKALIĞINA KENDİNİZE DÖNÜN</p><h2 className={landingTitle}>Bir eğitimden<br />daha fazlası.</h2><p className="mt-5 leading-[1.8]">Yeni bir bakış açısı. Küçük bir günlük pratik. Kendiniz için ayırdığınız bir an. Akademi’nin dünyasına kısa bir bakış.</p><p className="mt-5 text-[12px] leading-[1.8] text-stone">Örnek tanıtım videosu — final anlatım hazırlanıyor.</p></div><PromoVideo /></section>
 

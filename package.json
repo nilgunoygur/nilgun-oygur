@@ -14,7 +14,8 @@
     "test:routes": "node tests/check-routes.mjs",
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
-    "email:dev": "email dev --dir emails --port 3001"
+    "email:dev": "email dev --dir emails --port 3001",
+    "shopier:verify": "node --import tsx scripts/shopier-verify-delivery.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

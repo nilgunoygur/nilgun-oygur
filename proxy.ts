@@ -11,4 +11,4 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(new URL(`/akademi/giris?next=${encodeURIComponent(next)}`, request.url));
 }
 
-export const config = { matcher: ["/akademi/hesabim/:path*", "/yonetim/:path*"] };
+export const config = { matcher: ["/akademi/hesabim/:path*", "/akademi/siparis-ekle", "/yonetim/:path*"] };

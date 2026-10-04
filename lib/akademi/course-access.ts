@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { courseAccess, courses, shopierPurchases, user } from "../db/schema.ts";
+import { courseAccess, courses, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
 import { accessExpiryFromPayment, hasActiveAccess, type AccessGrant } from "./access-policy.ts";
 import { adoptShopierContact } from "./student-contact.ts";
@@ -47,10 +47,18 @@ async function adoptContactSafely(db: Database, userId: string, order: ShopierOr
 // Claims an unclaimed purchase and grants access in one transaction; active access is extended.
 export async function claimPurchase(db: Database, purchaseId: string, userId: string, now = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {
+    const [candidate] = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.id, purchaseId));
+    if (!candidate) return false;
+    // Refunds take the same order lock before the student lock. This also protects
+    // a purchase claimed concurrently with a refund notification.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${candidate.shopierOrderId}))`);
     // Lock the student, then re-read the purchase under lock.
     await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("update");
     const [purchase] = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.id, purchaseId)).for("update");
     if (!purchase || purchase.userId !== null) return false;
+    const [refund] = await tx.select({ id: shopierRefunds.id }).from(shopierRefunds)
+      .where(and(eq(shopierRefunds.shopierOrderId, purchase.shopierOrderId), eq(shopierRefunds.type, "full"))).limit(1);
+    if (refund) return false;
     await tx.update(shopierPurchases).set({ userId, claimedAt: now }).where(eq(shopierPurchases.id, purchase.id));
     const [current] = await tx.select().from(courseAccess)
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
@@ -65,7 +73,8 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
       await tx.update(courseAccess).set({ revokedAt: now, revocationReason: stillActive ? "extended_by_purchase" : "expired_replaced" })
         .where(eq(courseAccess.id, current.id));
     }
-    await tx.insert(courseAccess).values({ userId, courseId: purchase.courseId, sourcePurchaseId: purchase.id, startsAt, expiresAt });
+    await tx.insert(courseAccess).values({ userId, courseId: purchase.courseId, sourcePurchaseId: purchase.id, startsAt, expiresAt,
+      extendedFromId: current && current.expiresAt > purchase.purchasedAt ? current.id : null });
     return true;
   });
 }
@@ -79,7 +88,7 @@ export async function claimPurchasesByEmail(db: Database, userId: string, email:
   return granted;
 }
 
-export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "unpaid" | "not_academy";
+export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "unpaid" | "not_academy" | "refunded";
 
 // Claims a Shopier-fetched order (never browser data) whose buyer email matches the typed one.
 export async function claimShopierOrder(db: Database, order: ShopierOrder | null, typedEmail: string, userId: string): Promise<ClaimOutcome> {
@@ -87,6 +96,9 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   if (order.paymentStatus !== "paid") return "unpaid";
   const { purchaseIds } = await recordShopierOrder(db, order);
   if (purchaseIds.length === 0) return "not_academy";
+  const [refund] = await db.select({ id: shopierRefunds.id }).from(shopierRefunds)
+    .where(and(eq(shopierRefunds.shopierOrderId, order.id), eq(shopierRefunds.type, "full"))).limit(1);
+  if (refund) return "refunded";
   let granted = 0;
   for (const id of purchaseIds) if (await claimPurchase(db, id, userId)) granted++;
   let outcome: ClaimOutcome = "granted";

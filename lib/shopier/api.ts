@@ -31,7 +31,7 @@ export const shopierOrderSchema = z.object({
   })).min(1),
 });
 export type ShopierOrder = z.output<typeof shopierOrderSchema>;
-const shopierRefundSchema = z.object({
+export const shopierRefundSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
   orderId: z.union([z.string(), z.number()]).transform(String),
   status: z.enum(["pending", "failed", "succeeded"]),
@@ -41,7 +41,7 @@ const shopierRefundSchema = z.object({
   currency: z.string(),
   total: z.string(),
 });
-type ShopierRefund = z.output<typeof shopierRefundSchema>;
+export type ShopierRefund = z.output<typeof shopierRefundSchema>;
 
 const id = z.union([z.string(), z.number()]).transform(String);
 export const shopierProductSchema = z.object({
@@ -194,6 +194,17 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
     }
   }
   return {
+    async listSucceededRefunds(maxPages = 20) {
+      const refunds: ShopierRefund[] = [];
+      // Date filters currently fail on this account. Read all pages so an old order's
+      // recent refund is also reconciled; never silently return a truncated list.
+      for (let page = 1; page <= maxPages; page++) {
+        const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
+        refunds.push(...batch.filter(refund => refund.status === "succeeded"));
+        if (batch.length < 50) return refunds;
+      }
+      throw new Error("Shopier refund list exceeded the page limit.");
+    },
     async getOrder(id: string) {
       if (!/^\d{1,20}$/.test(id)) return null;
       try {

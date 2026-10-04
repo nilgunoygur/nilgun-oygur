@@ -9,10 +9,11 @@ import { ownerUsers, type UserListParams } from "./owner-users.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
+import { partialRefundReviews, recordShopierRefund } from "./refunds.ts";
 
 type Dependencies = {
   db: Database;
-  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "createProduct" | "updateProduct">;
+  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "listSucceededRefunds" | "createProduct" | "updateProduct">;
   now?: () => Date;
 };
 
@@ -36,10 +37,13 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       /** "Siparişimi ekle": five attempts per student per hour, order verified against the Shopier API. */
       async claimOrder(userId: string, orderNumber: string, shopierEmail: string) {
         if (!await consumeAttempt(db, `shopier-claim:${userId}`, { max: 5, windowMs: 3_600_000, now: now().getTime() })) return "rate_limited" as const;
+        for (const refund of await shopier.listSucceededRefunds()) if (refund.orderId === orderNumber.trim()) await recordShopierRefund(db, refund);
         return claimShopierOrder(db, await shopier.getOrder(orderNumber.trim()), shopierEmail, userId);
       },
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
+        const refunds = await shopier.listSucceededRefunds();
+        for (const refund of refunds) await recordShopierRefund(db, refund);
         const orders = await shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000));
         let purchases = 0, granted = 0;
         for (const order of orders) {
@@ -47,7 +51,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
           purchases += result.purchaseIds.length;
           granted += result.granted;
         }
-        return { orders: orders.length, purchases, granted, courses: await syncCatalog() };
+        return { orders: orders.length, purchases, granted, refunds: refunds.length, courses: await syncCatalog() };
       },
     },
     students: {
@@ -57,11 +61,12 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       overview: ownerOverview,
       /** JSON-safe; shared by the page and GET /api/yonetim/courses. */
       async catalogSnapshot() {
-        const [{ courses, recentSales }, attention] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db)]);
+        const [{ courses, recentSales }, attention, refundReviews] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db), partialRefundReviews(db)]);
         return {
           courses,
           recentSales: recentSales.map(sale => ({ ...sale, claimed: Boolean(sale.claimed), at: sale.at.toISOString() })),
           attention: attention.map(item => ({ ...item, at: item.at.toISOString() })),
+          refundReviews: refundReviews.map(item => ({ ...item, at: item.at.toISOString() })),
         };
       },
       users: (params: UserListParams) => ownerUsers(db, params, now()),

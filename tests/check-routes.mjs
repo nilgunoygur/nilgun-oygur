@@ -18,7 +18,7 @@ console.log(
   `All ${Object.keys(pages).length} content routes return 200 and include a heading. Unknown route returns 404.`,
 );
 
-const authRoutes = ["giris", "kayit", "sifremi-unuttum", "sifre-yenile", "dogrulama"];
+const authRoutes = ["giris", "kayit", "sifremi-unuttum", "sifre-yenile", "dogrulama", "satin-alim-sonrasi", "egitim-ekleme"];
 for (const route of authRoutes) {
   const response = await fetch(new URL(`/akademi/${route}`, origin));
   assert.equal(response.status, 200, route);
@@ -26,12 +26,13 @@ for (const route of authRoutes) {
   assert.match(html, /<h1[ >]/, `${route} should have a heading`);
   assert.match(html, /name="robots" content="noindex, nofollow"/, `${route} must not be indexed`);
 }
-for (const route of ["/akademi/hesabim", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar"]) {
+for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
   const location = new URL(response.headers.get("location"), origin);
   assert.equal(location.origin + location.pathname, new URL("/akademi/giris", origin).href, `${route} redirects to login`);
   assert.ok(location.searchParams.get("next"), `${route} returns after login`);
+  if (route === "/akademi/siparis-ekle") assert.equal(location.searchParams.get("next"), route, "claim form destination survives anonymous redirect");
 }
 for (const method of ["GET", "POST"]) {
   const response = await fetch(new URL("/api/internal/email-delivery", origin), { method });

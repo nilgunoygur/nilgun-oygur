@@ -21,6 +21,7 @@ async function ClaimContent() {
       <p className={kicker}>AKADEMİ · SİPARİŞ</p>
       <h1 className="mt-3 text-[clamp(36px,5vw,52px)]">Shopier siparişinizi ekleyin</h1>
       <p className="mt-3 mb-10 text-stone">Satın aldığınız eğitimi hesabınıza bağlamak için sipariş bilgilerinizi doğrulayın.</p>
+      <p className="mb-6 text-sm text-stone">Shopier sipariş onay e-postanızdaki sipariş numarasını ve satın alırken kullandığınız e-posta adresini girin. Akademi hesabınızın e-postası farklı olabilir. <Link href="/akademi/egitim-ekleme" className="text-forest underline underline-offset-4">Adım adım yardım</Link></p>
       <div className={accountCard}>
         <ClaimOrderForm />
       </div>

@@ -21,6 +21,7 @@ export const ownerCatalogSnapshotSchema = z.object({
   courses: z.array(courseSchema),
   recentSales: z.array(saleSchema),
   attention: z.array(attentionSchema),
+  refundReviews: z.array(z.object({ id: z.string(), orderId: z.string(), amountKurus: z.number(), currency: z.string(), at: z.string().datetime() })),
 });
 export type OwnerCatalogSnapshot = z.infer<typeof ownerCatalogSnapshotSchema>;
 export type OwnerCourse = OwnerCatalogSnapshot["courses"][number];

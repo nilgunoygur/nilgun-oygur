@@ -1,7 +1,12 @@
 export const callbackURL = "/akademi/giris?verified=1";
 
+export function verificationCallback(destination?: string): string {
+  return `${callbackURL}&next=${encodeURIComponent(authDestination(destination))}`;
+}
+
 // Only known post-login destinations are accepted; never redirect to user-supplied URLs.
 export function authDestination(value: unknown): string {
+  if (value === "/akademi/siparis-ekle" || value === "/akademi/satin-alim-sonrasi") return value;
   if (value === "/yonetim" || value === "/yonetim/guvenlik") return value;
   if (typeof value === "string" && /^\/akademi\/[a-z0-9-]{1,80}\/satin-al$/.test(value)) return value;
   if (typeof value === "string" && /^\/akademi\/hesabim\/[a-f0-9-]{36}$/.test(value)) return value;

@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { claimOrder } from "@/app/akademi/hesabim/actions";
 import { claimSchema } from "@/lib/akademi/claim-schema";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmailField, FormMessage, FormShell, SubmitButton, submitAction, TextField } from "./form-fields";
 
@@ -16,7 +17,7 @@ export function ClaimOrderForm() {
     if (result) setGranted(result.message);
   });
   const again = () => { form.reset(); setGranted(null); };
-  if (granted) return <div className="grid gap-5"><Alert><AlertDescription>{granted}</AlertDescription></Alert><Button type="button" variant="outline" onClick={again}>Başka sipariş ekle</Button></div>;
+  if (granted) return <div className="grid gap-5"><div role="status"><Alert><AlertDescription>{granted}</AlertDescription></Alert></div><Link href="/akademi/hesabim" className={buttonVariants()}>Eğitimlerime git</Link><Button type="button" variant="outline" onClick={again}>Başka sipariş ekle</Button></div>;
 
   return <FormShell form={form} onSubmit={submit} size="lg" fieldsClassName="gap-6">
     <TextField control={form.control} name="orderNumber" label="Shopier sipariş numarası" inputMode="numeric" autoComplete="off" placeholder="Sipariş numaranızı yazın" maxLength={20}
