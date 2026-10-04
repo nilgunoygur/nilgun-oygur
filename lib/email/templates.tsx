@@ -3,8 +3,8 @@ import type { z } from "zod";
 import { AuthEmail, authEmailText } from "../../emails/_components/auth-email.tsx";
 import { verifyCopy } from "../../emails/verify-email.tsx";
 import { resetCopy } from "../../emails/reset-password.tsx";
-import ContactMessage, { contactSubject, contactText } from "../../emails/contact-message.tsx";
-import type { contactSchema } from "../contact-schema.ts";
+import ContactMessage, { contactSubject, contactText, supportSubject } from "../../emails/contact-message.tsx";
+import type { contactSchema, supportSchema } from "../contact-schema.ts";
 import type { EmailMessage } from "./outbox.ts";
 
 const authCopy = { verification: verifyCopy, reset: resetCopy };
@@ -14,7 +14,7 @@ export async function authenticationEmail(kind: keyof typeof authCopy, to: strin
   return { to, subject: copy.subject, text: authEmailText(copy, url), html: await render(<AuthEmail copy={copy} url={url} />) };
 }
 
-export async function contactEmail(input: z.infer<typeof contactSchema>, recipient: string, siteUrl: string): Promise<EmailMessage> {
+export async function contactEmail(input: z.infer<typeof contactSchema> | z.infer<typeof supportSchema>, recipient: string, siteUrl: string): Promise<EmailMessage> {
   const props = { ...input, siteUrl };
-  return { to: recipient, replyTo: input.email, subject: contactSubject, text: contactText(props), html: await render(<ContactMessage {...props} />) };
+  return { to: recipient, replyTo: input.email, subject: "orderNumber" in input ? supportSubject : contactSubject, text: contactText(props), html: await render(<ContactMessage {...props} />) };
 }

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { CourseAddExample } from "@/components/akademi/course-add-examples";
+import { ContactForm } from "@/components/contact-form";
+import { config } from "@/lib/config";
 import { accountCard, accountPage, kicker, pageWidth, textLink } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +30,6 @@ export default function AddCourseGuide() {
       <details className={accountCard}><summary className="cursor-pointer font-medium text-forest">Shopier’de başka bir e-posta kullandım.</summary><p className="mt-4 leading-relaxed text-stone">Mevcut Akademi hesabınızla giriş yapın. Sipariş ekleme formundaki e-posta alanını Shopier’de kullandığınız adresle değiştirin. Sipariş başka bir Akademi hesabına eklenmemişse bu hesabınıza bağlanabilir.</p></details>
       <details className={accountCard}><summary className="cursor-pointer font-medium text-forest">Doğrulama e-postasını bulamıyorum.</summary><p className="mt-4 leading-relaxed text-stone">Spam ve gereksiz e-posta klasörlerini kontrol edin. Adresiniz doğruysa yeni bir doğrulama e-postası isteyin ve en son gelen bağlantıyı kullanın.</p><Link href="/akademi/dogrulama" className={cn(textLink, "mt-4")}>Doğrulama e-postasını yeniden gönder</Link></details>
     </div>
-    <div className="mt-12 border-t border-border pt-8"><h2 className="text-2xl">Hâlâ ekleyemiyor musunuz?</h2><div className="mt-4 grid gap-4 leading-relaxed text-stone"><p>Sipariş numarasını ve satın alma e-postasını tam olarak kontrol edin. Ödeme henüz onaylanmadıysa onaylandıktan sonra yeniden deneyin. Tamamen iade edilmiş siparişler eğitim erişimi sağlamaz.</p><p>Sipariş başka bir hesaba eklenmişse veya bilgileriniz doğru olduğu halde bulunamıyorsa sipariş numaranızla bize ulaşın. Şifrenizi ya da kart bilgilerinizi paylaşmayın.</p></div><Link href="/iletisim" className={cn(textLink, "mt-5 inline-flex")}>Yardım için iletişime geçin <ArrowUpRight className="size-4" aria-hidden="true" /></Link></div>
+    <div className="mt-12 border-t border-border pt-8"><h2 className="text-2xl">Hâlâ ekleyemiyor musunuz?</h2><div className="mt-4 grid gap-4 leading-relaxed text-stone"><p>Sipariş numarasını ve satın alma e-postasını tam olarak kontrol edin. Ödeme henüz onaylanmadıysa onaylandıktan sonra yeniden deneyin. Tamamen iade edilmiş siparişler eğitim erişimi sağlamaz.</p><p>Sipariş başka bir hesaba eklenmişse veya bilgileriniz doğru olduğu halde bulunamıyorsa sipariş numaranızla bize ulaşın. Şifrenizi ya da kart bilgilerinizi paylaşmayın.</p></div><div id="destek" className={cn(accountCard, "mt-8 scroll-mt-36")}><h3 className="mb-6 text-xl">Bize yazın</h3><ContactForm enabled={config().enabled.contact} support /></div></div>
   </div></section>;
 }
