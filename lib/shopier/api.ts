@@ -217,6 +217,11 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
+    /** Sends money back to the buyer. Shopier answers with the refund and later fires refund.updated. */
+    async createRefund(orderId: string, amountKurus: number, note?: string) {
+      if (!/^\d{1,20}$/.test(orderId) || !Number.isInteger(amountKurus) || amountKurus <= 0) throw new Error("Invalid Shopier refund.");
+      return shopierRefundSchema.parse(await call("/refunds", { method: "POST", body: JSON.stringify({ orderId, amount: amount(amountKurus), ...(note && { note }) }) }));
+    },
     async listOrdersSince(since: Date, maxPages = 10) {
       const orders: ShopierOrder[] = [];
       const dateStart = encodeURIComponent(since.toISOString().replace(/\.\d{3}Z$/, "+0000"));

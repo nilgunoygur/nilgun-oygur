@@ -40,6 +40,17 @@ After deploying and installing the new subscription:
 
 A real payment/refund was not executed during PR development. Record its order number and the verifier's redacted boolean output in the PR when this sign-off is performed.
 
+## Refund requests from the site
+
+Apply migration `0017_refund_requests` before deploying.
+
+- **Student:** "İade talep et" at the bottom of a course page (`/akademi/hesabim/{courseId}`) asks for a reason. One request can be open per purchase, three attempts per day. The page then shows whether the request is being reviewed, was approved, or was declined with the owner's note.
+- **Owner:** open requests appear above the course list in `/yonetim/egitimler`. "İade et" sends `POST /refunds` to Shopier with the order, an amount (prefilled with what was paid for the course) and an optional note to the buyer. "Reddet" stores a note the student sees. Both are written to the audit log.
+- **Amount:** it cannot exceed what the order's course purchases cost minus refunds already recorded. An amount below the order total is a partial refund in Shopier and does not close the course.
+- **Access:** approval alone changes nothing. Access is removed by the refund rules below once Shopier reports the refund as succeeded and full, at once if Shopier answers so, otherwise through `refund.updated` or the daily sync.
+- **Sent once:** the request is marked approved before Shopier is called. If Shopier refuses (4xx) the request reopens. If the call times out or fails unclearly, the request stays approved without a refund ID and the owner is told to check the Shopier panel, because the money may have been sent.
+- **Not built:** no email is sent to the owner or the student; and a real refund through the API has not been run against the live account.
+
 ## Refund rules
 
 - Only `status: succeeded`, `type: full` automatically removes the refunded order's contribution to course access.

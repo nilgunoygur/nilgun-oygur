@@ -237,6 +237,24 @@ export const shopierRefunds = pgTable("shopier_refunds", {
   check("shopier_refunds_type_valid", sql`${t.type} IN ('full', 'partial')`),
   check("shopier_refunds_amount_valid", sql`${t.amountKurus} >= 0`),
 ]);
+// A student's request to refund one purchase. The owner approves (the site asks Shopier to refund) or declines.
+export const refundRequests = pgTable("refund_requests", {
+  id: id(),
+  purchaseId: uuid("purchase_id").notNull().references(() => shopierPurchases.id),
+  userId: text("user_id").notNull().references(() => user.id),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("pending"),
+  amountKurus: integer("amount_kurus"),
+  shopierRefundId: text("shopier_refund_id"),
+  ownerNote: text("owner_note"),
+  decidedBy: text("decided_by").references(() => owners.userId),
+  decidedAt: time("decided_at"),
+  ...timestamps(),
+}, (t) => [
+  uniqueIndex("refund_requests_pending_unique").on(t.purchaseId).where(sql`${t.status} = 'pending'`),
+  check("refund_requests_status_valid", sql`${t.status} IN ('pending', 'approved', 'declined')`),
+  check("refund_requests_decision_consistent", sql`(${t.status} = 'pending') = (${t.decidedAt} IS NULL)`),
+]);
 export const courseAccess = pgTable("course_access", {
   id: id(),
   userId: text("user_id").notNull().references(() => user.id),

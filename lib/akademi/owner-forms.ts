@@ -31,6 +31,15 @@ export const productKeys = Object.keys(productFields) as (keyof typeof productFi
 /** One form for create and edit; an edit ignores the course fields. */
 export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean() }).refine(cheaper, cheaperIssue);
 export const productChangeSchema = z.object(productFields).partial().refine(cheaper, cheaperIssue);
+const refundNote = z.string().trim().max(500, "Not en fazla 500 karakter olabilir.");
+export const refundApprovalSchema = z.object({ amount: lira("İade tutarı"), note: refundNote });
+export const refundDeclineSchema = z.object({ note: refundNote });
+export const refundDecisionSchema = z.discriminatedUnion("decision", [
+  refundApprovalSchema.extend({ decision: z.literal("approve") }),
+  refundDeclineSchema.extend({ decision: z.literal("decline") }),
+]);
+export type RefundDecisionInput = z.input<typeof refundDecisionSchema>;
+
 export const coverRules = { types: ["image/jpeg", "image/png"], maxBytes: 4 * 1024 * 1024, hint: "JPG veya PNG; en fazla 4 MB." };
 
 export const linkSchema = z.object({ url: z.string().trim().min(1, "Bir bağlantı yazın.").max(2048) });

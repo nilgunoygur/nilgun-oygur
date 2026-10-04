@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import Image from "next/image";
 import { ArrowUpRight, BookOpen, Check, Clock3, Phone } from "lucide-react";
 import { studentPage } from "@/lib/auth/viewer";
 import { akademi, courseCards } from "@/lib/akademi/server";
 import { fallbackCover } from "@/lib/akademi/catalog";
 import { hasCompleteContact } from "@/lib/auth/contact";
+import { ClaimHint } from "@/components/akademi/claim-hint";
+import { claimHintCookie } from "@/lib/akademi/claim-schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { buttonVariants } from "@/components/ui/button";
@@ -26,10 +29,11 @@ export default function AccountPage() {
 
 async function Account() {
   const viewer = await studentPage();
+  const hintClosed = (await cookies()).has(claimHintCookie);
   const [access, cards, contact] = await Promise.all([akademi().access.active(viewer.user.id), courseCards(), akademi().students.contact(viewer.user.id)]);
   return <>
     <header className={accountHeader}><div><p className={kicker}>AKADEMİ · KİŞİSEL ALANINIZ</p><h1 className={accountTitle}>Merhaba, {viewer.user.name}.</h1><p>Eğitimleriniz ve hesabınız burada.</p></div></header>
-    <div className="mb-8 flex flex-wrap items-center gap-4 rounded-[20px] bg-mist p-6"><p className="mr-auto">Satın aldığınız eğitim görünmüyor mu?</p><Link href="/akademi/siparis-ekle" className={buttonVariants({ variant: "outline" })}>Shopier siparişimi ekle</Link><Link href="/akademi/egitim-ekleme" className="text-sm text-forest underline underline-offset-4">Nasıl eklenir?</Link></div>
+    {!hintClosed && <ClaimHint />}
     {!hasCompleteContact(contact) && <Alert className="mb-10"><Phone /><AlertTitle>İletişim bilgilerinizi tamamlayın</AlertTitle><AlertDescription>Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi ekleyin. <Link href="/akademi/profil#iletisim" className="font-medium text-forest underline underline-offset-4">Profil ayarlarına git</Link></AlertDescription></Alert>}
     {access.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Öğrenme yolculuğunuz burada başlıyor.</EmptyTitle><EmptyDescription>Henüz aktif bir eğitim erişiminiz bulunmuyor. Size uygun eğitimleri keşfedebilirsiniz.</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ size: "pill" })} href="/akademi">Eğitimleri keşfet</Link></EmptyContent></Empty> : <div className="grid grid-cols-2 gap-8 max-tablet:grid-cols-1">{access.map(item => {
       const course = cards[item.shopierProductId];

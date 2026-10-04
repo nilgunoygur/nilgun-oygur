@@ -6,6 +6,8 @@
 
 **Purchase**: one paid Shopier order line for a course, keyed by order and course, matched to a student by the buyer email.
 
+**Refund request**: a student's request to refund the purchase behind their current access to a course. The owner approves it (the site asks Shopier to refund an amount) or declines it with a note. The request never changes access itself; a completed full refund from Shopier does.
+
 **Grant** (course access): a student's right to one course from `startsAt` until `expiresAt`, from a purchase or an audited owner grant. At most one unrevoked grant per student and course; a repeat purchase extends it.
 
 **Active access**: an unrevoked grant with `startsAt <= now < expiresAt`. Decided only by the Course Access module.

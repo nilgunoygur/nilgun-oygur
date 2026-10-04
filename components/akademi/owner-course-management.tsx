@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { dateTimeLabel, formatPrice, formatMoney } from "@/lib/akademi/format";
-import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type ProductValues } from "@/lib/akademi/owner-queries";
+import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, decideOwnerRefundRequest, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type OwnerRefundRequest, type ProductValues } from "@/lib/akademi/owner-queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,11 +20,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { courseAccessSchema, coverRules, productFormSchema, productKeys, type CourseChange } from "@/lib/akademi/owner-forms";
+import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundApprovalSchema, type CourseChange } from "@/lib/akademi/owner-forms";
 import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
-type Edit = { kind: "access" | "product"; course: OwnerCourse } | { kind: "create" } | null;
+type Edit = { kind: "access" | "product"; course: OwnerCourse } | { kind: "create" } | { kind: "refund"; request: OwnerRefundRequest; approve: boolean } | null;
 const perPage = 6;
 const statusLabel = { published: "Yayında", draft: "Taslak", archived: "Arşivde" } as const;
 const blockerLabel = { missing: "Shopier ürünü bulunamadı.", notDigital: "Shopier ürünü dijital değil.", outOfStock: "ürün satışa kapalı.", unpriced: "ürünün geçerli bir ₺ fiyatı yok." } as const;
@@ -65,6 +65,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
   return <>
     <Tabs defaultValue="courses" className="gap-5">
+      {data.refundRequests.length > 0 && <Card className="mb-6 border-amber-300"><CardHeader><CardTitle>İade talepleri</CardTitle><CardDescription>Onayladığınızda tutar Shopier üzerinden alıcıya iade edilir. Tam iadede eğitim erişimi kapanır.</CardDescription></CardHeader><CardContent><ul className="grid gap-5">{data.refundRequests.map(request => <li key={request.id} className="flex flex-wrap items-start justify-between gap-3 text-sm"><div className="min-w-0 flex-1"><p className="font-medium">{request.name} · {courses.find(course => course.id === request.courseId)?.title ?? "Eğitim"}</p><p className="text-xs text-muted-foreground">{request.email} · Sipariş {request.orderId} · {formatMoney(request.amountKurus, request.currency)} · {dateTimeLabel.format(new Date(request.at))}</p><p className="mt-2 whitespace-pre-wrap">{request.reason}</p></div><div className="flex gap-2"><Button type="button" size="sm" onClick={() => setEditing({ kind: "refund", request, approve: true })}>İade et</Button><Button type="button" size="sm" variant="outline" onClick={() => setEditing({ kind: "refund", request, approve: false })}>Reddet</Button></div></li>)}</ul></CardContent></Card>}
       {data.refundReviews.length > 0 && <Card className="mb-6 border-amber-300"><CardHeader><CardTitle>Kısmi iadeleri inceleyin</CardTitle><CardDescription>Shopier kısmi iadelerde eğitim bilgisi göndermez. Öğrencinin hangi eğitime erişeceğini sipariş detaylarıyla kontrol edin; erişim otomatik kapatılmaz.</CardDescription></CardHeader><CardContent><ul className="grid gap-3">{data.refundReviews.map(refund => <li key={refund.id} className="text-sm">Sipariş {refund.orderId} · {formatMoney(refund.amountKurus, refund.currency)} · {dateTimeLabel.format(new Date(refund.at))}</li>)}</ul></CardContent></Card>}
       <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl border border-forest/10 bg-white p-1 sm:w-fit">
         <TabsTrigger value="courses" className="px-4 py-2.5">Eğitimler <span className="ml-1 text-xs text-muted-foreground">{courses.length}</span></TabsTrigger>
@@ -93,6 +94,8 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
     <Dialog open={editing?.kind === "access"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent><DialogHeader><DialogTitle>Erişim süresini değiştir</DialogTitle><DialogDescription>{editing?.kind === "access" && editing.course.title}</DialogDescription></DialogHeader>{editing?.kind === "access" && <AccessForm key={editing.course.id} course={editing.course} onSave={value => update.mutateAsync({ course: editing.course, change: { kind: "access", value } }).catch(() => {})} />}</DialogContent></Dialog>
 
+    <Dialog open={editing?.kind === "refund"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent><DialogHeader><DialogTitle>{editing?.kind === "refund" && editing.approve ? "Ödemeyi iade et" : "İade talebini reddet"}</DialogTitle><DialogDescription>{editing?.kind === "refund" && `${editing.request.name} · Sipariş ${editing.request.orderId}`}</DialogDescription></DialogHeader>{editing?.kind === "refund" && <RefundDecisionForm key={`${editing.request.id}-${editing.approve}`} request={editing.request} approve={editing.approve} onDone={() => setEditing(null)} />}</DialogContent></Dialog>
+
     <Dialog open={editing?.kind === "product" || editing?.kind === "create"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>{editing?.kind === "create" ? "Yeni eğitim" : "Shopier ürününü düzenle"}</DialogTitle><DialogDescription>{editing?.kind === "create" ? "Shopier’de dijital bir ürün oluşturulur ve sitede eğitim olarak eklenir." : "Değişiklikler Shopier’deki ürüne kaydedilir; sitedeki eğitim sayfası buradan beslenir."}</DialogDescription></DialogHeader>
       {(editing?.kind === "product" || editing?.kind === "create") && <ProductForm key={editing.kind === "product" ? editing.course.id : "new"} course={editing.kind === "product" ? editing.course : null} filesConfigured={filesConfigured}
@@ -110,6 +113,25 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
 }
 
 const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
+
+/** One form for both decisions; a decline ignores the amount. */
+function RefundDecisionForm({ request, approve, onDone }: { request: OwnerRefundRequest; approve: boolean; onDone: () => void }) {
+  const client = useQueryClient();
+  const form = useForm({ resolver: zodResolver(refundApprovalSchema), mode: "onTouched", defaultValues: { amount: lira(request.amountKurus), note: "" } });
+  const decide = useMutation({
+    mutationFn: ({ amount, note }: { amount: number; note: string }) => decideOwnerRefundRequest(request.id, approve ? { decision: "approve", amount, note } : { decision: "decline", note }),
+    onSuccess: () => { toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone(); },
+    onError: error => form.setError("root", { message: error.message }),
+    onSettled: () => client.invalidateQueries({ queryKey: ownerQueryKeys.catalog() }),
+  });
+  return <FormShell form={form} onSubmit={form.handleSubmit(values => decide.mutateAsync(values).catch(() => undefined))}>
+    {approve && <TextField control={form.control} name="amount" label="İade tutarı (₺)" type="number" inputMode="decimal" step="0.01" min={1}
+      description={`Bu eğitim için ödenen: ${formatMoney(request.amountKurus, request.currency)}. Daha düşük bir tutar kısmi iade olur ve erişimi kapatmaz.`} />}
+    <TextareaField control={form.control} name="note" label={approve ? "Alıcıya not (isteğe bağlı)" : "Ret nedeni (öğrenci görür)"} rows={3} maxLength={500} />
+    <FormMessage />
+    <DialogFooter><SubmitButton variant={approve ? "destructive" : "default"} pendingLabel={approve ? "Shopier’e gönderiliyor…" : "Kaydediliyor…"}>{approve ? "Parayı iade et" : "Talebi reddet"}</SubmitButton></DialogFooter>
+  </FormShell>;
+}
 
 /** `course === null` creates a course; an edit sends only the fields that changed. */
 function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse | null; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
