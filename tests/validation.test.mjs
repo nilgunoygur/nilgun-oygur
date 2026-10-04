@@ -150,3 +150,13 @@ test("a recording's waveform is its loudness per bar, scaled so one loud moment 
   assert.ok(peaks[60] >= 95, `loud half ${peaks[60]}`);
   assert.deepEqual(peaksFromSamples(new Float32Array(100), 10), Array(10).fill(0), "silence");
 });
+
+test("a copied Shopier order number accepts its displayed hash prefix and rejects invalid identifiers", async () => {
+  const { claimSchema } = await import("../lib/akademi/claim-schema.ts");
+  const base = { email: "buyer@example.com" };
+  assert.equal(claimSchema.parse({ ...base, orderNumber: " #123456789 " }).orderNumber, "123456789");
+  assert.equal(claimSchema.parse({ ...base, orderNumber: "# 123456789" }).orderNumber, "123456789");
+  assert.equal(claimSchema.parse({ ...base, orderNumber: "123456789" }).orderNumber, "123456789");
+  assert.equal(claimSchema.parse({ ...base, orderNumber: "# 12345678901234567890" }).orderNumber, "12345678901234567890");
+  for (const value of ["##123456789", "12345abc", "#12", "../orders", "123 456"]) assert.equal(claimSchema.safeParse({ ...base, orderNumber: value }).success, false);
+});
