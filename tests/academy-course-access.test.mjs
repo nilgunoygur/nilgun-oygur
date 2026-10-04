@@ -141,7 +141,7 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
   const headers = (raw, extra = {}) => new Headers({ "shopier-event": "order.created", "shopier-webhook-id": "wh-1", "shopier-signature": sign(raw), ...extra });
   const hook = (raw, h) => handleShopierWebhook(db, raw, h, ["hook-token"]);
   assert.deepEqual(await hook(body, headers(body, { "shopier-signature": sign(body, "wrong") })), { status: 401, outcome: "invalid_signature", catalogChanged: false });
-  assert.equal((await hook(body, headers(body, { "shopier-event": "refund.updated" }))).outcome, "ignored_event");
+  assert.equal((await hook(body, headers(body, { "shopier-event": "unknown.event" }))).outcome, "ignored_event");
   assert.deepEqual(await hook(body, headers(body)), { status: 200, outcome: "recorded", catalogChanged: false });
   assert.deepEqual(await hook(body, headers(body)), { status: 200, outcome: "duplicate", catalogChanged: false });
   assert.equal((await activeGrants("student-c")).filter(g => g.courseId === other.id).length, 1);
@@ -269,6 +269,7 @@ test("the composed Akademi claims orders through Shopier, limits attempts and re
     getOrder: async (id) => id === paid.id ? paid : null,
     getProduct: async () => null,
     listProducts: async () => ({ products: [], ids: new Set(["51075042", "80000001", "80000002", "80000003", "80000004", "80000005", "60000001", "70000001", "70000005"]) }),
+    listSucceededRefunds: async () => [],
     listOrdersSince: async () => [order({ id: "990000002", shippingInfo: { email: "c@example.com" } })],
   };
   const akademi = createAkademi({ db, shopier });

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable,
+  bigint, boolean, check, foreignKey, index, integer, jsonb, pgEnum, pgTable, type AnyPgColumn,
   primaryKey, text, timestamp, unique, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { BannerConfig } from "@/lib/announcements";
@@ -224,11 +224,43 @@ export const shopierPurchases = pgTable("shopier_purchases", {
   check("shopier_purchases_duration_valid", sql`${t.accessDurationDays} > 0`),
   check("shopier_purchases_claim_consistent", sql`(${t.userId} IS NULL) = (${t.claimedAt} IS NULL)`),
 ]);
+// Successful refunds are retained even when they arrive before the order notification.
+export const shopierRefunds = pgTable("shopier_refunds", {
+  id: text("id").primaryKey(),
+  shopierOrderId: text("shopier_order_id").notNull(),
+  type: text("type").notNull(),
+  amountKurus: integer("amount_kurus").notNull(),
+  currency: text("currency").notNull(),
+  refundedAt: time("refunded_at").notNull(),
+}, (t) => [
+  index("shopier_refunds_order_idx").on(t.shopierOrderId),
+  check("shopier_refunds_type_valid", sql`${t.type} IN ('full', 'partial')`),
+  check("shopier_refunds_amount_valid", sql`${t.amountKurus} >= 0`),
+]);
+// A student's request to refund one purchase.
+export const refundRequests = pgTable("refund_requests", {
+  id: id(),
+  purchaseId: uuid("purchase_id").notNull().references(() => shopierPurchases.id),
+  userId: text("user_id").notNull().references(() => user.id),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["pending", "approved", "declined"] }).notNull().default("pending"),
+  amountKurus: integer("amount_kurus"),
+  shopierRefundId: text("shopier_refund_id"),
+  ownerNote: text("owner_note"),
+  decidedBy: text("decided_by").references(() => owners.userId),
+  decidedAt: time("decided_at"),
+  ...timestamps(),
+}, (t) => [
+  uniqueIndex("refund_requests_pending_unique").on(t.purchaseId).where(sql`${t.status} = 'pending'`),
+  check("refund_requests_status_valid", sql`${t.status} IN ('pending', 'approved', 'declined')`),
+  check("refund_requests_decision_consistent", sql`(${t.status} = 'pending') = (${t.decidedAt} IS NULL)`),
+]);
 export const courseAccess = pgTable("course_access", {
   id: id(),
   userId: text("user_id").notNull().references(() => user.id),
   courseId: uuid("course_id").notNull().references(() => courses.id),
   sourcePurchaseId: uuid("source_purchase_id").unique(),
+  extendedFromId: uuid("extended_from_id").references((): AnyPgColumn => courseAccess.id),
   grantedBy: text("granted_by").references(() => owners.userId),
   grantReason: text("grant_reason"),
   startsAt: time("starts_at").notNull(),
@@ -256,6 +288,7 @@ export const providerEvents = pgTable("provider_events", {
   id: id(),
   provider: text("provider").notNull(),
   eventIdentity: text("event_identity").notNull(),
+  resourceId: text("resource_id"),
   verifiedPayloadHash: text("verified_payload_hash").notNull(),
   status: eventStatus("status").notNull().default("pending"),
   leaseId: uuid("lease_id"),

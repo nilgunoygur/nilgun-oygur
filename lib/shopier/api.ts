@@ -31,7 +31,7 @@ export const shopierOrderSchema = z.object({
   })).min(1),
 });
 export type ShopierOrder = z.output<typeof shopierOrderSchema>;
-const shopierRefundSchema = z.object({
+export const shopierRefundSchema = z.object({
   id: z.union([z.string(), z.number()]).transform(String),
   orderId: z.union([z.string(), z.number()]).transform(String),
   status: z.enum(["pending", "failed", "succeeded"]),
@@ -41,7 +41,7 @@ const shopierRefundSchema = z.object({
   currency: z.string(),
   total: z.string(),
 });
-type ShopierRefund = z.output<typeof shopierRefundSchema>;
+export type ShopierRefund = z.output<typeof shopierRefundSchema>;
 
 const id = z.union([z.string(), z.number()]).transform(String);
 export const shopierProductSchema = z.object({
@@ -129,8 +129,11 @@ export function productDetails(product: ShopierProduct): ShopierProductDetails |
 /** The products the owner can edit from the site. */
 export const isEditableProduct = (product: ShopierProduct) => product.type === "digital" && product.priceData.currency === "TRY";
 
-/** In-stock digital products are Akademi courses. Use the Catalog module's rule, not this alone. */
-export const isCourseProduct = (product: ShopierProduct) => product.type === "digital" && product.stockStatus !== "outOfStock";
+/** Why a product is not an Akademi course, or null for an in-stock digital product. */
+export const courseProductBlocker = (product: ShopierProduct) => product.type !== "digital" ? "notDigital" as const : product.stockStatus === "outOfStock" ? "outOfStock" as const : null;
+
+/** Use the Catalog module's rule, not this alone. */
+export const isCourseProduct = (product: ShopierProduct) => !courseProductBlocker(product);
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {
@@ -164,11 +167,15 @@ export function isValidWebhookSignature(rawBody: string, signature: string | nul
   return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
 }
 
+export const isShopierId = (id: string) => /^\d{1,20}$/.test(id);
+
 export class ShopierError extends Error {
   readonly status: number;
   /** The start of Shopier's response body, for the owner to read when a write is refused. */
   readonly detail: string;
   constructor(status: number, message: string, detail = "") { super(message); this.status = status; this.detail = detail; }
+  /** Shopier answered no, so nothing was written; any other failure may have gone through. */
+  get refused() { return this.status < 500; }
 }
 
 export type ShopierClient = ReturnType<typeof createShopierClient>;
@@ -193,15 +200,31 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       return response.json() as Promise<T>;
     }
   }
+  // Shopier answers 500 to refund date filters, so read every page.
+  async function listSucceededRefunds(maxPages = 20) {
+    const refunds: ShopierRefund[] = [];
+    for (let page = 1; page <= maxPages; page++) {
+      const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
+      refunds.push(...batch.filter(refund => refund.status === "succeeded"));
+      if (batch.length < 50) return refunds;
+    }
+    throw new Error("Shopier refund list exceeded the page limit.");
+  }
   return {
+    listSucceededRefunds,
     async getOrder(id: string) {
-      if (!/^\d{1,20}$/.test(id)) return null;
+      if (!isShopierId(id)) return null;
       try {
         return shopierOrderSchema.parse(await call(`/orders/${id}`));
       } catch (error) {
         if (error instanceof ShopierError && (error.status === 404 || error.status === 400)) return null;
         throw error;
       }
+    },
+    /** Shopier later fires refund.updated. */
+    async createRefund(orderId: string, amountKurus: number, note?: string) {
+      if (!isShopierId(orderId) || !Number.isInteger(amountKurus) || amountKurus <= 0) throw new Error("Invalid Shopier refund.");
+      return shopierRefundSchema.parse(await call("/refunds", { method: "POST", body: JSON.stringify({ orderId, amount: amount(amountKurus), ...(note && { note }) }) }));
     },
     async listOrdersSince(since: Date, maxPages = 10) {
       const orders: ShopierOrder[] = [];
@@ -226,16 +249,9 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       });
       const [rawOrders, refundResult] = await Promise.all([
         call<unknown>(`/orders?${query}`),
-        (async () => {
-          const refunds: ShopierRefund[] = [];
-          // Shopier currently returns HTTP 500 for refunds dateStart/dateEnd; filter processed dates locally.
-          for (let page = 1; page <= 20; page++) {
-            const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
-            refunds.push(...batch.filter(refund => (refund.dateRefunded ?? refund.dateCreated) >= start && (refund.dateRefunded ?? refund.dateCreated) < end));
-            if (batch.length < 50) return refunds;
-          }
-          throw new Error("Shopier refund list exceeded the page limit.");
-        })().then(refunds => ({ refunds, unavailable: false }), () => ({ refunds: [] as ShopierRefund[], unavailable: true })),
+        listSucceededRefunds().then(
+          all => ({ refunds: all.filter(refund => (refund.dateRefunded ?? refund.dateCreated) >= start && (refund.dateRefunded ?? refund.dateCreated) < end), unavailable: false }),
+          () => ({ refunds: [] as ShopierRefund[], unavailable: true })),
       ]);
       return {
         orders: z.array(shopierOrderSchema).parse(rawOrders),
@@ -243,7 +259,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       };
     },
     async getProduct(id: string) {
-      if (!/^\d{1,20}$/.test(id)) return null;
+      if (!isShopierId(id)) return null;
       try {
         return shopierProductSchema.parse(await call(`/products/${id}`));
       } catch (error) {
@@ -260,7 +276,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       }));
     },
     async updateProduct(id: string, changes: ProductChanges) {
-      if (!/^\d{1,20}$/.test(id)) throw new Error("Invalid Shopier product.");
+      if (!isShopierId(id)) throw new Error("Invalid Shopier product.");
       return shopierProductSchema.parse(await call(`/products/${id}`, { method: "PUT", body: JSON.stringify(productBody(changes)) }));
     },
     /** Every product (hidden ones included). `ids` also covers products that failed validation. */

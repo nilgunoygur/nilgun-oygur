@@ -1,8 +1,10 @@
-import { eq } from "drizzle-orm";
-import { adminAuditLog, courses } from "../db/schema.ts";
+import { and, eq } from "drizzle-orm";
+import { adminAuditLog, courses, refundRequests, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { isEditableProduct, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
+import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
 import { linkCourse } from "./catalog.ts";
+import { formatMoney } from "./format.ts";
+import { refundableKurus } from "./refunds.ts";
 
 // Owner Commands: every owner change runs with its audit entry in one transaction, and only when something changed.
 // Callers authorize the owner (verified session and owner row) before calling.
@@ -86,6 +88,39 @@ export async function createCourse(db: Database, actorId: string, { accessDurati
   const courseId = (await linkCourse(db, created, { accessDurationDays, status }))!;
   await db.insert(adminAuditLog).values({ actorId, action: "course.linked", resourceType: "course", resourceId: courseId, reason: `Shopier ürünü ${created.id} eğitim olarak bağlandı (${status})` });
   return { courseId, product: created };
+}
+
+export type RefundDecision = { approve: true; amountKurus: number; note: string } | { approve: false; note: string };
+
+/** Returns Shopier's refund, or null for a decline. */
+export async function decideRefundRequest(db: Database, actorId: string, requestId: string, decision: RefundDecision, shopier: Pick<ShopierClient, "createRefund">) {
+  const [request] = await db.select({ orderId: shopierPurchases.shopierOrderId }).from(refundRequests)
+    .innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).where(eq(refundRequests.id, requestId)).limit(1);
+  if (!request) throw new OwnerInputError("İade talebi bulunamadı.");
+  const target = { resourceType: "refund_request", resourceId: requestId };
+  const pending = and(eq(refundRequests.id, requestId), eq(refundRequests.status, "pending"));
+  const decided = { decidedBy: actorId, decidedAt: new Date(), ownerNote: decision.note || null };
+  const alreadyDecided = new OwnerInputError("Bu talep zaten sonuçlandırılmış.");
+  if (!decision.approve) {
+    const declined = await audited(db, actorId, { action: "refund_request.declined", ...target, reason: decision.note || "İade talebi reddedildi" },
+      async tx => (await tx.update(refundRequests).set({ status: "declined", ...decided }).where(pending).returning({ id: refundRequests.id })).length > 0);
+    if (!declined) throw alreadyDecided;
+    return null;
+  }
+  if (decision.amountKurus > await refundableKurus(db, request.orderId)) throw new OwnerInputError("İade tutarı siparişin kalan tutarını aşamaz.");
+  // Claimed first, so two approvals cannot refund twice.
+  const claimed = await db.update(refundRequests).set({ status: "approved", amountKurus: decision.amountKurus, ...decided }).where(pending).returning({ id: refundRequests.id });
+  if (!claimed.length) throw alreadyDecided;
+  try {
+    const refund = await withShopier(db, actorId, target, "refund_request.refund", `sipariş ${request.orderId} için ${formatMoney(decision.amountKurus)} iade`,
+      () => shopier.createRefund(request.orderId, decision.amountKurus, decision.note || undefined));
+    await db.update(refundRequests).set({ shopierRefundId: refund.id }).where(eq(refundRequests.id, requestId));
+    return refund;
+  } catch (error) {
+    // A refusal moved no money: reopen. Anything else stays approved for the owner to check.
+    if (error instanceof ShopierError && error.refused) await db.update(refundRequests).set({ status: "pending", amountKurus: null, decidedBy: null, decidedAt: null, ownerNote: null }).where(eq(refundRequests.id, requestId));
+    throw error;
+  }
 }
 
 /** Runs the catalog sync, then records who asked for it. */

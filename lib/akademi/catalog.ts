@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { courses, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { isCourseProduct, isEditableProduct, parsePriceKurus, productDetails, type ShopierProduct } from "../shopier/api.ts";
+import { courseProductBlocker, isCourseProduct, isEditableProduct, parsePriceKurus, productDetails, type ShopierProduct } from "../shopier/api.ts";
 import { descriptionHtml, descriptionMarkup, descriptionText } from "../shopier/description.ts";
 import { normalizeSlug } from "../route-slug.ts";
 import { courseSlug } from "./slug.ts";
@@ -85,7 +85,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
       const details = product ? saleDetails(product) : null;
       return {
         ...row, title: titleOf(row.productId), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
-        blocker: !product ? "missing" as const : product.type !== "digital" ? "notDigital" as const : !isCourseProduct(product) ? "outOfStock" as const : details ? null : "unpriced" as const,
+        blocker: !product ? "missing" as const : courseProductBlocker(product) ?? (details ? null : "unpriced" as const),
         // Raw Shopier values for the edit form.
         product: product && isEditableProduct(product) ? {
           description: descriptionMarkup(product.description), listPriceKurus: parsePriceKurus(product.priceData.price), image: details?.imageUrl ?? null,
@@ -97,7 +97,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   };
 }
 
-/** The new course's id, or undefined when the product is already linked. The owner's `settings` win; without them a product hidden from the Shopier store starts as a draft. */
+/** The new course's id, or undefined when already linked. Hidden products start as drafts unless `settings` says otherwise. */
 export async function linkCourse(db: Database, product: Pick<ShopierProduct, "id" | "title" | "customListing">, settings?: { accessDurationDays: number; status: "draft" | "published" }) {
   const slug = courseSlug(product.title) || `egitim-${product.id}`;
   const [taken] = await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1);

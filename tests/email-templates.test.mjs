@@ -41,4 +41,8 @@ test("contact messages go only to the configured inbox, with the visitor as Repl
   assert.ok(message.text.includes("Hello from the website"));
   assert.ok(message.html.includes("mailto:visitor@example.com"));
   assert.ok(!message.html.includes("<img src=x") && !message.html.includes("<b>"), "visitor input is escaped");
+  const support = await contactEmail({ ...input, orderNumber: "512345678" }, "owner@example.com", "https://nilgunoygur.com", true);
+  assert.deepEqual([support.to, support.replyTo, support.subject], ["owner@example.com", "visitor@example.com", "Akademi destek mesajı"]);
+  assert.ok(support.text.includes("Shopier siparişi: 512345678") && support.html.includes("512345678") && support.html.includes("AKADEMİ DESTEK"));
+  assert.equal((await contactEmail({ ...input, orderNumber: "" }, "owner@example.com", "https://nilgunoygur.com", true)).subject, "Akademi destek mesajı", "the order number is optional");
 });

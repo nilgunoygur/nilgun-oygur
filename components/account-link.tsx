@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, ChevronDown, LogOut, Settings, ShoppingBag, LayoutDashboard } from "lucide-react";
+import { BookOpen, ChevronDown, LifeBuoy, LogOut, Settings, ShoppingBag, LayoutDashboard } from "lucide-react";
 import { authClient } from "@/lib/auth/client";
 import { avatarSource } from "@/lib/auth/profile";
 import { accountOptions } from "@/app/akademi/hesabim/profile-actions";
@@ -62,6 +62,7 @@ export function AccountLink({ compact = false }: { compact?: boolean }) {
           <DropdownMenuItem className={menuItemClass} render={<Link href="/akademi/hesabim" />}><BookOpen />Eğitimlerim</DropdownMenuItem>
           <DropdownMenuItem className={menuItemClass} render={<Link href="/akademi/profil" />}><Settings />Profil ayarları</DropdownMenuItem>
           <DropdownMenuItem className={menuItemClass} render={<Link href="/akademi/siparis-ekle" />}><ShoppingBag />Shopier siparişi ekle</DropdownMenuItem>
+          <DropdownMenuItem className={menuItemClass} render={<Link href="/akademi/egitim-ekleme#destek" />}><LifeBuoy />Destek</DropdownMenuItem>
           {ownerAccess?.userId === userId && ownerAccess.isOwner && <DropdownMenuItem className={menuItemClass} render={<Link href="/yonetim" />}><LayoutDashboard />Yönetim</DropdownMenuItem>}
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="my-2 bg-forest/10" />

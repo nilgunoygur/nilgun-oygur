@@ -2,7 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import type { CourseChange, productFormSchema } from "./owner-forms";
+import type { CourseChange, productFormSchema, RefundDecisionInput } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
@@ -21,9 +21,12 @@ export const ownerCatalogSnapshotSchema = z.object({
   courses: z.array(courseSchema),
   recentSales: z.array(saleSchema),
   attention: z.array(attentionSchema),
+  refundReviews: z.array(z.object({ id: z.string(), orderId: z.string(), amountKurus: z.number(), currency: z.string(), at: z.string().datetime() })),
+  refundRequests: z.array(z.object({ id: z.string(), orderId: z.string(), courseId: z.string(), name: z.string(), email: z.string(), reason: z.string(), amountKurus: z.number(), currency: z.string(), at: z.string().datetime() })),
 });
 export type OwnerCatalogSnapshot = z.infer<typeof ownerCatalogSnapshotSchema>;
 export type OwnerCourse = OwnerCatalogSnapshot["courses"][number];
+export type OwnerRefundRequest = OwnerCatalogSnapshot["refundRequests"][number];
 const ownerTransactionsSchema = z.object({
   items: z.array(z.object({
     id: z.string(), order: z.string(), kind: z.enum(["sale", "refund"]), at: z.string().datetime(),
@@ -63,6 +66,8 @@ const withCover = (data: Partial<ProductValues>, image: File | null) => { const 
 export const updateOwnerProduct = (courseId: string, changes: Partial<ProductValues>, image: File | null) => ownerFetch(`/api/yonetim/courses/${courseId}/product`,
   { method: "PUT", body: withCover(changes, image) }, "Shopier ürünü güncellenemedi.");
 export const createOwnerCourse = (course: ProductValues, image: File | null) => ownerFetch("/api/yonetim/courses", { method: "POST", body: withCover(course, image) }, "Eğitim oluşturulamadı.");
+export const decideOwnerRefundRequest = (requestId: string, decision: RefundDecisionInput) => ownerFetch(`/api/yonetim/refund-requests/${requestId}`,
+  { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(decision) }, "İade talebi sonuçlandırılamadı.");
 export const syncOwnerCatalog = () => ownerFetch("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.");
 
 export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {

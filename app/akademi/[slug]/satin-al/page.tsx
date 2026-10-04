@@ -28,9 +28,11 @@ export default async function Checkout({ params }: { params: Promise<{ slug: str
     <p className={kicker}>AKADEMİ · SATIN AL</p>
     <h1 className="mt-5 mb-[35px] text-[48px]">Öğrenmeye bir adım daha.</h1>
     <div className="rounded-[20px] bg-mist p-[30px]"><h2 className="mb-[15px] text-[28px]">{course.title}</h2><CoursePrice large priceClassName="text-[34px]" priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} /><p>{formatAccess(course.accessDurationDays)} · Ödeme Shopier güvencesiyle alınır.</p></div>
+    <p className="mt-6 leading-relaxed text-stone">Shopier yeni sekmede açılır. Ödemeden sonra bu siteye dönün; hesabınızdan eğitime başlayabilir veya siparişinizi ekleyebilirsiniz.</p>
     <Suspense fallback={<div className={steps} />}>
       <CheckoutSteps course={course} />
     </Suspense>
+    <div className="mt-10 border-t border-border pt-6"><Link href="/akademi/satin-alim-sonrasi" className={textLink}>Ödememi yaptım, eğitimime nasıl ulaşırım?</Link></div>
   </section>;
 }
 
@@ -41,15 +43,15 @@ async function CheckoutSteps({ course }: { course: CatalogCourse }) {
   return email ? <div className={steps}>
     <p><MailCheck size={20} aria-hidden="true" className="mr-[6px] inline align-[-4px]" /> Shopier ödeme sayfasında bu e-posta adresini kullanın: <strong>{email}</strong></p>
     <p>Ödemeniz onaylandığında eğitiminiz hesabınıza otomatik olarak eklenir. Farklı bir e-posta kullanırsanız, sipariş numaranızla hesabınızdan ekleyebilirsiniz.</p>
-    <TrackedLink event="begin_checkout" params={{ ...courseEcommerce(course), signed_in: true }} className={buttonVariants({ size: "hero" })} href={course.shopierUrl} rel="noopener">Shopier ile öde <ArrowUpRight size={18} aria-hidden="true" /></TrackedLink>
+    <TrackedLink event="begin_checkout" params={{ ...courseEcommerce(course), signed_in: true }} className={buttonVariants({ size: "hero" })} href={course.shopierUrl} target="_blank" rel="noopener">Shopier ile öde (yeni sekme) <ArrowUpRight size={18} aria-hidden="true" /></TrackedLink>
     <Link href="/akademi/hesabim" className={textLink}>Hesabıma git</Link>
   </div> : <div className={steps}>
     <p>Eğitiminize ödemeden sonra hesabınızdan ulaşırsınız. Önce giriş yapın ya da ücretsiz hesap oluşturun; Shopier’de aynı e-posta adresini kullanın.</p>
     <div className="flex flex-wrap gap-3">
       <Link className={buttonVariants({ size: "hero" })} href={`/akademi/giris?next=${back}`}>Giriş yap</Link>
-      <Link className={buttonVariants({ size: "hero", variant: "outline" })} href="/akademi/kayit">Hesap oluştur</Link>
+      <Link className={buttonVariants({ size: "hero", variant: "outline" })} href={`/akademi/kayit?next=${back}`}>Hesap oluştur</Link>
     </div>
     <p>Hesabınız yoksa da ödeme yapabilirsiniz. Daha sonra aynı e-posta adresiyle kayıt olduğunuzda eğitiminiz hesabınızda görünür.</p>
-    <TrackedLink event="begin_checkout" params={{ ...courseEcommerce(course), signed_in: false }} className={textLink} href={course.shopierUrl} rel="noopener">Hesapsız devam et ve Shopier ile öde</TrackedLink>
+    <TrackedLink event="begin_checkout" params={{ ...courseEcommerce(course), signed_in: false }} className={textLink} href={course.shopierUrl} target="_blank" rel="noopener">Hesapsız devam et ve Shopier ile öde (yeni sekme)</TrackedLink>
   </div>;
 }

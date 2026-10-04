@@ -6,12 +6,14 @@ import { z } from "zod";
 import { studentPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { studentCourse } from "@/lib/akademi/learning";
-import { courseCards } from "@/lib/akademi/server";
+import { akademi, courseCards } from "@/lib/akademi/server";
 import { LessonChecklist } from "@/components/akademi/lesson-checklist";
+import { RefundRequestForm } from "@/components/akademi/refund-request-form";
 import { accountPage, accountTitle, kicker, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Eğitimim", robots: { index: false, follow: false }, referrer: "no-referrer" as const };
+const refundStatusLabel = { pending: "İade talebiniz inceleniyor.", approved: "İade talebiniz onaylandı; ödemeniz Shopier üzerinden iade ediliyor.", declined: null };
 const expiry = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: "Europe/Istanbul" });
 
 export default function CourseLearning({ params }: { params: Promise<{ courseId: string }> }) {
@@ -21,8 +23,13 @@ async function Content({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;
   if (!z.uuid().safeParse(courseId).success) notFound();
   const viewer = await studentPage(`/akademi/hesabim/${courseId}`);
-  const data = await studentCourse(getDatabase(), viewer.user.id, courseId);
+  const [data, cards, refund] = await Promise.all([studentCourse(getDatabase(), viewer.user.id, courseId), courseCards(), akademi().access.refundRequest(viewer.user.id, courseId)]);
   if (!data) notFound();
-  const cards = await courseCards();
-  return <><Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm text-stone hover:text-forest"><ArrowLeft size={16} />Eğitimlerime dön</Link><header className="mb-9"><p className={kicker}>AKADEMİ · ÖĞRENME ALANINIZ</p><h1 className={accountTitle}>{cards[data.course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="text-stone">Bir sonraki adımınız burada. İzleyin, uygulayın, kendinize zaman ayırın.</p><p className="mt-3 text-xs text-stone">Erişim bitişi: {expiry.format(data.grant.expiresAt)}</p></header><LessonChecklist lessons={data.lessons} /></>;
+  const refundStatus = refund && refundStatusLabel[refund.status];
+  return <><Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm text-stone hover:text-forest"><ArrowLeft size={16} />Eğitimlerime dön</Link><header className="mb-9"><p className={kicker}>AKADEMİ · ÖĞRENME ALANINIZ</p><h1 className={accountTitle}>{cards[data.course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="text-stone">Bir sonraki adımınız burada. İzleyin, uygulayın, kendinize zaman ayırın.</p><p className="mt-3 text-xs text-stone">Erişim bitişi: {expiry.format(data.grant.expiresAt)}</p></header><LessonChecklist lessons={data.lessons} />
+    <section className="mt-14 border-t border-border pt-8 text-sm text-stone">
+      {refundStatus ? <p role="status">{refundStatus}</p>
+        : <>{refund && <p className="mb-4">Önceki iade talebiniz reddedildi.{refund.ownerNote && ` Not: ${refund.ownerNote}`}</p>}
+          <details><summary className="cursor-pointer underline underline-offset-4">İade talep et</summary><div className="mt-5 max-w-xl"><RefundRequestForm courseId={courseId} /></div></details></>}
+    </section></>;
 }

@@ -49,6 +49,8 @@ Email verification replay is an idempotent success in Better Auth once the addre
 
 ## Shopier purchases — 21 September 2026
 
+For the current buyer return flow, completed refund handling, subscription upgrade and real-payment sign-off, see [SHOPIER_DELIVERY.md](SHOPIER_DELIVERY.md).
+
 Payment happens on Shopier product pages. The site records purchases from Shopier and grants course access; it has no checkout or payment form of its own.
 
 - **Account capabilities** (personal access token with every scope): products, orders and webhooks all work. Until 22 September 2026, `GET /products` returned 403. Shopier enabled product reads for this account on request (their docs define 403 as a permission they grant).
@@ -59,7 +61,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 - **Daily sync** `GET/POST /api/internal/shopier-sync` (Bearer `CRON_SECRET`, Vercel Cron 04:00 UTC) replays the last seven days of orders. All steps are idempotent.
 - **Owner panel** `/yonetim/egitimler`: lists courses with their live Shopier title and price, sets access duration, turns each course on or off with the switch in its row (and says why a published course is still not shown), archives, runs "Shopier ile eşitle", and shows recent sales and whether each is attached to an account.
 - **Editing Shopier from the panel:** "Yeni eğitim" creates a digital TRY product (`POST /products`) and links it as a course with the chosen access duration, as a draft unless published straight away. "Shopier ürününü düzenle" changes title, description, price, discount, cover, store visibility (`customListing`) and stock (`stockQuantity` 0 or 10000) with `PUT /products/{id}`, sending only the fields that changed. The description is edited as plain text with a few marks (`###`, `-`, `**`), one paragraph per line. Two behaviours were observed on the live API and are built in: Shopier drops `<br>` from descriptions it is sent (so a line break is saved as a paragraph break), and it takes price and discount as one block (a price sent alone resets the discount, a discount alone is refused), so a change to either sends both. A cover is uploaded to the private Blob store and handed to Shopier as a link signed for a day, because Shopier downloads images itself; a new course without a cover uses the academy's default. Every write records an intent and an outcome in the audit log. Deleting a product stays in the Shopier panel.
-- **Refunds** are deliberately not implemented yet (owner decision pending).
+- **Refunds** are issued by the owner, in the Shopier panel or by approving a student's refund request in `/yonetim/egitimler`; the site then reacts to Shopier's refund. See [SHOPIER_DELIVERY.md](SHOPIER_DELIVERY.md#refund-requests-from-the-site).
 
 ### Shopier is the course catalog
 
@@ -122,7 +124,7 @@ Shopier has no sandbox or test cards. Instead:
 - **Modules** (`lib/akademi`): `course-access.ts` records Shopier orders, grants, extends and reads access (`activeCourseAccess`, `activeGrant`); `catalog.ts` owns the sellable-course rule (published row + visible, in-stock, digital product + positive TRY price), linking/archiving and the owner list; `owner-commands.ts` runs every owner change with its audit row in one transaction and writes nothing when no row changed; `provider-inbox.ts` applies verified provider events once; `shopier-webhook.ts` is the Shopier adapter for it. `akademi.ts` composes them from a database, a Shopier client and config, which is how tests build the real wiring with PGlite and a fake Shopier.
 - **Server edge**: `lib/akademi/server.ts` builds the env-backed instance and holds the cached catalog reads and their invalidation. `lib/config.ts` is the only reader of environment variables and defines which features are enabled.
 - **Viewer**: `lib/auth/viewer.ts` reads the session once per request (React `cache`) with owner and MFA state; pages use `studentPage`/`ownerPage`/`ownerEnrollmentPage` (redirect or 404), Server Functions use `requireStudent`/`requireOwner` (throw). `proxy.ts` only redirects visitors without a session cookie.
-- **Fixed on the way**: product webhooks now honour `SHOPIER_SHOW_HIDDEN_PRODUCTS` like the sync; the owner price column applies the TRY rule; changing a missing course's access duration no longer writes an audit row; the account page no longer writes during render.
+- **Fixed on the way**: the owner price column applies the TRY rule; changing a missing course's access duration no longer writes an audit row; the account page no longer writes during render.
 - **Stack**: Next.js 16.3.6 with `cacheComponents` and `reactCompiler`, Better Auth `nextCookies()`, Vercel BotID (Basic) on sign-up, sign-in, reset, verification resend and "Siparişimi ekle", `LazyMotion` with `domAnimation`, Shopier 429 `Retry-After` handling.
 - **Verification**: `pnpm test` 44 pass, `pnpm run lint`, `tsc --noEmit`, `pnpm run build`, and `pnpm run test:routes` against a production build all pass. Catalog, course, checkout (including 404 for unknown courses), sitemap and auth pages were checked on the production build.
 - **Vercel settings to do by hand**: mark `SHOPIER_API_TOKEN`, `SHOPIER_WEBHOOK_TOKEN`, `BETTER_AUTH_SECRET`, `EMAIL_ENCRYPTION_KEY` and `CRON_SECRET` as Sensitive; move to Pro before public sales (Hobby is non-commercial and limits cron to daily).

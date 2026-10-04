@@ -4,18 +4,21 @@ import { headers } from "next/headers";
 import type { z } from "zod";
 import { checkBotId } from "botid/server";
 import { config } from "@/lib/config";
-import { contactSchema } from "@/lib/contact-schema";
+import { contactSchema, supportSchema } from "@/lib/contact-schema";
 import { getDatabase } from "@/lib/db";
 import { consumeAttempt } from "@/lib/akademi/rate-limit";
 import { deliverPendingEmailsAfterResponse, getEmailOutbox } from "@/lib/email";
 import { contactEmail } from "@/lib/email/templates";
 import type { FormState } from "@/components/akademi/form-status";
 
-export async function sendContactMessage(values: z.input<typeof contactSchema>): Promise<FormState> {
+export const sendContactMessage = async (values: z.input<typeof contactSchema>) => send(values, false);
+export const sendSupportMessage = async (values: z.input<typeof supportSchema>) => send(values, true);
+
+async function send(values: unknown, support: boolean): Promise<FormState> {
   const failed = (message: string): FormState => ({ status: "error", message });
   const settings = config();
   if (!settings.enabled.contact) return failed("Mesaj şu anda gönderilemiyor. Lütfen e-posta adresimizden bize ulaşın.");
-  const input = contactSchema.safeParse(values);
+  const input = (support ? supportSchema : contactSchema).safeParse(values);
   if (!input.success) return failed("Formdaki bilgileri kontrol edin.");
   try {
     if ((await checkBotId()).isBot) return failed("İstek doğrulanamadı.");
@@ -25,7 +28,7 @@ export async function sendContactMessage(values: z.input<typeof contactSchema>):
     if (!await consumeAttempt(getDatabase(), `contact:${key}`, { max: 3, windowMs: 3_600_000, now: Date.now() })) {
       return failed("Çok fazla mesaj gönderdiniz. Lütfen bir saat sonra tekrar deneyin.");
     }
-    await getEmailOutbox().enqueue(await contactEmail(input.data, settings.resend.replyTo!, settings.siteUrl));
+    await getEmailOutbox().enqueue(await contactEmail(input.data, settings.resend.replyTo!, settings.siteUrl, support));
     deliverPendingEmailsAfterResponse();
     return { status: "success", message: "Mesajınız alındı. En kısa sürede size dönüş yapacağız." };
   } catch {

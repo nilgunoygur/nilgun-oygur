@@ -67,3 +67,9 @@ export function accessExpiryFromPayment(paidAt: Date, accessDurationDays: number
 
 /** A video counts as watched once 90% of it has played. */
 export const hasWatched = (positionSeconds: number, durationSeconds: number) => positionSeconds >= durationSeconds * 0.9;
+
+/** A purchase extends access still running when it was paid; otherwise access starts at the payment. */
+export function purchaseWindow(previous: { startsAt: Date; expiresAt: Date } | null | undefined, purchasedAt: Date, accessDurationDays: number) {
+  const extended = previous && previous.expiresAt.getTime() > purchasedAt.getTime() ? previous : null;
+  return { extendsPrevious: !!extended, startsAt: extended?.startsAt ?? purchasedAt, expiresAt: accessExpiryFromPayment(extended?.expiresAt ?? purchasedAt, accessDurationDays) };
+}

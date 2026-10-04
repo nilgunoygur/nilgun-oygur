@@ -5,17 +5,17 @@ import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
 import { contactFormValues, registerSchema } from "@/lib/auth/contact";
 import { ContactFields } from "./contact-fields";
-import { callbackURL } from "@/lib/auth/navigation";
+import { verificationCallback } from "@/lib/auth/navigation";
 import { authAttempt, AuthSubmit, EmailField, FormMessage, FormShell, PasswordField, TextField } from "./form-fields";
 
 // Its own chunk: only the register page loads the phone and address code.
-export default function RegisterForm({ disabled, onSent }: { disabled: boolean; onSent: () => void }) {
+export default function RegisterForm({ disabled, destination, onSent }: { disabled: boolean; destination?: string; onSent: () => void }) {
   const form = useForm({
     resolver: zodResolver(registerSchema), mode: "onTouched",
     defaultValues: { name: "", email: "", password: "", confirmPassword: "", contact: contactFormValues() },
   });
   const submit = form.handleSubmit(async ({ name, email, password, contact }) => {
-    if (!await authAttempt(form, () => authClient.signUp.email({ name, email, password, callbackURL, ...contact }))) return;
+    if (!await authAttempt(form, () => authClient.signUp.email({ name, email, password, callbackURL: verificationCallback(destination), ...contact }))) return;
     track("sign_up", { method: "email" });
     onSent();
   });

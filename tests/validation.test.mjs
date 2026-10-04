@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeSlug } from "../lib/route-slug.ts";
-import { contactSchema } from "../lib/contact-schema.ts";
+import { contactSchema, supportSchema } from "../lib/contact-schema.ts";
 import { articles } from "../lib/content.ts";
 import { districtsOf, matchDistrict, matchProvince, matchesTurkish, plateCode, provinces } from "../lib/turkiye.ts";
 import { callingCode, formatPhone, groupNational, normalizePhone, phoneCountries, splitPhone } from "../lib/phone.ts";
@@ -149,4 +149,20 @@ test("a recording's waveform is its loudness per bar, scaled so one loud moment 
   assert.ok(peaks[10] > 15 && peaks[10] < 35, `quiet half ${peaks[10]}`);
   assert.ok(peaks[60] >= 95, `loud half ${peaks[60]}`);
   assert.deepEqual(peaksFromSamples(new Float32Array(100), 10), Array(10).fill(0), "silence");
+});
+
+test("a copied Shopier order number accepts its displayed hash prefix and rejects invalid identifiers", async () => {
+  const { claimSchema } = await import("../lib/akademi/claim-schema.ts");
+  const base = { email: "buyer@example.com" };
+  assert.equal(claimSchema.parse({ ...base, orderNumber: " #123456789 " }).orderNumber, "123456789");
+  assert.equal(claimSchema.parse({ ...base, orderNumber: "# 123456789" }).orderNumber, "123456789");
+  assert.equal(claimSchema.parse({ ...base, orderNumber: "123456789" }).orderNumber, "123456789");
+  assert.equal(claimSchema.parse({ ...base, orderNumber: "# 12345678901234567890" }).orderNumber, "12345678901234567890");
+  for (const value of ["##123456789", "12345abc", "#12", "../orders", "123 456"]) assert.equal(claimSchema.safeParse({ ...base, orderNumber: value }).success, false);
+});
+
+test("the support form takes an optional Shopier order number", () => {
+  const base = { name: "Ayşe Yılmaz", email: "ayse@example.com", message: "Eğitimim hesabımda görünmüyor." };
+  assert.deepEqual(["", "#512345678", " 512345678 "].map(orderNumber => supportSchema.parse({ ...base, orderNumber }).orderNumber), ["", "512345678", "512345678"]);
+  assert.equal(supportSchema.safeParse({ ...base, orderNumber: "abc" }).success, false);
 });

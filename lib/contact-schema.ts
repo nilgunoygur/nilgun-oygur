@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { emailField } from "./auth/forms.ts";
+import { optionalOrderNumberField } from "./akademi/claim-schema.ts";
 export const contactSchema = z.object({
   name: z
     .string()
@@ -13,3 +14,5 @@ export const contactSchema = z.object({
     .min(10, "Mesajınız en az 10 karakter olmalıdır.")
     .max(5000, "Mesajınız en fazla 5000 karakter olabilir."),
 });
+/** A contact message with an optional Shopier order number. */
+export const supportSchema = contactSchema.extend({ orderNumber: optionalOrderNumberField });

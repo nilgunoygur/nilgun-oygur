@@ -2,17 +2,19 @@ import type { Database } from "../db/types.ts";
 import type { ProductChanges, ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
 import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalogFromShopier } from "./catalog.ts";
-import { createCourse, setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse } from "./owner-commands.ts";
+import { createCourse, decideRefundRequest, setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse, type RefundDecision } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
 import { createOwnerOverview } from "./dashboard.ts";
 import { ownerUsers, type UserListParams } from "./owner-users.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
+import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
+import { latestRefundRequest, pendingRefundRequests, requestRefund } from "./refund-requests.ts";
 
 type Dependencies = {
   db: Database;
-  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "createProduct" | "updateProduct">;
+  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "listSucceededRefunds" | "createRefund" | "createProduct" | "updateProduct">;
   now?: () => Date;
 };
 
@@ -36,10 +38,19 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       /** "Siparişimi ekle": five attempts per student per hour, order verified against the Shopier API. */
       async claimOrder(userId: string, orderNumber: string, shopierEmail: string) {
         if (!await consumeAttempt(db, `shopier-claim:${userId}`, { max: 5, windowMs: 3_600_000, now: now().getTime() })) return "rate_limited" as const;
-        return claimShopierOrder(db, await shopier.getOrder(orderNumber.trim()), shopierEmail, userId);
+        const order = await shopier.getOrder(orderNumber.trim());
+        if (order) for (const refund of await shopier.listSucceededRefunds()) if (refund.orderId === order.id) await recordShopierRefund(db, refund);
+        return claimShopierOrder(db, order, shopierEmail, userId);
       },
+      async requestRefund(userId: string, courseId: string, reason: string) {
+        if (!await consumeAttempt(db, `refund-request:${userId}`, { max: 3, windowMs: 86_400_000, now: now().getTime() })) return "rate_limited" as const;
+        return requestRefund(db, userId, courseId, reason);
+      },
+      refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
+        const refunds = await shopier.listSucceededRefunds();
+        await recordNewShopierRefunds(db, refunds);
         const orders = await shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000));
         let purchases = 0, granted = 0;
         for (const order of orders) {
@@ -47,7 +58,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
           purchases += result.purchaseIds.length;
           granted += result.granted;
         }
-        return { orders: orders.length, purchases, granted, courses: await syncCatalog() };
+        return { orders: orders.length, purchases, granted, refunds: refunds.length, courses: await syncCatalog() };
       },
     },
     students: {
@@ -57,11 +68,13 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       overview: ownerOverview,
       /** JSON-safe; shared by the page and GET /api/yonetim/courses. */
       async catalogSnapshot() {
-        const [{ courses, recentSales }, attention] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db)]);
+        const [{ courses, recentSales }, attention, refundReviews, refundRequests] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db), partialRefundReviews(db), pendingRefundRequests(db)]);
         return {
           courses,
           recentSales: recentSales.map(sale => ({ ...sale, claimed: Boolean(sale.claimed), at: sale.at.toISOString() })),
           attention: attention.map(item => ({ ...item, at: item.at.toISOString() })),
+          refundReviews: refundReviews.map(item => ({ ...item, at: item.at.toISOString() })),
+          refundRequests: refundRequests.map(item => ({ ...item, at: item.at.toISOString() })),
         };
       },
       users: (params: UserListParams) => ownerUsers(db, params, now()),
@@ -69,6 +82,11 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
       updateCourseProduct: (actorId: string, courseId: string, changes: ProductChanges) => updateCourseProduct(db, actorId, courseId, changes, shopier),
       createCourse: (actorId: string, course: NewCourse) => createCourse(db, actorId, course, shopier),
+      /** A refund Shopier completes at once is applied now. */
+      async decideRefundRequest(actorId: string, requestId: string, decision: RefundDecision) {
+        const refund = await decideRefundRequest(db, actorId, requestId, decision, shopier);
+        if (refund) await recordShopierRefund(db, refund);
+      },
       syncCatalog: (actorId: string) => syncCatalogAsOwner(db, actorId, syncCatalog),
     },
     webhooks: {

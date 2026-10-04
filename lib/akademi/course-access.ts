@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { courseAccess, courses, shopierPurchases, user } from "../db/schema.ts";
+import { courseAccess, courses, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
-import { accessExpiryFromPayment, hasActiveAccess, type AccessGrant } from "./access-policy.ts";
+import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
 import { adoptShopierContact } from "./student-contact.ts";
 import type { Database } from "../db/types.ts";
 
@@ -44,30 +44,70 @@ async function adoptContactSafely(db: Database, userId: string, order: ShopierOr
   try { await adoptShopierContact(db, userId, order); } catch { console.error("Shopier contact could not be copied to the student profile."); }
 }
 
+/** Refunds and claims of one order run one at a time. */
+export const lockShopierOrder = (tx: Database, orderId: string) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${orderId}))`);
+
+export async function hasFullRefund(db: Database, orderId: string) {
+  const [refund] = await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(and(eq(shopierRefunds.shopierOrderId, orderId), eq(shopierRefunds.type, "full"))).limit(1);
+  return !!refund;
+}
+
+
 // Claims an unclaimed purchase and grants access in one transaction; active access is extended.
 export async function claimPurchase(db: Database, purchaseId: string, userId: string, now = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {
-    // Lock the student, then re-read the purchase under lock.
+    const [candidate] = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.id, purchaseId));
+    if (!candidate) return false;
+    // Order lock (shared with refunds), then the student, then re-read the purchase.
+    await lockShopierOrder(tx, candidate.shopierOrderId);
     await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("update");
     const [purchase] = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.id, purchaseId)).for("update");
     if (!purchase || purchase.userId !== null) return false;
+    if (await hasFullRefund(tx, purchase.shopierOrderId)) return false;
     await tx.update(shopierPurchases).set({ userId, claimedAt: now }).where(eq(shopierPurchases.id, purchase.id));
     const [current] = await tx.select().from(courseAccess)
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
-    let startsAt = purchase.purchasedAt;
-    let expiresAt = accessExpiryFromPayment(purchase.purchasedAt, purchase.accessDurationDays);
+    const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(current, purchase.purchasedAt, purchase.accessDurationDays);
     if (current) {
-      const stillActive = current.expiresAt.getTime() > purchase.purchasedAt.getTime();
-      if (stillActive) {
-        startsAt = current.startsAt;
-        expiresAt = accessExpiryFromPayment(current.expiresAt, purchase.accessDurationDays);
-      }
-      await tx.update(courseAccess).set({ revokedAt: now, revocationReason: stillActive ? "extended_by_purchase" : "expired_replaced" })
+      await tx.update(courseAccess).set({ revokedAt: now, revocationReason: extendsPrevious ? "extended_by_purchase" : "expired_replaced" })
         .where(eq(courseAccess.id, current.id));
     }
-    await tx.insert(courseAccess).values({ userId, courseId: purchase.courseId, sourcePurchaseId: purchase.id, startsAt, expiresAt });
+    await tx.insert(courseAccess).values({ userId, courseId: purchase.courseId, sourcePurchaseId: purchase.id, startsAt, expiresAt,
+      extendedFromId: extendsPrevious && current ? current.id : null });
     return true;
   });
+}
+
+// Rebuilds only the current extension chain; owner grants and manual revocations are untouched.
+export async function rebuildRefundedExtension(db: Database, userId: string, courseId: string, orderId: string) {
+  const grants = await db.select().from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId)));
+  const current = grants.find(g => g.revokedAt === null);
+  if (!current || !current.sourcePurchaseId) return;
+  const purchases = await db.select().from(shopierPurchases).where(and(eq(shopierPurchases.userId, userId), eq(shopierPurchases.courseId, courseId)));
+  const byPurchase = new Map(purchases.map(p => [p.id, p]));
+  const byGrant = new Map(grants.map(g => [g.id, g]));
+  const chain: typeof grants = [];
+  const visited = new Set<string>();
+  for (let grant: typeof current | undefined = current; grant; grant = grant.extendedFromId ? byGrant.get(grant.extendedFromId) : undefined) {
+    if (visited.has(grant.id)) throw new Error("Invalid course access extension chain.");
+    visited.add(grant.id);
+    chain.unshift(grant);
+  }
+  if (!chain.some(g => g.sourcePurchaseId && byPurchase.get(g.sourcePurchaseId)?.shopierOrderId === orderId)) return;
+  const refunds = await db.select().from(shopierRefunds).where(and(eq(shopierRefunds.type, "full"), inArray(shopierRefunds.shopierOrderId, purchases.map(p => p.shopierOrderId))));
+  const refundedOrders = new Set(refunds.map(r => r.shopierOrderId));
+  let remaining: { grant: typeof current; startsAt: Date; expiresAt: Date } | undefined;
+  for (const grant of chain) {
+    if (!grant.sourcePurchaseId) { remaining = { grant, startsAt: grant.startsAt, expiresAt: grant.expiresAt }; continue; }
+    const purchase = byPurchase.get(grant.sourcePurchaseId);
+    if (!purchase) throw new Error("Course access purchase is missing.");
+    if (refundedOrders.has(purchase.shopierOrderId)) continue;
+    const { startsAt, expiresAt } = purchaseWindow(remaining, purchase.purchasedAt, purchase.accessDurationDays);
+    remaining = { grant, startsAt, expiresAt };
+  }
+  // Release the unique active slot before restoring a surviving earlier purchase.
+  await db.update(courseAccess).set({ revokedAt: new Date(), revocationReason: "shopier_full_refund" }).where(eq(courseAccess.id, current.id));
+  if (remaining) await db.update(courseAccess).set({ startsAt: remaining.startsAt, expiresAt: remaining.expiresAt, revokedAt: null, revocationReason: null }).where(eq(courseAccess.id, remaining.grant.id));
 }
 
 /** Grants every unclaimed purchase made with this verified email. Runs when the email is verified and on sign-in. */
@@ -79,7 +119,7 @@ export async function claimPurchasesByEmail(db: Database, userId: string, email:
   return granted;
 }
 
-export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "unpaid" | "not_academy";
+export type ClaimOutcome = "granted" | "already_yours" | "claimed_by_other" | "not_found" | "unpaid" | "not_academy" | "refunded";
 
 // Claims a Shopier-fetched order (never browser data) whose buyer email matches the typed one.
 export async function claimShopierOrder(db: Database, order: ShopierOrder | null, typedEmail: string, userId: string): Promise<ClaimOutcome> {
@@ -87,6 +127,7 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   if (order.paymentStatus !== "paid") return "unpaid";
   const { purchaseIds } = await recordShopierOrder(db, order);
   if (purchaseIds.length === 0) return "not_academy";
+  if (await hasFullRefund(db, order.id)) return "refunded";
   let granted = 0;
   for (const id of purchaseIds) if (await claimPurchase(db, id, userId)) granted++;
   let outcome: ClaimOutcome = "granted";
