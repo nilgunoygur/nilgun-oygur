@@ -9,7 +9,7 @@ import { ownerUsers, type UserListParams } from "./owner-users.ts";
 import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
-import { partialRefundReviews, recordShopierRefund } from "./refunds.ts";
+import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
 
 type Dependencies = {
   db: Database;
@@ -44,7 +44,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
         const refunds = await shopier.listSucceededRefunds();
-        for (const refund of refunds) await recordShopierRefund(db, refund);
+        await recordNewShopierRefunds(db, refunds);
         const orders = await shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000));
         let purchases = 0, granted = 0;
         for (const order of orders) {

@@ -35,6 +35,13 @@ export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
   });
 }
 
+/** A recorded refund is never applied twice, so the daily replay skips the ones already stored. */
+export async function recordNewShopierRefunds(db: Database, refunds: ShopierRefund[]) {
+  if (!refunds.length) return;
+  const known = new Set((await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(inArray(shopierRefunds.id, refunds.map(r => r.id)))).map(r => r.id));
+  for (const refund of refunds) if (!known.has(refund.id)) await recordShopierRefund(db, refund);
+}
+
 // Rebuilds only the current extension chain; owner grants and manual revocations are untouched.
 async function rebuildRefundedExtension(db: Database, userId: string, courseId: string, orderId: string) {
   const grants = await db.select().from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId)));

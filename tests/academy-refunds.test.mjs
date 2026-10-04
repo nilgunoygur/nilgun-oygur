@@ -179,10 +179,13 @@ test("concurrent refund and claim cannot leave refunded access active", async ()
 test("reconciliation handles recent refunds of old orders; claims fail closed when refunds cannot be checked", async () => {
   const f = await fixture(), oldOrder = f.order();
   await recordShopierOrder(db, oldOrder);
-  const shopier = { listSucceededRefunds: async () => [refund(oldOrder)], listOrdersSince: async () => [], listProducts: async () => ({ products: [], ids: new Set([f.course.shopierProductId]) }) };
+  const returned = refund(oldOrder);
+  const shopier = { listSucceededRefunds: async () => [returned], listOrdersSince: async () => [], listProducts: async () => ({ products: [], ids: new Set([f.course.shopierProductId]) }) };
   const akademi = createAkademi({ db, shopier });
   assert.equal((await akademi.access.replayRecentOrders()).refunds, 1);
   assert.equal(await f.current(), undefined);
+  assert.equal((await akademi.access.replayRecentOrders()).refunds, 1, "a second replay skips the stored refund");
+  assert.equal((await db.select().from(schema.shopierRefunds).where(eq(schema.shopierRefunds.shopierOrderId, oldOrder.id))).length, 1);
   const broken = createAkademi({ db, shopier: { ...shopier, getOrder: async () => f.order(), listSucceededRefunds: async () => { throw new Error("unavailable"); } } });
   await assert.rejects(() => broken.access.claimOrder(f.id, "123", `${f.id}@example.com`), /unavailable/);
   await assert.rejects(() => broken.access.replayRecentOrders(), /unavailable/);
