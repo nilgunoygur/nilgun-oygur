@@ -1,4 +1,3 @@
-import type { Config } from "../config.ts";
 import type { Database } from "../db/types.ts";
 import type { ProductChanges, ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
@@ -14,22 +13,20 @@ import { studentContact } from "./student-contact.ts";
 type Dependencies = {
   db: Database;
   shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "createProduct" | "updateProduct">;
-  config: Pick<Config, "shopier">;
   now?: () => Date;
 };
 
-// Composition root: wires the Akademi modules to one database, one Shopier adapter and one config.
+// Composition root: wires the Akademi modules to one database and one Shopier adapter.
 // Production builds it from env in server.ts; tests build it with PGlite and a fake Shopier.
-export function createAkademi({ db, shopier, config, now = () => new Date() }: Dependencies) {
-  const options = { includeHidden: config.shopier.includeHidden };
-  const syncCatalog = () => syncCatalogFromShopier(db, shopier, options);
+export function createAkademi({ db, shopier, now = () => new Date() }: Dependencies) {
+  const syncCatalog = () => syncCatalogFromShopier(db, shopier);
   const products = async () => (await shopier.listProducts()).products;
   const ownerOverview = createOwnerOverview({ db, shopier, now });
 
   return {
     catalog: {
-      list: async () => listCatalog(db, await products(), options),
-      find: (slug: string) => findCatalogCourse(db, slug, id => shopier.getProduct(id), options),
+      list: async () => listCatalog(db, await products()),
+      find: (slug: string) => findCatalogCourse(db, slug, id => shopier.getProduct(id)),
       cards: async () => productCards(await products()),
       sync: syncCatalog,
     },
@@ -75,7 +72,7 @@ export function createAkademi({ db, shopier, config, now = () => new Date() }: D
       syncCatalog: (actorId: string) => syncCatalogAsOwner(db, actorId, syncCatalog),
     },
     webhooks: {
-      shopier: (rawBody: string, headers: Headers, tokens: string[]) => handleShopierWebhook(db, rawBody, headers, tokens, options),
+      shopier: (rawBody: string, headers: Headers, tokens: string[]) => handleShopierWebhook(db, rawBody, headers, tokens),
     },
   };
 }

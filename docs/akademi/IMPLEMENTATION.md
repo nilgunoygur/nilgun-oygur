@@ -57,7 +57,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 - **Matching**: paid lines for known products become purchases keyed by the buyer email Shopier reports (billing first, then shipping). A verified account with that email is granted immediately; otherwise it is granted when the student verifies that email (Better Auth `afterEmailVerification`) or on their next verified sign-in. Page renders never grant access. "Siparişimi ekle" claims an order bought with another email: order number plus Shopier email, verified against the Shopier API, five attempts per hour.
 - **Access** runs from the payment time for the course's duration. A repeat purchase while access is active extends it (the previous grant is retired as `extended_by_purchase`).
 - **Daily sync** `GET/POST /api/internal/shopier-sync` (Bearer `CRON_SECRET`, Vercel Cron 04:00 UTC) replays the last seven days of orders. All steps are idempotent.
-- **Owner panel** `/yonetim/egitimler`: lists courses with their live Shopier title and price, sets access duration, publishes, unpublishes and archives, runs "Shopier ile eşitle", and shows recent sales and whether each is attached to an account.
+- **Owner panel** `/yonetim/egitimler`: lists courses with their live Shopier title and price, sets access duration, turns each course on or off with the switch in its row (and says why a published course is still not shown), archives, runs "Shopier ile eşitle", and shows recent sales and whether each is attached to an account.
 - **Editing Shopier from the panel:** "Yeni eğitim" creates a digital TRY product (`POST /products`) and links it as a course with the chosen access duration, as a draft unless published straight away. "Shopier ürününü düzenle" changes title, description, price, discount, cover, store visibility (`customListing`) and stock (`stockQuantity` 0 or 10000) with `PUT /products/{id}`, sending only the fields that changed. The description is edited as plain text with a few marks (`###`, `-`, `**`), one paragraph per line. Two behaviours were observed on the live API and are built in: Shopier drops `<br>` from descriptions it is sent (so a line break is saved as a paragraph break), and it takes price and discount as one block (a price sent alone resets the discount, a discount alone is refused), so a change to either sends both. A cover is uploaded to the private Blob store and handed to Shopier as a link signed for a day, because Shopier downloads images itself; a new course without a cover uses the academy's default. Every write records an intent and an outcome in the audit log. Deleting a product stays in the Shopier panel.
 - **Refunds** are deliberately not implemented yet (owner decision pending).
 
@@ -65,8 +65,8 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 - **Source of truth:** the Shopier products API. `courses` only links a product to the site: slug, product ID, access duration and owner status (migration `0005` dropped the copied title, description, image, price and discount columns).
 - **Reading:** pages read title, description, image, price and discount live from `GET /products` and `GET /products/{id}`, cached by the Catalog module with `'use cache'` (revalidate 10 minutes, tag `akademi-catalog`). Product webhooks and the daily sync call `revalidateTag(tag, "max")`; owner actions call `updateTag`.
-- **What counts as a course:** only products that are *visible, in-stock and digital* are shown. With `SHOPIER_SHOW_HIDDEN_PRODUCTS=true`, set in Development and Preview only, hidden `[TEST]` products are listed too. Production never shows them, even though the database is shared.
-- **Linking:** the sync links new course products as published courses with 365 days of access, which the owner can change.
+- **What counts as a course:** a course is shown when the owner has published it and its product is *in stock, digital and priced in TRY*. Hiding a product from the Shopier store (`customListing`) only removes it from the Shopier storefront; the course stays on the site. The same rule applies in Development, Preview and Production, which share one database.
+- **Linking:** the sync links new course products with 365 days of access, which the owner can change. A listed product becomes a published course; a product hidden from the Shopier store becomes a draft, so nothing hidden goes on sale until the owner switches it on.
 - **Removal:** a course whose product is no longer returned is archived. A failed API call archives nothing, and a product that fails validation still counts as existing.
 - **Owner decisions stick:** archived courses are never revived.
 - **When it runs:** `product.created`/`product.updated` webhooks link new products immediately; the daily cron and "Shopier ile eşitle" run the full sync (which also archives deleted products). Pages never sync: a deleted product disappears from the catalog on the next cache refresh because it is no longer returned.
@@ -77,7 +77,7 @@ Payment happens on Shopier product pages. The site records purchases from Shopie
 
 ### Test products
 
-Seven hidden `[TEST]` products remain in Shopier (`51075042`, `51075057`, `51075059`, `51076812`, `51076813`, `51076814`, `51076937`). Hidden products are shown only where `SHOPIER_SHOW_HIDDEN_PRODUCTS=true` (Development and Preview). Their demo course rows and the simulated purchase were removed from the database on 22 September 2026. Delete the products in the Shopier panel.
+Seven hidden `[TEST]` products remain in Shopier (`51075042`, `51075057`, `51075059`, `51076812`, `51076813`, `51076814`, `51076937`). Their courses are drafts or archived (migration `0015`), except the ₺1 Kuantum demo (`51076812`), which is published for a real end-to-end purchase. Switch it off in `/yonetim/egitimler` when testing is done, and delete the products in the Shopier panel.
 
 ### Testing without a card
 
@@ -85,7 +85,7 @@ Shopier has no sandbox or test cards. Instead:
 
 - **Local auth**: with `NODE_ENV=development` and no `RESEND_API_KEY`, verification and reset emails are printed to the `next dev` terminal, so registration and login work locally. Never active in deployments.
 - **Purchases**: `pnpm run shopier:simulate <email> <product-id>` sends a correctly signed `order.created` webhook to the local server using the development-only `SHOPIER_WEBHOOK_TOKEN`. It refuses non-local URLs, and the production token is sensitive in Vercel, so it cannot forge production orders.
-- **End to end**: one real ₺1 purchase of a hidden test product after the production webhook is registered, then a refund in the Shopier panel.
+- **End to end**: one real ₺1 purchase of the published test course, then a refund in the Shopier panel.
 
 ### Security notes
 

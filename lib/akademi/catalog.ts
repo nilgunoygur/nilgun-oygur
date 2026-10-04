@@ -12,7 +12,6 @@ import { courseSlug } from "./slug.ts";
 /** Cache tag for everything the public catalog shows. Invalidate it whenever products or courses change. */
 export const CATALOG_TAG = "akademi-catalog";
 
-export type CatalogOptions = { includeHidden: boolean };
 export type ProductSource = { listProducts(): Promise<{ products: ShopierProduct[]; ids: Set<string> }> };
 
 export const fallbackCover = "/images/akademi/academy-art-v1.png";
@@ -38,8 +37,8 @@ function saleDetails(product: ShopierProduct) {
 }
 
 /** A course is shown for sale when its row is published and its product is a sellable course product. */
-function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProduct | null | undefined, { includeHidden }: CatalogOptions): CatalogCourse | null {
-  if (row.status !== "published" || !product || !isCourseProduct(product, { includeHidden })) return null;
+function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProduct | null | undefined): CatalogCourse | null {
+  if (row.status !== "published" || !product || !isCourseProduct(product)) return null;
   const details = saleDetails(product);
   if (!details) return null;
   return {
@@ -49,18 +48,18 @@ function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProdu
   };
 }
 
-export async function listCatalog(db: Database, products: ShopierProduct[], options: CatalogOptions): Promise<CatalogCourse[]> {
+export async function listCatalog(db: Database, products: ShopierProduct[]): Promise<CatalogCourse[]> {
   const byId = new Map(products.map(product => [product.id, product]));
   const rows = await db.select().from(courses).where(eq(courses.status, "published")).orderBy(asc(courses.createdAt));
-  return rows.flatMap(row => toCatalogCourse(row, byId.get(row.shopierProductId), options) ?? []);
+  return rows.flatMap(row => toCatalogCourse(row, byId.get(row.shopierProductId)) ?? []);
 }
 
 /** Accepts a raw route param. */
-export async function findCatalogCourse(db: Database, rawSlug: string, getProduct: (id: string) => Promise<ShopierProduct | null>, options: CatalogOptions) {
+export async function findCatalogCourse(db: Database, rawSlug: string, getProduct: (id: string) => Promise<ShopierProduct | null>) {
   const slug = normalizeSlug(rawSlug);
   if (!slug) return null;
   const [row] = await db.select().from(courses).where(and(eq(courses.status, "published"), eq(courses.slug, slug))).limit(1);
-  return row ? toCatalogCourse(row, await getProduct(row.shopierProductId), options) : null;
+  return row ? toCatalogCourse(row, await getProduct(row.shopierProductId)) : null;
 }
 
 /** Product title and cover by id, whatever its sale state, so buyers still see courses no longer for sale. */
@@ -86,6 +85,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
       const details = product ? saleDetails(product) : null;
       return {
         ...row, title: titleOf(row.productId), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
+        blocker: !product ? "missing" as const : product.type !== "digital" ? "notDigital" as const : !isCourseProduct(product) ? "outOfStock" as const : details ? null : "unpriced" as const,
         // Raw Shopier values for the edit form.
         product: product && isEditableProduct(product) ? {
           description: descriptionMarkup(product.description), listPriceKurus: parsePriceKurus(product.priceData.price), image: details?.imageUrl ?? null,
@@ -97,24 +97,24 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   };
 }
 
-/** The new course's id, or undefined when the product is already linked. The owner's `settings` win over an existing link. */
-export async function linkCourse(db: Database, product: Pick<ShopierProduct, "id" | "title">, settings?: { accessDurationDays: number; status: "draft" | "published" }) {
+/** The new course's id, or undefined when the product is already linked. The owner's `settings` win; without them a product hidden from the Shopier store starts as a draft. */
+export async function linkCourse(db: Database, product: Pick<ShopierProduct, "id" | "title" | "customListing">, settings?: { accessDurationDays: number; status: "draft" | "published" }) {
   const slug = courseSlug(product.title) || `egitim-${product.id}`;
   const [taken] = await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1);
-  const insert = db.insert(courses).values({ slug: taken ? `${slug}-${product.id}` : slug, shopierProductId: product.id, status: "published", ...settings });
+  const insert = db.insert(courses).values({ slug: taken ? `${slug}-${product.id}` : slug, shopierProductId: product.id, status: product.customListing ? "draft" : "published", ...settings });
   const [row] = await (settings ? insert.onConflictDoUpdate({ target: courses.shopierProductId, set: settings }) : insert.onConflictDoNothing()).returning({ id: courses.id });
   return row?.id;
 }
 
 /** product.created / product.updated: link a new course product. Returns whether the public catalog may have changed. */
-export async function applyShopierProduct(db: Database, product: ShopierProduct, { includeHidden }: CatalogOptions): Promise<"added" | "changed" | "ignored"> {
+export async function applyShopierProduct(db: Database, product: ShopierProduct): Promise<"added" | "changed" | "ignored"> {
   const [course] = await db.select({ id: courses.id }).from(courses).where(eq(courses.shopierProductId, product.id)).limit(1);
   if (course) return "changed";
-  return isCourseProduct(product, { includeHidden }) && await linkCourse(db, product) ? "added" : "ignored";
+  return isCourseProduct(product) && await linkCourse(db, product) ? "added" : "ignored";
 }
 
 /** Links new course products and archives courses whose product is gone; owner-archived courses stay archived. */
-export async function syncCatalogFromShopier(db: Database, shopier: ProductSource, { includeHidden }: CatalogOptions) {
+export async function syncCatalogFromShopier(db: Database, shopier: ProductSource) {
   const { products, ids } = await shopier.listProducts();
   const linked = await db.select({ id: courses.id, productId: courses.shopierProductId, status: courses.status }).from(courses);
   const known = new Set(linked.map(course => course.productId));
@@ -125,7 +125,7 @@ export async function syncCatalogFromShopier(db: Database, shopier: ProductSourc
     result.archived++;
   }
   for (const product of products) {
-    if (!known.has(product.id) && isCourseProduct(product, { includeHidden }) && await linkCourse(db, product)) result.added++;
+    if (!known.has(product.id) && isCourseProduct(product) && await linkCourse(db, product)) result.added++;
   }
   return result;
 }

@@ -6,7 +6,7 @@ import type { CourseChange, productFormSchema } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
-  priceKurus: z.number().nullable(), discounted: z.boolean(), accessDurationDays: z.number(),
+  priceKurus: z.number().nullable(), discounted: z.boolean(), blocker: z.enum(["missing", "notDigital", "outOfStock", "unpriced"]).nullable(), accessDurationDays: z.number(),
   sales: z.number(), claimed: z.number(), status: z.enum(["published", "draft", "archived"]),
   product: z.object({ description: z.string(), listPriceKurus: z.number().nullable(), image: z.string().nullable(), hidden: z.boolean(), inStock: z.boolean(), url: z.string().nullable() }).nullable(),
 });

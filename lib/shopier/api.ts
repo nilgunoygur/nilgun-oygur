@@ -129,9 +129,8 @@ export function productDetails(product: ShopierProduct): ShopierProductDetails |
 /** The products the owner can edit from the site. */
 export const isEditableProduct = (product: ShopierProduct) => product.type === "digital" && product.priceData.currency === "TRY";
 
-/** In-stock digital products are Akademi courses; hidden ones only where test products are shown. Use the Catalog module's rule, not this alone. */
-export const isCourseProduct = (product: ShopierProduct, { includeHidden = false } = {}) =>
-  product.type === "digital" && (includeHidden || !product.customListing) && product.stockStatus !== "outOfStock";
+/** In-stock digital products are Akademi courses. Use the Catalog module's rule, not this alone. */
+export const isCourseProduct = (product: ShopierProduct) => product.type === "digital" && product.stockStatus !== "outOfStock";
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {
