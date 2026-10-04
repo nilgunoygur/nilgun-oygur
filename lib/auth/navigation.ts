@@ -4,7 +4,7 @@ export const verificationCallback = (destination?: string) => `/akademi/giris?ve
 
 // Only known post-login destinations are accepted; never redirect to user-supplied URLs.
 export function authDestination(value: unknown): string {
-  if (value === "/akademi/siparis-ekle" || value === "/akademi/satin-alim-sonrasi") return value;
+  if (value === "/akademi/siparis-ekle") return value;
   if (value === "/yonetim" || value === "/yonetim/guvenlik") return value;
   if (typeof value === "string" && /^\/akademi\/[a-z0-9-]{1,80}\/satin-al$/.test(value)) return value;
   if (typeof value === "string" && /^\/akademi\/hesabim\/[a-f0-9-]{36}$/.test(value)) return value;

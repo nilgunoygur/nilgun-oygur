@@ -1,16 +1,8 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { courseAccess, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
+import { asc, eq, inArray, sql } from "drizzle-orm";
+import { shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { toKurus, type ShopierRefund } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
-import { purchaseWindow } from "./access-policy.ts";
-
-/** Refunds and claims of one order run one at a time. */
-export const lockShopierOrder = (tx: Database, orderId: string) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${orderId}))`);
-
-export async function hasFullRefund(db: Database, orderId: string) {
-  const [refund] = await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(and(eq(shopierRefunds.shopierOrderId, orderId), eq(shopierRefunds.type, "full"))).limit(1);
-  return !!refund;
-}
+import { lockShopierOrder, rebuildRefundedExtension } from "./course-access.ts";
 
 /** Only succeeded refunds change access. */
 export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
@@ -21,7 +13,7 @@ export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
       amountKurus: toKurus(refund.total), currency: refund.currency, refundedAt: refund.dateRefunded ?? refund.dateCreated,
     }).onConflictDoNothing().returning({ id: shopierRefunds.id });
     if (!inserted.length) return "refund_duplicate";
-    // A partial refund names an order, not a product. Keep it visible for owner review.
+    // Partial refunds name no product; kept for owner review.
     if (refund.type !== "full") return "partial_refund_review";
     const purchases = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.shopierOrderId, refund.orderId));
     const students = [...new Set(purchases.flatMap(p => p.userId ? [p.userId] : []))].sort();
@@ -35,43 +27,20 @@ export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
   });
 }
 
-/** A recorded refund is never applied twice, so the daily replay skips the ones already stored. */
+/** Skips refunds already stored. */
 export async function recordNewShopierRefunds(db: Database, refunds: ShopierRefund[]) {
   if (!refunds.length) return;
   const known = new Set((await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(inArray(shopierRefunds.id, refunds.map(r => r.id)))).map(r => r.id));
   for (const refund of refunds) if (!known.has(refund.id)) await recordShopierRefund(db, refund);
 }
 
-// Rebuilds only the current extension chain; owner grants and manual revocations are untouched.
-async function rebuildRefundedExtension(db: Database, userId: string, courseId: string, orderId: string) {
-  const grants = await db.select().from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId)));
-  const current = grants.find(g => g.revokedAt === null);
-  if (!current || !current.sourcePurchaseId) return;
-  const purchases = await db.select().from(shopierPurchases).where(and(eq(shopierPurchases.userId, userId), eq(shopierPurchases.courseId, courseId)));
-  const byPurchase = new Map(purchases.map(p => [p.id, p]));
-  const byGrant = new Map(grants.map(g => [g.id, g]));
-  const chain: typeof grants = [];
-  const visited = new Set<string>();
-  for (let grant: typeof current | undefined = current; grant; grant = grant.extendedFromId ? byGrant.get(grant.extendedFromId) : undefined) {
-    if (visited.has(grant.id)) throw new Error("Invalid course access extension chain.");
-    visited.add(grant.id);
-    chain.unshift(grant);
-  }
-  if (!chain.some(g => g.sourcePurchaseId && byPurchase.get(g.sourcePurchaseId)?.shopierOrderId === orderId)) return;
-  const refunds = await db.select().from(shopierRefunds).where(and(eq(shopierRefunds.type, "full"), inArray(shopierRefunds.shopierOrderId, purchases.map(p => p.shopierOrderId))));
-  const refundedOrders = new Set(refunds.map(r => r.shopierOrderId));
-  let remaining: { grant: typeof current; startsAt: Date; expiresAt: Date } | undefined;
-  for (const grant of chain) {
-    if (!grant.sourcePurchaseId) { remaining = { grant, startsAt: grant.startsAt, expiresAt: grant.expiresAt }; continue; }
-    const purchase = byPurchase.get(grant.sourcePurchaseId);
-    if (!purchase) throw new Error("Course access purchase is missing.");
-    if (refundedOrders.has(purchase.shopierOrderId)) continue;
-    const { startsAt, expiresAt } = purchaseWindow(remaining, purchase.purchasedAt, purchase.accessDurationDays);
-    remaining = { grant, startsAt, expiresAt };
-  }
-  // Release the unique active slot before restoring a surviving earlier purchase.
-  await db.update(courseAccess).set({ revokedAt: new Date(), revocationReason: "shopier_full_refund" }).where(eq(courseAccess.id, current.id));
-  if (remaining) await db.update(courseAccess).set({ startsAt: remaining.startsAt, expiresAt: remaining.expiresAt, revokedAt: null, revocationReason: null }).where(eq(courseAccess.id, remaining.grant.id));
+/** What an order's course purchases cost, less the refunds recorded for it. */
+export async function refundableKurus(db: Database, orderId: string) {
+  const [[{ paid }], [{ refunded }]] = await Promise.all([
+    db.select({ paid: sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::int` }).from(shopierPurchases).where(eq(shopierPurchases.shopierOrderId, orderId)),
+    db.select({ refunded: sql<number>`coalesce(sum(${shopierRefunds.amountKurus}), 0)::int` }).from(shopierRefunds).where(eq(shopierRefunds.shopierOrderId, orderId)),
+  ]);
+  return paid - refunded;
 }
 
 export function partialRefundReviews(db: Database) {

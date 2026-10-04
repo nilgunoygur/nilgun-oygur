@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { claimHintCookie } from "@/lib/akademi/claim-schema";
 import { Button, buttonVariants } from "@/components/ui/button";
 
-/** Closing it sets a year-long cookie, which the account page reads to leave it out. */
+/** Closing sets a cookie the account page reads. */
 export function ClaimHint() {
   const [open, setOpen] = useState(true);
   if (!open) return null;

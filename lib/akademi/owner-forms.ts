@@ -33,10 +33,9 @@ export const productFormSchema = z.object({ ...productFields, accessDays, publis
 export const productChangeSchema = z.object(productFields).partial().refine(cheaper, cheaperIssue);
 const refundNote = z.string().trim().max(500, "Not en fazla 500 karakter olabilir.");
 export const refundApprovalSchema = z.object({ amount: lira("İade tutarı"), note: refundNote });
-export const refundDeclineSchema = z.object({ note: refundNote });
 export const refundDecisionSchema = z.discriminatedUnion("decision", [
   refundApprovalSchema.extend({ decision: z.literal("approve") }),
-  refundDeclineSchema.extend({ decision: z.literal("decline") }),
+  z.object({ decision: z.literal("decline"), note: refundNote }),
 ]);
 export type RefundDecisionInput = z.input<typeof refundDecisionSchema>;
 

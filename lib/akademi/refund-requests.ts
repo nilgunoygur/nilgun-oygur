@@ -1,11 +1,11 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { courseAccess, refundRequests, shopierPurchases, user } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { hasFullRefund } from "./refunds.ts";
+import { hasFullRefund } from "./course-access.ts";
 
-// Refund Requests: a student asks, the owner decides (owner-commands.ts). Money only moves through Shopier.
+// A student asks, the owner decides (owner-commands.ts); money only moves through Shopier.
 
-export type RefundRequestOutcome = "requested" | "no_purchase" | "already_pending" | "refunded";
+type RefundRequestOutcome = "requested" | "no_purchase" | "already_pending" | "refunded";
 
 /** A request is about the purchase behind the student's current access to the course. */
 export async function requestRefund(db: Database, userId: string, courseId: string, reason: string): Promise<RefundRequestOutcome> {
@@ -18,7 +18,6 @@ export async function requestRefund(db: Database, userId: string, courseId: stri
   return inserted.length ? "requested" : "already_pending";
 }
 
-/** The student's latest request for a course, for the course page. */
 export async function latestRefundRequest(db: Database, userId: string, courseId: string) {
   const [request] = await db.select({ status: refundRequests.status, ownerNote: refundRequests.ownerNote }).from(refundRequests)
     .innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId))

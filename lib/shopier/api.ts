@@ -167,11 +167,15 @@ export function isValidWebhookSignature(rawBody: string, signature: string | nul
   return given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
 }
 
+export const isShopierId = (id: string) => /^\d{1,20}$/.test(id);
+
 export class ShopierError extends Error {
   readonly status: number;
   /** The start of Shopier's response body, for the owner to read when a write is refused. */
   readonly detail: string;
   constructor(status: number, message: string, detail = "") { super(message); this.status = status; this.detail = detail; }
+  /** Shopier answered no, so nothing was written; any other failure may have gone through. */
+  get refused() { return this.status < 500; }
 }
 
 export type ShopierClient = ReturnType<typeof createShopierClient>;
@@ -196,7 +200,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       return response.json() as Promise<T>;
     }
   }
-  // Shopier returns HTTP 500 for refund date filters, so read every page; never truncate.
+  // Shopier answers 500 to refund date filters, so read every page.
   async function listSucceededRefunds(maxPages = 20) {
     const refunds: ShopierRefund[] = [];
     for (let page = 1; page <= maxPages; page++) {
@@ -209,7 +213,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
   return {
     listSucceededRefunds,
     async getOrder(id: string) {
-      if (!/^\d{1,20}$/.test(id)) return null;
+      if (!isShopierId(id)) return null;
       try {
         return shopierOrderSchema.parse(await call(`/orders/${id}`));
       } catch (error) {
@@ -217,9 +221,9 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
-    /** Sends money back to the buyer. Shopier answers with the refund and later fires refund.updated. */
+    /** Shopier later fires refund.updated. */
     async createRefund(orderId: string, amountKurus: number, note?: string) {
-      if (!/^\d{1,20}$/.test(orderId) || !Number.isInteger(amountKurus) || amountKurus <= 0) throw new Error("Invalid Shopier refund.");
+      if (!isShopierId(orderId) || !Number.isInteger(amountKurus) || amountKurus <= 0) throw new Error("Invalid Shopier refund.");
       return shopierRefundSchema.parse(await call("/refunds", { method: "POST", body: JSON.stringify({ orderId, amount: amount(amountKurus), ...(note && { note }) }) }));
     },
     async listOrdersSince(since: Date, maxPages = 10) {
@@ -255,7 +259,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       };
     },
     async getProduct(id: string) {
-      if (!/^\d{1,20}$/.test(id)) return null;
+      if (!isShopierId(id)) return null;
       try {
         return shopierProductSchema.parse(await call(`/products/${id}`));
       } catch (error) {
@@ -272,7 +276,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       }));
     },
     async updateProduct(id: string, changes: ProductChanges) {
-      if (!/^\d{1,20}$/.test(id)) throw new Error("Invalid Shopier product.");
+      if (!isShopierId(id)) throw new Error("Invalid Shopier product.");
       return shopierProductSchema.parse(await call(`/products/${id}`, { method: "PUT", body: JSON.stringify(productBody(changes)) }));
     },
     /** Every product (hidden ones included). `ids` also covers products that failed validation. */

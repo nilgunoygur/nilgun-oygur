@@ -19,7 +19,7 @@ test("auth failures use Turkish messages instead of exposing provider details", 
 });
 
 test("course claiming survives login and email verification without accepting external redirects", () => {
-  for (const path of ["/akademi/siparis-ekle", "/akademi/satin-alim-sonrasi"]) {
+  for (const path of ["/akademi/siparis-ekle"]) {
     assert.equal(authDestination(path), path);
     const callback = new URL(verificationCallback(path), "https://www.nilgunoygur.com");
     assert.equal(callback.pathname, "/akademi/giris");

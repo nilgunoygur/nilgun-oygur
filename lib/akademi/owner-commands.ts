@@ -1,8 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
-import { adminAuditLog, courses, refundRequests, shopierPurchases, shopierRefunds } from "../db/schema.ts";
+import { and, eq } from "drizzle-orm";
+import { adminAuditLog, courses, refundRequests, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
 import { linkCourse } from "./catalog.ts";
+import { formatMoney } from "./format.ts";
+import { refundableKurus } from "./refunds.ts";
 
 // Owner Commands: every owner change runs with its audit entry in one transaction, and only when something changed.
 // Callers authorize the owner (verified session and owner row) before calling.
@@ -90,7 +92,7 @@ export async function createCourse(db: Database, actorId: string, { accessDurati
 
 export type RefundDecision = { approve: true; amountKurus: number; note: string } | { approve: false; note: string };
 
-/** Approving asks Shopier to send the money back; access is removed once Shopier confirms a full refund. Returns that refund, or null for a decline. */
+/** Returns Shopier's refund, or null for a decline. */
 export async function decideRefundRequest(db: Database, actorId: string, requestId: string, decision: RefundDecision, shopier: Pick<ShopierClient, "createRefund">) {
   const [request] = await db.select({ orderId: shopierPurchases.shopierOrderId }).from(refundRequests)
     .innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).where(eq(refundRequests.id, requestId)).limit(1);
@@ -105,22 +107,18 @@ export async function decideRefundRequest(db: Database, actorId: string, request
     if (!declined) throw alreadyDecided;
     return null;
   }
-  const [[{ paid }], [{ refunded }]] = await Promise.all([
-    db.select({ paid: sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::int` }).from(shopierPurchases).where(eq(shopierPurchases.shopierOrderId, request.orderId)),
-    db.select({ refunded: sql<number>`coalesce(sum(${shopierRefunds.amountKurus}), 0)::int` }).from(shopierRefunds).where(eq(shopierRefunds.shopierOrderId, request.orderId)),
-  ]);
-  if (decision.amountKurus > paid - refunded) throw new OwnerInputError("İade tutarı siparişin kalan tutarını aşamaz.");
-  // Claimed before the Shopier call, so two approvals cannot send the money twice.
+  if (decision.amountKurus > await refundableKurus(db, request.orderId)) throw new OwnerInputError("İade tutarı siparişin kalan tutarını aşamaz.");
+  // Claimed first, so two approvals cannot refund twice.
   const claimed = await db.update(refundRequests).set({ status: "approved", amountKurus: decision.amountKurus, ...decided }).where(pending).returning({ id: refundRequests.id });
   if (!claimed.length) throw alreadyDecided;
   try {
-    const refund = await withShopier(db, actorId, target, "refund_request.refund", `sipariş ${request.orderId} için ${(decision.amountKurus / 100).toFixed(2)} iade`,
+    const refund = await withShopier(db, actorId, target, "refund_request.refund", `sipariş ${request.orderId} için ${formatMoney(decision.amountKurus)} iade`,
       () => shopier.createRefund(request.orderId, decision.amountKurus, decision.note || undefined));
     await db.update(refundRequests).set({ shopierRefundId: refund.id }).where(eq(refundRequests.id, requestId));
     return refund;
   } catch (error) {
-    // Shopier refused, so no money moved: reopen the request. Anything else may have gone through, so it stays approved for the owner to check.
-    if (error instanceof ShopierError && error.status < 500) await db.update(refundRequests).set({ status: "pending", amountKurus: null, decidedBy: null, decidedAt: null, ownerNote: null }).where(eq(refundRequests.id, requestId));
+    // A refusal moved no money: reopen. Anything else stays approved for the owner to check.
+    if (error instanceof ShopierError && error.refused) await db.update(refundRequests).set({ status: "pending", amountKurus: null, decidedBy: null, decidedAt: null, ownerNote: null }).where(eq(refundRequests.id, requestId));
     throw error;
   }
 }

@@ -237,13 +237,13 @@ export const shopierRefunds = pgTable("shopier_refunds", {
   check("shopier_refunds_type_valid", sql`${t.type} IN ('full', 'partial')`),
   check("shopier_refunds_amount_valid", sql`${t.amountKurus} >= 0`),
 ]);
-// A student's request to refund one purchase. The owner approves (the site asks Shopier to refund) or declines.
+// A student's request to refund one purchase.
 export const refundRequests = pgTable("refund_requests", {
   id: id(),
   purchaseId: uuid("purchase_id").notNull().references(() => shopierPurchases.id),
   userId: text("user_id").notNull().references(() => user.id),
   reason: text("reason").notNull(),
-  status: text("status").notNull().default("pending"),
+  status: text("status", { enum: ["pending", "approved", "declined"] }).notNull().default("pending"),
   amountKurus: integer("amount_kurus"),
   shopierRefundId: text("shopier_refund_id"),
   ownerNote: text("owner_note"),

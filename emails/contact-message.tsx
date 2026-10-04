@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import { Column, Link, Row, Section, Text } from "react-email";
 import { ActionButton, EmailLayout, Small, colors, kicker, text } from "./_components/layout.tsx";
 
-type Props = { name: string; email: string; message: string; siteUrl: string; orderNumber?: string };
+type Props = { name: string; email: string; message: string; siteUrl: string; support?: boolean; orderNumber?: string };
 
 export const contactSubject = "Web sitesi iletişim mesajı";
 export const supportSubject = "Akademi destek mesajı";
@@ -20,9 +20,7 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** A message with `orderNumber` defined (even empty) came from the Akademi support form. */
-export default function ContactMessage({ name, email, message, siteUrl, orderNumber }: Props) {
-  const support = orderNumber !== undefined, subject = support ? supportSubject : contactSubject;
+export default function ContactMessage({ name, email, message, siteUrl, support, orderNumber }: Props) {
   return (
     <EmailLayout
       preview={`${name}: ${message.slice(0, 90)}`}
@@ -42,7 +40,7 @@ export default function ContactMessage({ name, email, message, siteUrl, orderNum
         {/* Outlook ignores white-space: pre-wrap. */}
         <Text className="ink" style={{ ...text, margin: 0 }}>{message.split("\n").map((line, index) => <Fragment key={index}>{index > 0 && <br />}{line}</Fragment>)}</Text>
       </Section>
-      <ActionButton href={`mailto:${email}?subject=${encodeURIComponent(`Re: ${subject}`)}`}>Yanıtla</ActionButton>
+      <ActionButton href={`mailto:${email}?subject=${encodeURIComponent(`Re: ${support ? supportSubject : contactSubject}`)}`}>Yanıtla</ActionButton>
       <Small style={{ margin: 0 }}>Bu e-postayı yanıtladığınızda yanıtınız doğrudan {email} adresine gider.</Small>
     </EmailLayout>
   );

@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ req
       data.decision === "approve" ? { approve: true, amountKurus: kurus(data.amount), note: data.note } : { approve: false, note: data.note });
     return new Response(null, { status: 204, headers: privateNoStore });
   } catch (error) {
-    if (error instanceof OwnerInputError || (error instanceof ShopierError && error.status < 500)) return productFailure(error);
+    if (error instanceof OwnerInputError || (error instanceof ShopierError && error.refused)) return productFailure(error);
     return refuse("Shopier’den yanıt alınamadı. İade gönderilmiş olabilir; yeniden denemeden önce Shopier panelinden kontrol edin.", 502);
   }
 }

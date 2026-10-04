@@ -2,7 +2,7 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { courseAccess, courses, providerEvents, shopierPurchases } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
-import { hasFullRefund } from "./refunds.ts";
+import { hasFullRefund } from "./course-access.ts";
 
 /** Read-only; a sync or claim alone does not prove webhook delivery. */
 export async function verifyShopierDelivery(db: Database, order: ShopierOrder) {

@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { emailField } from "../auth/forms.ts";
 
-/** Set when the student closes the "purchase not showing?" hint; a server page cannot read a constant exported from a client file. */
+/** Here, not in the client component, so the server page can read it. */
 export const claimHintCookie = "akademi-claim-hint";
 
+const orderNumber = (pattern: RegExp) => z.string().trim().transform(value => value.replace(/^#\s*/, "")).pipe(z.string().regex(pattern, "Sipariş numarası yalnızca rakamlardan oluşur."));
+export const orderNumberField = orderNumber(/^\d{5,20}$/);
+export const optionalOrderNumberField = orderNumber(/^(\d{5,20})?$/);
+
 export const claimSchema = z.object({
-  orderNumber: z.string().trim().transform(value => value.replace(/^#\s*/, "")).pipe(z.string().regex(/^\d{5,20}$/, "Sipariş numarası yalnızca rakamlardan oluşur.")),
+  orderNumber: orderNumberField,
   email: emailField("Shopier’de kullandığınız e-posta adresini yazın."),
 });
 export type ClaimInput = z.input<typeof claimSchema>;

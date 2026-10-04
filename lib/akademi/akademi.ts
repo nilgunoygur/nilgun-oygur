@@ -42,7 +42,6 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
         if (order) for (const refund of await shopier.listSucceededRefunds()) if (refund.orderId === order.id) await recordShopierRefund(db, refund);
         return claimShopierOrder(db, order, shopierEmail, userId);
       },
-      /** "İade talep et": three requests per student per day. */
       async requestRefund(userId: string, courseId: string, reason: string) {
         if (!await consumeAttempt(db, `refund-request:${userId}`, { max: 3, windowMs: 86_400_000, now: now().getTime() })) return "rate_limited" as const;
         return requestRefund(db, userId, courseId, reason);
@@ -83,7 +82,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
       updateCourseProduct: (actorId: string, courseId: string, changes: ProductChanges) => updateCourseProduct(db, actorId, courseId, changes, shopier),
       createCourse: (actorId: string, course: NewCourse) => createCourse(db, actorId, course, shopier),
-      /** A refund Shopier completes at once is applied now; otherwise refund.updated or the daily sync applies it. */
+      /** A refund Shopier completes at once is applied now. */
       async decideRefundRequest(actorId: string, requestId: string, decision: RefundDecision) {
         const refund = await decideRefundRequest(db, actorId, requestId, decision, shopier);
         if (refund) await recordShopierRefund(db, refund);

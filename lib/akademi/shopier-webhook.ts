@@ -1,4 +1,4 @@
-import { isValidWebhookSignature, shopierOrderSchema, shopierProductSchema, shopierRefundSchema } from "../shopier/api.ts";
+import { isShopierId, isValidWebhookSignature, shopierOrderSchema, shopierProductSchema, shopierRefundSchema } from "../shopier/api.ts";
 import { recordShopierRefund } from "./refunds.ts";
 import { recordShopierOrder } from "./course-access.ts";
 import { applyShopierProduct } from "./catalog.ts";
@@ -27,7 +27,7 @@ export async function handleShopierWebhook(db: Database, rawBody: string, header
   let resourceId: string | undefined;
   try {
     const id = JSON.parse(rawBody)?.id;
-    if ((typeof id === "string" || typeof id === "number") && /^\d{1,20}$/.test(String(id))) resourceId = String(id);
+    if ((typeof id === "string" || typeof id === "number") && isShopierId(String(id))) resourceId = String(id);
   } catch { /* Invalid payloads are recorded as failed by the inbox below. */ }
   const received = await receive(db, { provider: "shopier", name, deliveryId: headers.get("shopier-webhook-id"), resourceId, rawBody }, () => handle(db, JSON.parse(rawBody)));
   switch (received.status) {

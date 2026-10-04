@@ -114,13 +114,16 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
 
 const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
 
-/** One form for both decisions; a decline ignores the amount. */
+/** A decline ignores the amount. */
 function RefundDecisionForm({ request, approve, onDone }: { request: OwnerRefundRequest; approve: boolean; onDone: () => void }) {
   const client = useQueryClient();
   const form = useForm({ resolver: zodResolver(refundApprovalSchema), mode: "onTouched", defaultValues: { amount: lira(request.amountKurus), note: "" } });
   const decide = useMutation({
     mutationFn: ({ amount, note }: { amount: number; note: string }) => decideOwnerRefundRequest(request.id, approve ? { decision: "approve", amount, note } : { decision: "decline", note }),
-    onSuccess: () => { toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone(); },
+    onSuccess: () => {
+      client.setQueryData<OwnerCatalogSnapshot>(ownerQueryKeys.catalog(), current => current && { ...current, refundRequests: current.refundRequests.filter(item => item.id !== request.id) });
+      toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone();
+    },
     onError: error => form.setError("root", { message: error.message }),
     onSettled: () => client.invalidateQueries({ queryKey: ownerQueryKeys.catalog() }),
   });

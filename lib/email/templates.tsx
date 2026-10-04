@@ -14,7 +14,7 @@ export async function authenticationEmail(kind: keyof typeof authCopy, to: strin
   return { to, subject: copy.subject, text: authEmailText(copy, url), html: await render(<AuthEmail copy={copy} url={url} />) };
 }
 
-export async function contactEmail(input: z.infer<typeof contactSchema> | z.infer<typeof supportSchema>, recipient: string, siteUrl: string): Promise<EmailMessage> {
-  const props = { ...input, siteUrl };
-  return { to: recipient, replyTo: input.email, subject: "orderNumber" in input ? supportSubject : contactSubject, text: contactText(props), html: await render(<ContactMessage {...props} />) };
+export async function contactEmail(input: z.infer<typeof contactSchema> | z.infer<typeof supportSchema>, recipient: string, siteUrl: string, support = false): Promise<EmailMessage> {
+  const props = { ...input, siteUrl, support };
+  return { to: recipient, replyTo: input.email, subject: support ? supportSubject : contactSubject, text: contactText(props), html: await render(<ContactMessage {...props} />) };
 }

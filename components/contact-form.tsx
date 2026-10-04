@@ -11,7 +11,7 @@ import { track } from "@/lib/analytics";
 
 const unavailable: FormState = { status: "error", message: "İletişim formu şu anda kullanılamıyor. Lütfen bize e-posta ile ulaşın." };
 
-/** `support` adds the Shopier order number and sends the message as an Akademi support request. */
+/** `support` adds the Shopier order number. */
 export function ContactForm({ enabled, support = false }: { enabled: boolean; support?: boolean }) {
   const [sent, setSent] = useState<FormState>(idleForm);
   const form = useForm({ resolver: zodResolver(supportSchema), mode: "onTouched", defaultValues: { name: "", email: "", orderNumber: "", message: "" } });
