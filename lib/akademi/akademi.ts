@@ -16,7 +16,7 @@ type Dependencies = {
   now?: () => Date;
 };
 
-// Composition root: wires the Akademi modules to one database, one Shopier adapter and one config.
+// Composition root: wires the Akademi modules to one database and one Shopier adapter.
 // Production builds it from env in server.ts; tests build it with PGlite and a fake Shopier.
 export function createAkademi({ db, shopier, now = () => new Date() }: Dependencies) {
   const syncCatalog = () => syncCatalogFromShopier(db, shopier);

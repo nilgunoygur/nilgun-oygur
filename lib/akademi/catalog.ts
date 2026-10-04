@@ -36,13 +36,11 @@ function saleDetails(product: ShopierProduct) {
   return details && details.currency === "TRY" ? details : null;
 }
 
-/** A published course is on sale when its product is a sellable course product. Hiding a product from the Shopier store does not hide its course. */
-const isOnSale = (status: typeof courses.$inferSelect["status"], product: ShopierProduct | null | undefined): product is ShopierProduct =>
-  status === "published" && !!product && isCourseProduct(product) && !!saleDetails(product);
-
+/** A course is shown for sale when its row is published and its product is a sellable course product. */
 function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProduct | null | undefined): CatalogCourse | null {
-  if (!isOnSale(row.status, product)) return null;
-  const details = saleDetails(product)!;
+  if (row.status !== "published" || !product || !isCourseProduct(product)) return null;
+  const details = saleDetails(product);
+  if (!details) return null;
   return {
     slug: row.slug, title: details.title, summary: descriptionText(details.description), descriptionHtml: descriptionHtml(details.description), image: details.imageUrl ?? fallbackCover,
     priceKurus: details.priceKurus, compareAtPriceKurus: details.compareAtPriceKurus,
@@ -87,8 +85,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
       const details = product ? saleDetails(product) : null;
       return {
         ...row, title: titleOf(row.productId), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
-        /** Whether visitors can see and buy it right now. */
-        onSale: isOnSale(row.status, product),
+        blocker: !product ? "missing" as const : product.type !== "digital" ? "notDigital" as const : !isCourseProduct(product) ? "outOfStock" as const : details ? null : "unpriced" as const,
         // Raw Shopier values for the edit form.
         product: product && isEditableProduct(product) ? {
           description: descriptionMarkup(product.description), listPriceKurus: parsePriceKurus(product.priceData.price), image: details?.imageUrl ?? null,
@@ -100,10 +97,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   };
 }
 
-/**
- * The new course's id, or undefined when the product is already linked. The owner's `settings` win over an existing link.
- * Without them, a product hidden from the Shopier store starts as a draft, so the owner decides when it goes on sale.
- */
+/** The new course's id, or undefined when the product is already linked. The owner's `settings` win; without them a product hidden from the Shopier store starts as a draft. */
 export async function linkCourse(db: Database, product: Pick<ShopierProduct, "id" | "title" | "customListing">, settings?: { accessDurationDays: number; status: "draft" | "published" }) {
   const slug = courseSlug(product.title) || `egitim-${product.id}`;
   const [taken] = await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1);

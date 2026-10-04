@@ -129,7 +129,7 @@ export function productDetails(product: ShopierProduct): ShopierProductDetails |
 /** The products the owner can edit from the site. */
 export const isEditableProduct = (product: ShopierProduct) => product.type === "digital" && product.priceData.currency === "TRY";
 
-/** In-stock digital products are Akademi courses, listed in the Shopier store or not. Use the Catalog module's rule, not this alone. */
+/** In-stock digital products are Akademi courses. Use the Catalog module's rule, not this alone. */
 export const isCourseProduct = (product: ShopierProduct) => product.type === "digital" && product.stockStatus !== "outOfStock";
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */

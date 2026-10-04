@@ -242,7 +242,7 @@ test("the catalog shows only published, sellable TRY courses and names every lin
   const owner = await ownerCatalog(db, products);
   const row = slug => owner.courses.find(c => c.slug === slug);
   assert.deepEqual([row("sat-1").priceKurus, row("sat-usd").priceKurus, row("sat-taslak").title], [10000, null, "Ürün 80000003"]);
-  assert.deepEqual(["sat-1", "sat-usd", "sat-taslak", "sat-gizli", "sat-bedava"].map(slug => row(slug).onSale), [true, false, false, true, false]);
+  assert.deepEqual(["sat-1", "sat-usd", "sat-taslak", "sat-gizli", "sat-bedava"].map(slug => row(slug).blocker), [null, "unpriced", null, null, "unpriced"]);
   assert.equal(row("kurs").title, "Shopier ürünü 51075042");
 });
 
