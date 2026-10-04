@@ -1,4 +1,4 @@
-// Subscribes order.created, product.created and product.updated and refund.updated to <base-url>/api/shopier/webhook.
+// Subscribes order.created, product.created, product.updated and refund.updated to <base-url>/api/shopier/webhook.
 // Prints only the comma-separated one-time tokens to stdout; capture them before saving (see docs/akademi/IMPLEMENTATION.md).
 // Usage: pnpm run --silent shopier:webhook https://example.com
 import nextEnv from "@next/env";
@@ -15,7 +15,7 @@ const events = ["order.created", "product.created", "product.updated", "refund.u
 const subscribed = events.filter(event => existing.some(hook => hook.event === event && hook.url === url));
 if (subscribed.length && !tokens.length) throw new Error("Existing subscriptions need their signing tokens in SHOPIER_WEBHOOK_TOKEN before adding another subscription.");
 for (const event of events) {
-  if (existing.some(hook => hook.event === event && hook.url === url)) {
+  if (subscribed.includes(event)) {
     console.error(`${event} is already subscribed to ${url}; keeping it.`);
     continue;
   }

@@ -37,8 +37,9 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       /** "Siparişimi ekle": five attempts per student per hour, order verified against the Shopier API. */
       async claimOrder(userId: string, orderNumber: string, shopierEmail: string) {
         if (!await consumeAttempt(db, `shopier-claim:${userId}`, { max: 5, windowMs: 3_600_000, now: now().getTime() })) return "rate_limited" as const;
-        for (const refund of await shopier.listSucceededRefunds()) if (refund.orderId === orderNumber.trim()) await recordShopierRefund(db, refund);
-        return claimShopierOrder(db, await shopier.getOrder(orderNumber.trim()), shopierEmail, userId);
+        const order = await shopier.getOrder(orderNumber.trim());
+        if (order) for (const refund of await shopier.listSucceededRefunds()) if (refund.orderId === order.id) await recordShopierRefund(db, refund);
+        return claimShopierOrder(db, order, shopierEmail, userId);
       },
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {

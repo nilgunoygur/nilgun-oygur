@@ -129,8 +129,11 @@ export function productDetails(product: ShopierProduct): ShopierProductDetails |
 /** The products the owner can edit from the site. */
 export const isEditableProduct = (product: ShopierProduct) => product.type === "digital" && product.priceData.currency === "TRY";
 
-/** In-stock digital products are Akademi courses. Use the Catalog module's rule, not this alone. */
-export const isCourseProduct = (product: ShopierProduct) => product.type === "digital" && product.stockStatus !== "outOfStock";
+/** Why a product is not an Akademi course, or null for an in-stock digital product. */
+export const courseProductBlocker = (product: ShopierProduct) => product.type !== "digital" ? "notDigital" as const : product.stockStatus === "outOfStock" ? "outOfStock" as const : null;
+
+/** Use the Catalog module's rule, not this alone. */
+export const isCourseProduct = (product: ShopierProduct) => !courseProductBlocker(product);
 
 /** The email the buyer typed at Shopier checkout, normalized; billing wins over shipping. */
 export function buyerEmail(order: ShopierOrder): string | null {
@@ -193,18 +196,18 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       return response.json() as Promise<T>;
     }
   }
+  // Shopier returns HTTP 500 for refund date filters, so read every page; never truncate.
+  async function listSucceededRefunds(maxPages = 20) {
+    const refunds: ShopierRefund[] = [];
+    for (let page = 1; page <= maxPages; page++) {
+      const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
+      refunds.push(...batch.filter(refund => refund.status === "succeeded"));
+      if (batch.length < 50) return refunds;
+    }
+    throw new Error("Shopier refund list exceeded the page limit.");
+  }
   return {
-    async listSucceededRefunds(maxPages = 20) {
-      const refunds: ShopierRefund[] = [];
-      // Date filters currently fail on this account. Read all pages so an old order's
-      // recent refund is also reconciled; never silently return a truncated list.
-      for (let page = 1; page <= maxPages; page++) {
-        const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
-        refunds.push(...batch.filter(refund => refund.status === "succeeded"));
-        if (batch.length < 50) return refunds;
-      }
-      throw new Error("Shopier refund list exceeded the page limit.");
-    },
+    listSucceededRefunds,
     async getOrder(id: string) {
       if (!/^\d{1,20}$/.test(id)) return null;
       try {
@@ -237,16 +240,9 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       });
       const [rawOrders, refundResult] = await Promise.all([
         call<unknown>(`/orders?${query}`),
-        (async () => {
-          const refunds: ShopierRefund[] = [];
-          // Shopier currently returns HTTP 500 for refunds dateStart/dateEnd; filter processed dates locally.
-          for (let page = 1; page <= 20; page++) {
-            const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
-            refunds.push(...batch.filter(refund => (refund.dateRefunded ?? refund.dateCreated) >= start && (refund.dateRefunded ?? refund.dateCreated) < end));
-            if (batch.length < 50) return refunds;
-          }
-          throw new Error("Shopier refund list exceeded the page limit.");
-        })().then(refunds => ({ refunds, unavailable: false }), () => ({ refunds: [] as ShopierRefund[], unavailable: true })),
+        listSucceededRefunds().then(
+          all => ({ refunds: all.filter(refund => (refund.dateRefunded ?? refund.dateCreated) >= start && (refund.dateRefunded ?? refund.dateCreated) < end), unavailable: false }),
+          () => ({ refunds: [] as ShopierRefund[], unavailable: true })),
       ]);
       return {
         orders: z.array(shopierOrderSchema).parse(rawOrders),

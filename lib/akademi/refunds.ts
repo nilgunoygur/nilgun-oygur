@@ -2,13 +2,21 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { courseAccess, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { toKurus, type ShopierRefund } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
-import { accessExpiryFromPayment } from "./access-policy.ts";
+import { purchaseWindow } from "./access-policy.ts";
 
-/** Only completed refunds change access. No buyer details or unrestricted payloads are stored. */
+/** Refunds and claims of one order run one at a time. */
+export const lockShopierOrder = (tx: Database, orderId: string) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${orderId}))`);
+
+export async function hasFullRefund(db: Database, orderId: string) {
+  const [refund] = await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(and(eq(shopierRefunds.shopierOrderId, orderId), eq(shopierRefunds.type, "full"))).limit(1);
+  return !!refund;
+}
+
+/** Only succeeded refunds change access. */
 export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
   if (refund.status !== "succeeded") return "refund_pending_or_failed";
   return db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${refund.orderId}))`);
+    await lockShopierOrder(tx, refund.orderId);
     const inserted = await tx.insert(shopierRefunds).values({ id: refund.id, shopierOrderId: refund.orderId, type: refund.type,
       amountKurus: toKurus(refund.total), currency: refund.currency, refundedAt: refund.dateRefunded ?? refund.dateCreated,
     }).onConflictDoNothing().returning({ id: shopierRefunds.id });
@@ -27,8 +35,7 @@ export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
   });
 }
 
-// Follow only the current extension chain. Independent owner grants and access
-// manually revoked by the owner are never restored by a refund.
+// Rebuilds only the current extension chain; owner grants and manual revocations are untouched.
 async function rebuildRefundedExtension(db: Database, userId: string, courseId: string, orderId: string) {
   const grants = await db.select().from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId)));
   const current = grants.find(g => g.revokedAt === null);
@@ -52,9 +59,8 @@ async function rebuildRefundedExtension(db: Database, userId: string, courseId: 
     const purchase = byPurchase.get(grant.sourcePurchaseId);
     if (!purchase) throw new Error("Course access purchase is missing.");
     if (refundedOrders.has(purchase.shopierOrderId)) continue;
-    const startsAt = remaining && remaining.expiresAt > purchase.purchasedAt ? remaining.startsAt : purchase.purchasedAt;
-    const base = remaining && remaining.expiresAt > purchase.purchasedAt ? remaining.expiresAt : purchase.purchasedAt;
-    remaining = { grant, startsAt, expiresAt: accessExpiryFromPayment(base, purchase.accessDurationDays) };
+    const { startsAt, expiresAt } = purchaseWindow(remaining, purchase.purchasedAt, purchase.accessDurationDays);
+    remaining = { grant, startsAt, expiresAt };
   }
   // Release the unique active slot before restoring a surviving earlier purchase.
   await db.update(courseAccess).set({ revokedAt: new Date(), revocationReason: "shopier_full_refund" }).where(eq(courseAccess.id, current.id));

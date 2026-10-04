@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { getAuth } from "./index";
-import { authDestination } from "./navigation";
+import { nextParam } from "./navigation";
 import { isOwner } from "./owner-access";
 
 type Session = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>["api"]["getSession"]>>>;
@@ -27,7 +27,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 
 export async function studentPage(destination = "/akademi/hesabim") {
   const viewer = await getViewer();
-  if (!viewer) redirect(`/akademi/giris?next=${encodeURIComponent(authDestination(destination))}`);
+  if (!viewer) redirect(`/akademi/giris?next=${nextParam(destination)}`);
   return viewer;
 }
 

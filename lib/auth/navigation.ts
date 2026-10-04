@@ -1,8 +1,6 @@
-export const callbackURL = "/akademi/giris?verified=1";
+export const nextParam = (destination?: unknown) => encodeURIComponent(authDestination(destination));
 
-export function verificationCallback(destination?: string): string {
-  return `${callbackURL}&next=${encodeURIComponent(authDestination(destination))}`;
-}
+export const verificationCallback = (destination?: string) => `/akademi/giris?verified=1&next=${nextParam(destination)}`;
 
 // Only known post-login destinations are accepted; never redirect to user-supplied URLs.
 export function authDestination(value: unknown): string {

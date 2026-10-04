@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { getViewer } from "@/lib/auth/viewer";
 
 export const metadata: Metadata = { title: "Satın aldığınız eğitime ulaşın", robots: { index: false, follow: false } };
-const next = encodeURIComponent("/akademi/hesabim");
 
 export default function PurchaseReturnPage() {
   return <section className={cn(pageWidth, accountPage)}>
@@ -31,5 +30,5 @@ export default function PurchaseReturnPage() {
 async function ReturnAccountActions() {
   const viewer = await getViewer();
   if (viewer) return <><h2 className="text-2xl">Hesabınız hazır. Eğitiminize geçin.</h2><p className="mt-3 mb-6 leading-relaxed">Eğitimlerim sayfasını açın ve satın aldığınız eğitimde “Eğitime devam et” düğmesine tıklayın. Eğitim görünmüyorsa siparişinizi ekleyebilirsiniz.</p><div className="flex flex-wrap gap-3"><Link href="/akademi/hesabim" className={buttonVariants({ size: "pill" })}>Eğitimlerime git <ArrowUpRight className="size-4" aria-hidden="true" /></Link><Link href="/akademi/siparis-ekle" className={buttonVariants({ size: "pill", variant: "outline" })}>Shopier siparişimi ekle</Link></div></>;
-  return <><h2 className="text-2xl">Hesabınıza girin, eğitiminize başlayın.</h2><p className="mt-3 mb-6 leading-relaxed">Ödeme sırasında kullandığınız e-posta ile giriş yapın. Hesabınız yoksa aynı adresle kayıt olun ve doğrulama e-postasındaki bağlantıya tıklayın.</p><div className="flex flex-wrap gap-3"><Link href={`/akademi/giris?next=${next}`} className={buttonVariants({ size: "pill" })}>Giriş yap <ArrowUpRight className="size-4" aria-hidden="true" /></Link><Link href={`/akademi/kayit?next=${next}`} className={buttonVariants({ size: "pill", variant: "outline" })}>Hesap oluştur</Link></div><p className="mt-4 text-xs leading-relaxed text-stone">Akademi hesabınız, Shopier’deki alışverişinizden ayrıdır. Eğitiminiz için bu sitede hesap oluşturun.</p></>;
+  return <><h2 className="text-2xl">Hesabınıza girin, eğitiminize başlayın.</h2><p className="mt-3 mb-6 leading-relaxed">Ödeme sırasında kullandığınız e-posta ile giriş yapın. Hesabınız yoksa aynı adresle kayıt olun ve doğrulama e-postasındaki bağlantıya tıklayın.</p><div className="flex flex-wrap gap-3"><Link href="/akademi/giris" className={buttonVariants({ size: "pill" })}>Giriş yap <ArrowUpRight className="size-4" aria-hidden="true" /></Link><Link href="/akademi/kayit" className={buttonVariants({ size: "pill", variant: "outline" })}>Hesap oluştur</Link></div><p className="mt-4 text-xs leading-relaxed text-stone">Akademi hesabınız, Shopier’deki alışverişinizden ayrıdır. Eğitiminiz için bu sitede hesap oluşturun.</p></>;
 }

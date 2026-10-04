@@ -5,7 +5,6 @@ const sampleOrder = "123456789";
 const sampleEmail = "ogrenci@example.com";
 const field = "mt-2 rounded-xl border border-forest/20 bg-white px-4 py-3 text-sm text-forest";
 
-/** Responsive illustrations, clearly labeled as examples. No customer screenshots or working form controls. */
 export function CourseAddExample({ kind }: { kind: Example }) {
   return <figure className="mt-5 overflow-hidden rounded-[18px] border border-forest/15 bg-mist">
     <figcaption className="flex flex-wrap items-center justify-between gap-2 border-b border-forest/10 px-4 py-3 text-[11px] font-medium text-stone sm:px-5"><span>GÖRSEL REHBER · TEMSİLİ ÖRNEK</span><span>Bilgiler size ait değildir.</span></figcaption>

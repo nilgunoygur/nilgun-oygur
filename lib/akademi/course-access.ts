@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { courseAccess, courses, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
+import { courseAccess, courses, shopierPurchases, user } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
-import { accessExpiryFromPayment, hasActiveAccess, type AccessGrant } from "./access-policy.ts";
+import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
+import { hasFullRefund, lockShopierOrder } from "./refunds.ts";
 import { adoptShopierContact } from "./student-contact.ts";
 import type { Database } from "../db/types.ts";
 
@@ -49,32 +50,23 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
   return db.transaction(async (tx) => {
     const [candidate] = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.id, purchaseId));
     if (!candidate) return false;
-    // Refunds take the same order lock before the student lock. This also protects
-    // a purchase claimed concurrently with a refund notification.
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${candidate.shopierOrderId}))`);
+    // Same order lock as refunds, taken before the student lock.
+    await lockShopierOrder(tx, candidate.shopierOrderId);
     // Lock the student, then re-read the purchase under lock.
     await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("update");
     const [purchase] = await tx.select().from(shopierPurchases).where(eq(shopierPurchases.id, purchaseId)).for("update");
     if (!purchase || purchase.userId !== null) return false;
-    const [refund] = await tx.select({ id: shopierRefunds.id }).from(shopierRefunds)
-      .where(and(eq(shopierRefunds.shopierOrderId, purchase.shopierOrderId), eq(shopierRefunds.type, "full"))).limit(1);
-    if (refund) return false;
+    if (await hasFullRefund(tx, purchase.shopierOrderId)) return false;
     await tx.update(shopierPurchases).set({ userId, claimedAt: now }).where(eq(shopierPurchases.id, purchase.id));
     const [current] = await tx.select().from(courseAccess)
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
-    let startsAt = purchase.purchasedAt;
-    let expiresAt = accessExpiryFromPayment(purchase.purchasedAt, purchase.accessDurationDays);
+    const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(current, purchase.purchasedAt, purchase.accessDurationDays);
     if (current) {
-      const stillActive = current.expiresAt.getTime() > purchase.purchasedAt.getTime();
-      if (stillActive) {
-        startsAt = current.startsAt;
-        expiresAt = accessExpiryFromPayment(current.expiresAt, purchase.accessDurationDays);
-      }
-      await tx.update(courseAccess).set({ revokedAt: now, revocationReason: stillActive ? "extended_by_purchase" : "expired_replaced" })
+      await tx.update(courseAccess).set({ revokedAt: now, revocationReason: extendsPrevious ? "extended_by_purchase" : "expired_replaced" })
         .where(eq(courseAccess.id, current.id));
     }
     await tx.insert(courseAccess).values({ userId, courseId: purchase.courseId, sourcePurchaseId: purchase.id, startsAt, expiresAt,
-      extendedFromId: current && current.expiresAt > purchase.purchasedAt ? current.id : null });
+      extendedFromId: extendsPrevious && current ? current.id : null });
     return true;
   });
 }
@@ -96,9 +88,7 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   if (order.paymentStatus !== "paid") return "unpaid";
   const { purchaseIds } = await recordShopierOrder(db, order);
   if (purchaseIds.length === 0) return "not_academy";
-  const [refund] = await db.select({ id: shopierRefunds.id }).from(shopierRefunds)
-    .where(and(eq(shopierRefunds.shopierOrderId, order.id), eq(shopierRefunds.type, "full"))).limit(1);
-  if (refund) return "refunded";
+  if (await hasFullRefund(db, order.id)) return "refunded";
   let granted = 0;
   for (const id of purchaseIds) if (await claimPurchase(db, id, userId)) granted++;
   let outcome: ClaimOutcome = "granted";

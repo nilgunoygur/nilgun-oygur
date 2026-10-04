@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
-import { authDestination, verificationCallback } from "@/lib/auth/navigation";
+import { authDestination, nextParam, verificationCallback } from "@/lib/auth/navigation";
 import { backupCodeSchema, emailLinkSchema, loginSchema, resetSchema, totpSchema } from "@/lib/auth/forms";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,7 +29,7 @@ export function AuthForm({ mode, configured, localEmail = false, token, destinat
     setDone(true);
   };
   const disabled = !configured || invalidReset;
-  const next = encodeURIComponent(authDestination(destination));
+  const next = nextParam(destination);
   return (
     <div className="flex flex-col gap-[22px]">
       {!configured && <Alert><AlertDescription>Akademi hesapları henüz kullanıma açılmadı. Yakında buradan hesabınızı oluşturabilirsiniz.</AlertDescription></Alert>}
@@ -65,7 +65,7 @@ function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean
     <PasswordField control={form.control} name="password" label="Şifreniz" autoComplete="current-password" />
     <div className="flex items-center justify-between gap-4 text-[13px] max-[681px]:flex-wrap">
       <CheckboxField control={form.control} name="remember" label="Beni hatırla" className="w-auto" />
-      <Link href={`/akademi/sifremi-unuttum?next=${encodeURIComponent(authDestination(destination))}`} className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link>
+      <Link href={`/akademi/sifremi-unuttum?next=${nextParam(destination)}`} className="whitespace-nowrap underline underline-offset-4">Şifremi unuttum</Link>
     </div>
     <AuthSubmit>Giriş yap</AuthSubmit>
   </FormShell>;
@@ -89,7 +89,7 @@ function EmailLinkForm({ mode, disabled, destination, onSent }: { mode: "forgot"
   const form = useForm({ resolver: zodResolver(emailLinkSchema), mode: "onTouched", defaultValues: { email: "" } });
   const forgot = mode === "forgot";
   const submit = form.handleSubmit(async ({ email }) => {
-    const call = () => forgot ? authClient.requestPasswordReset({ email, redirectTo: `/akademi/sifre-yenile?next=${encodeURIComponent(authDestination(destination))}` }) : authClient.sendVerificationEmail({ email, callbackURL: verificationCallback(destination) });
+    const call = () => forgot ? authClient.requestPasswordReset({ email, redirectTo: `/akademi/sifre-yenile?next=${nextParam(destination)}` }) : authClient.sendVerificationEmail({ email, callbackURL: verificationCallback(destination) });
     if (!await authAttempt(form, call)) return;
     if (forgot) onSent("şifre yenileme", "Bu adresle bir hesabınız varsa şifre yenileme bağlantısı gönderilecektir.");
     else onSent("doğrulama", "Adresiniz doğrulanmayı bekliyorsa yeni bir bağlantı gönderilecektir.");
@@ -105,7 +105,7 @@ function ResetForm({ disabled, token, destination }: { disabled: boolean; token?
   const router = useRouter();
   const form = useForm({ resolver: zodResolver(resetSchema), mode: "onTouched", defaultValues: { password: "", confirmPassword: "" } });
   const submit = form.handleSubmit(async ({ password }) => {
-    if (await authAttempt(form, () => authClient.resetPassword({ newPassword: password, token: token! }))) router.replace(`/akademi/giris?reset=1&next=${encodeURIComponent(authDestination(destination))}`);
+    if (await authAttempt(form, () => authClient.resetPassword({ newPassword: password, token: token! }))) router.replace(`/akademi/giris?reset=1&next=${nextParam(destination)}`);
   });
   return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
     <FormMessage />
