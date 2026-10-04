@@ -23,8 +23,6 @@ export function parseConfig(env: Env) {
     shopier: {
       token: shopierToken,
       webhookTokens,
-      /** Development and Preview only: treat hidden [TEST] products as courses. */
-      includeHidden: value(env, "SHOPIER_SHOW_HIDDEN_PRODUCTS") === "true",
     },
     auth,
     resend,

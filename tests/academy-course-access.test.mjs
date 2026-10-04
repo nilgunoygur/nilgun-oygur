@@ -16,7 +16,6 @@ const client = new PGlite();
 const db = drizzle(client, { schema });
 let course, other;
 const DAY = 86_400_000;
-const visibleOnly = { includeHidden: false };
 let nextOrder = 900000000;
 const order = (fields = {}) => shopierOrderSchema.parse({
   id: String(nextOrder++), paymentStatus: "paid", dateCreated: "2026-09-21T10:00:00+0300", currency: "TRY",
@@ -140,7 +139,7 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
   const body = JSON.stringify({ id: "555000111", paymentStatus: "paid", dateCreated: "2026-09-21T12:00:00+0300", currency: "TRY", shippingInfo: { email: "c@example.com" }, lineItems: [{ productId: "51075057", total: "2.00" }] });
   const sign = (raw, token = "hook-token") => createHmac("sha256", token).update(raw).digest("hex");
   const headers = (raw, extra = {}) => new Headers({ "shopier-event": "order.created", "shopier-webhook-id": "wh-1", "shopier-signature": sign(raw), ...extra });
-  const hook = (raw, h) => handleShopierWebhook(db, raw, h, ["hook-token"], visibleOnly);
+  const hook = (raw, h) => handleShopierWebhook(db, raw, h, ["hook-token"]);
   assert.deepEqual(await hook(body, headers(body, { "shopier-signature": sign(body, "wrong") })), { status: 401, outcome: "invalid_signature", catalogChanged: false });
   assert.equal((await hook(body, headers(body, { "shopier-event": "refund.updated" }))).outcome, "ignored_event");
   assert.deepEqual(await hook(body, headers(body)), { status: 200, outcome: "recorded", catalogChanged: false });
@@ -164,10 +163,9 @@ test("the Shopier product API is the catalog: link course products, archive dele
   assert.deepEqual(productDetails(product({ priceData: { currency: "TRY", price: "5.00", discount: true, discountedPrice: "4.00" } })),
     { title: "Kurs", description: "Açıklama", imageUrl: "https://cdn.shopier.app/pictures_large/a.jpg", priceKurus: 400, compareAtPriceKurus: 500, currency: "TRY" });
   assert.equal(productDetails(product({ media: [{ url: "https://evil.example/x.jpg" }] })).imageUrl, null);
-  assert.deepEqual([product({}), product({ type: "physical" }), product({ customListing: true }), product({ stockStatus: "outOfStock" })].map(p => isCourseProduct(p)), [true, false, false, false]);
-  assert.deepEqual([product({ customListing: true }), product({ customListing: true, stockStatus: "outOfStock" })].map(p => isCourseProduct(p, { includeHidden: true })), [true, false]);
+  assert.deepEqual([product({}), product({ type: "physical" }), product({ customListing: true }), product({ stockStatus: "outOfStock" })].map(p => isCourseProduct(p)), [true, false, true, false]);
 
-  // 51075042 is linked and still exists; 51075057 was deleted; four new products, only one a course.
+  // 51075042 is linked and still exists; 51075057 was deleted; four new products, two of them courses.
   const catalog = [
     product({}),
     product({ id: "60000001", title: "Yeni Kurs" }),
@@ -176,16 +174,17 @@ test("the Shopier product API is the catalog: link course products, archive dele
     product({ id: "60000004", title: "Tükendi", stockStatus: "outOfStock" }),
   ];
   const source = (products, extraIds = []) => ({ listProducts: async () => ({ products, ids: new Set([...products.map(p => p.id), ...extraIds]) }) });
-  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog), visibleOnly), { added: 1, archived: 1 });
+  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 2, archived: 1 });
   const bySlug = Object.fromEntries((await db.select().from(schema.courses)).map(c => [c.slug, c]));
   assert.equal(bySlug["yeni-kurs"].status, "published");
   assert.equal(bySlug["yeni-kurs"].shopierProductId, "60000001");
+  assert.equal(bySlug["gizli"].status, "draft", "a product hidden from the Shopier store waits for the owner to publish it");
   assert.equal(bySlug["diger"].status, "archived");
-  for (const slug of ["kitap", "gizli", "tukendi"]) assert.equal(bySlug[slug], undefined);
-  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog), visibleOnly), { added: 0, archived: 0 });
+  for (const slug of ["kitap", "tukendi"]) assert.equal(bySlug[slug], undefined);
+  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 0, archived: 0 });
   // A product that fails validation still counts as existing, and a failed list call archives nothing.
-  assert.equal((await syncCatalogFromShopier(db, source([], ["51075042", "60000001"]), visibleOnly)).archived, 0);
-  await assert.rejects(() => syncCatalogFromShopier(db, { listProducts: async () => { throw new Error("503"); } }, visibleOnly));
+  assert.equal((await syncCatalogFromShopier(db, source([], ["51075042", "60000001", "60000003"]))).archived, 0);
+  await assert.rejects(() => syncCatalogFromShopier(db, { listProducts: async () => { throw new Error("503"); } }));
   assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.slug, "yeni-kurs")))[0].status, "published");
 });
 
@@ -193,16 +192,17 @@ test("product webhooks link new course products and flag changes for cache refre
   const product = (fields) => JSON.stringify({ id: "70000001", title: "Kuantum Eğitimi", description: "Açıklama", type: "digital", customListing: false, stockStatus: "inStock",
     media: [{ type: "image", url: "https://cdn.shopier.app/pictures_large/k.jpg", placement: 1 }],
     priceData: { currency: "TRY", price: "2490.00", discount: false, discountedPrice: "" }, ...fields });
-  const send = (raw, event, id, options = visibleOnly) => handleShopierWebhook(db, raw, new Headers({ "shopier-event": event, "shopier-webhook-id": id, "shopier-signature": createHmac("sha256", "product-token").update(raw).digest("hex") }), ["order-token", "product-token"], options);
+  const send = (raw, event, id) => handleShopierWebhook(db, raw, new Headers({ "shopier-event": event, "shopier-webhook-id": id, "shopier-signature": createHmac("sha256", "product-token").update(raw).digest("hex") }), ["order-token", "product-token"]);
   assert.deepEqual(await send(product({}), "product.created", "p-1"), { status: 200, outcome: "added", catalogChanged: true });
   const [added] = await db.select().from(schema.courses).where(eq(schema.courses.shopierProductId, "70000001"));
   assert.deepEqual([added.slug, added.status, added.accessDurationDays], ["kuantum-egitimi", "published", 365]);
   assert.equal((await send(product({ priceData: { currency: "TRY", price: "2490.00", discount: true, discountedPrice: "1990.00" } }), "product.updated", "p-2")).outcome, "changed");
-  for (const [fields, id] of [[{ id: "70000002", customListing: true }, "p-3"], [{ id: "70000003", type: "physical" }, "p-4"], [{ id: "70000004", stockStatus: "outOfStock" }, "p-5"]]) {
+  for (const [fields, id] of [[{ id: "70000003", type: "physical" }, "p-4"], [{ id: "70000004", stockStatus: "outOfStock" }, "p-5"]]) {
     assert.deepEqual(await send(product(fields), "product.created", id), { status: 200, outcome: "ignored", catalogChanged: false });
   }
-  // Where test products are shown, a hidden product arriving by webhook is linked, exactly as the sync links it.
-  assert.equal((await send(product({ id: "70000005", title: "Gizli Test", customListing: true }), "product.created", "p-7", { includeHidden: true })).outcome, "added");
+  // A product hidden from the Shopier store is linked as a draft, exactly as the sync links it.
+  assert.equal((await send(product({ id: "70000005", title: "Gizli Test", customListing: true }), "product.created", "p-7")).outcome, "added");
+  assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.shopierProductId, "70000005")))[0].status, "draft");
   await db.update(schema.courses).set({ status: "archived" }).where(eq(schema.courses.id, added.id));
   assert.equal((await send(product({ title: "Yeni ad" }), "product.updated", "p-6")).outcome, "changed");
   assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.id, added.id)))[0].status, "archived");
@@ -234,15 +234,15 @@ test("the catalog shows only published, sellable TRY courses and names every lin
   const products = [product("80000001"), product("80000002", { priceData: { currency: "USD", price: "5.00" } }), product("80000003"),
     product("80000004", { customListing: true }), product("80000005", { priceData: { currency: "TRY", price: "0" } })];
   const slugs = (list) => list.map(c => c.slug).filter(s => s.startsWith("sat-"));
-  assert.deepEqual(slugs(await listCatalog(db, products, visibleOnly)), ["sat-1"]);
-  assert.deepEqual(slugs(await listCatalog(db, products, { includeHidden: true })), ["sat-1", "sat-gizli"]);
-  const found = await findCatalogCourse(db, "sat-1", async id => products.find(p => p.id === id) ?? null, visibleOnly);
+  assert.deepEqual(slugs(await listCatalog(db, products)), ["sat-1", "sat-gizli"], "the site's own status decides, not the Shopier store listing");
+  const found = await findCatalogCourse(db, "sat-1", async id => products.find(p => p.id === id) ?? null);
   assert.deepEqual([found.title, found.summary, found.priceKurus, found.shopierUrl], ["Ürün 80000001", "Açıklama", 10000, "https://www.shopier.com/80000001"]);
-  assert.equal(await findCatalogCourse(db, "sat-usd", async id => products.find(p => p.id === id) ?? null, visibleOnly), null);
-  assert.equal(await findCatalogCourse(db, "sat-1", async () => null, visibleOnly), null, "a deleted product is not for sale");
+  assert.equal(await findCatalogCourse(db, "sat-usd", async id => products.find(p => p.id === id) ?? null), null);
+  assert.equal(await findCatalogCourse(db, "sat-1", async () => null), null, "a deleted product is not for sale");
   const owner = await ownerCatalog(db, products);
   const row = slug => owner.courses.find(c => c.slug === slug);
   assert.deepEqual([row("sat-1").priceKurus, row("sat-usd").priceKurus, row("sat-taslak").title], [10000, null, "Ürün 80000003"]);
+  assert.deepEqual(["sat-1", "sat-usd", "sat-taslak", "sat-gizli", "sat-bedava"].map(slug => row(slug).onSale), [true, false, false, true, false]);
   assert.equal(row("kurs").title, "Shopier ürünü 51075042");
 });
 
@@ -271,7 +271,7 @@ test("the composed Akademi claims orders through Shopier, limits attempts and re
     listProducts: async () => ({ products: [], ids: new Set(["51075042", "80000001", "80000002", "80000003", "80000004", "80000005", "60000001", "70000001", "70000005"]) }),
     listOrdersSince: async () => [order({ id: "990000002", shippingInfo: { email: "c@example.com" } })],
   };
-  const akademi = createAkademi({ db, shopier, config: { shopier: { includeHidden: false } } });
+  const akademi = createAkademi({ db, shopier });
   assert.equal(await akademi.access.claimOrder("student-c", paid.id, "gift@example.com"), "granted");
   for (let attempt = 2; attempt <= 5; attempt++) assert.equal(await akademi.access.claimOrder("student-c", "123456", "gift@example.com"), "not_found");
   assert.equal(await akademi.access.claimOrder("student-c", paid.id, "gift@example.com"), "rate_limited");

@@ -68,13 +68,13 @@ test("creating a course makes the Shopier product, links it with the owner's set
   assert.deepEqual([course.slug, course.shopierProductId, course.status, course.accessDurationDays], ["nefes-egitimi", "70000001", "draft", 180]);
   assert.deepEqual(await audits(), ["course.create_requested", "course.create_done", "course.linked"]);
   // Shopier's product.created webhook for the same product adds no second course.
-  assert.equal(await applyShopierProduct(db, product(), { includeHidden: false }), "changed");
+  assert.equal(await applyShopierProduct(db, product()), "changed");
   assert.equal((await db.select().from(schema.courses)).length, 1);
 });
 
 test("the owner's settings win when Shopier's webhook linked the new product first", async () => {
   const late = product({ id: "70000002", title: "Geç Kalan" });
-  assert.equal(await applyShopierProduct(db, late, { includeHidden: false }), "added");
+  assert.equal(await applyShopierProduct(db, late), "added");
   const { courseId } = await createCourse(db, "owner", { title: "Geç Kalan", description: "", priceKurus: 10000, imageUrl: "https://files.example/c.png", accessDurationDays: 30, status: "draft" }, fakeShopier(late).shopier);
   const rows = await db.select().from(schema.courses).where(eq(schema.courses.shopierProductId, "70000002"));
   assert.deepEqual(rows.map(row => [row.id, row.status, row.accessDurationDays]), [[courseId, "draft", 30]]);

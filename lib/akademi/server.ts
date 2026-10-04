@@ -10,7 +10,7 @@ import { CATALOG_TAG, type CatalogCourse } from "./catalog";
 
 let instance: Akademi | undefined;
 export function akademi() {
-  return instance ??= createAkademi({ db: getDatabase(), shopier: getShopier(), config: config() });
+  return instance ??= createAkademi({ db: getDatabase(), shopier: getShopier() });
 }
 
 const catalogLife = { stale: 300, revalidate: 600, expire: 86_400 };

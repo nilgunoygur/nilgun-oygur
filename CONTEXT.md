@@ -2,7 +2,7 @@
 
 **Course**: a Shopier product linked to the site (`courses` row: slug, access duration, owner status). Title, description, image and price live in Shopier; the owner can edit them from the site, which writes to Shopier.
 
-**Sellable course**: a published course whose product is visible (or hidden where `SHOPIER_SHOW_HIDDEN_PRODUCTS=true`), in stock, digital and priced in TRY above zero. Decided only by the Catalog module.
+**Sellable course**: a published course whose product is in stock, digital and priced in TRY above zero. The owner's status alone turns a course on or off; hiding the product from the Shopier store does not. Decided only by the Catalog module.
 
 **Purchase**: one paid Shopier order line for a course, keyed by order and course, matched to a student by the buyer email.
 
