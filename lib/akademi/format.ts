@@ -4,6 +4,8 @@ export function formatMoney(kurus: number, currency = "TRY") {
   catch { return `${(kurus / 100).toLocaleString("tr-TR")} ${currency}`; }
 }
 export const formatPrice = (kurus: number) => formatMoney(kurus);
+/** Kuruş as a lira form value: 1250 is "12.50", 1200 is "12". */
+export const liraInput = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
 export const dayLabel = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Istanbul" });
 export const istanbulDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Europe/Istanbul" }).format(date);
 export const dateTimeLabel = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" });

@@ -24,11 +24,12 @@ async function Content({ params }: { params: Promise<{ courseId: string }> }) {
   if (!z.uuid().safeParse(courseId).success) notFound();
   const viewer = await studentPage(`/akademi/hesabim/${courseId}`);
   const [data, cards, refund] = await Promise.all([studentCourse(getDatabase(), viewer.user.id, courseId), courseCards(), akademi().access.refundRequest(viewer.user.id, courseId)]);
-  if (refund?.status === "pending" || refund?.status === "approved") return <><Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm"><ArrowLeft size={16} />Eğitimlerime dön</Link><h1 className={accountTitle}>İade talebiniz</h1><RefundNotice status={refund.status} note={refund.ownerNote} /></>;
+  const back = <Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm text-stone hover:text-forest"><ArrowLeft size={16} />Eğitimlerime dön</Link>;
+  if (refund?.status === "pending" || refund?.status === "approved") return <>{back}<h1 className={accountTitle}>İade talebiniz</h1><RefundNotice status={refund.status} note={refund.ownerNote} /></>;
   if (!data) notFound();
-  return <><Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm text-stone hover:text-forest"><ArrowLeft size={16} />Eğitimlerime dön</Link><header className="mb-9"><p className={kicker}>AKADEMİ · ÖĞRENME ALANINIZ</p><h1 className={accountTitle}>{cards[data.course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="text-stone">Bir sonraki adımınız burada. İzleyin, uygulayın, kendinize zaman ayırın.</p><p className="mt-3 text-xs text-stone">Erişim bitişi: {expiry.format(data.grant.expiresAt)}</p></header><LessonChecklist lessons={data.lessons} />
+  return <>{back}<header className="mb-9"><p className={kicker}>AKADEMİ · ÖĞRENME ALANINIZ</p><h1 className={accountTitle}>{cards[data.course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="text-stone">Bir sonraki adımınız burada. İzleyin, uygulayın, kendinize zaman ayırın.</p><p className="mt-3 text-xs text-stone">Erişim bitişi: {expiry.format(data.grant.expiresAt)}</p></header><LessonChecklist lessons={data.lessons} />
     <section className="mt-14 border-t border-border pt-8 text-sm text-stone">
-      <>{refund && <div className="mb-6"><RefundNotice status={refund.status} note={refund.ownerNote} /></div>}
-          <details><summary className="cursor-pointer underline underline-offset-4">İade talep et</summary><div className="mt-5 max-w-xl"><RefundRequestForm courseId={courseId} /></div></details></>
+      {refund && <div className="mb-6"><RefundNotice status={refund.status} note={refund.ownerNote} /></div>}
+      <details><summary className="cursor-pointer underline underline-offset-4">İade talep et</summary><div className="mt-5 max-w-xl"><RefundRequestForm courseId={courseId} /></div></details>
     </section></>;
 }

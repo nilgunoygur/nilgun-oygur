@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
-import { dateTimeLabel, formatPrice, formatMoney } from "@/lib/akademi/format";
+import { dateTimeLabel, formatPrice, formatMoney, liraInput } from "@/lib/akademi/format";
 import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type ProductValues } from "@/lib/akademi/owner-queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -110,7 +110,6 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
   </FormShell>;
 }
 
-const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
 
 /** `course === null` creates a course; an edit sends only the fields that changed. */
 function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse | null; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
@@ -119,7 +118,7 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
   const form = useForm({
     resolver: zodResolver(productFormSchema), mode: "onTouched",
     defaultValues: {
-      title: course?.title ?? "", description: product?.description ?? "", price: lira(product?.listPriceKurus), discountedPrice: course?.discounted ? lira(course.priceKurus) : "",
+      title: course?.title ?? "", description: product?.description ?? "", price: liraInput(product?.listPriceKurus), discountedPrice: course?.discounted ? liraInput(course.priceKurus) : "",
       listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false,
     },
   });

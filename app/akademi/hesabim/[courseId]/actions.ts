@@ -7,7 +7,8 @@ import { playbackExpiresAt, playbackLifetimeMs } from "@/lib/akademi/access-poli
 import { playbackTokens } from "@/lib/video/mux";
 
 const progressInput = z.object({ lessonId: z.uuid(), completed: z.boolean().optional(), position: z.number().int().min(0).max(604800).optional() });
-/** Existing players recheck access, including refunds and changed prerequisites. */
+
+/** Polled by open lessons so a refund or changed prerequisite closes them. */
 export async function checkLessonAccess(lessonId: string) {
   try {
     const viewer = await requireStudent();

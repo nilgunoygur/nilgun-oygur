@@ -32,7 +32,9 @@ async function Account() {
   const viewer = await studentPage();
   const hintClosed = (await cookies()).has(claimHintCookie);
   const [access, cards, contact, refunds] = await Promise.all([akademi().access.active(viewer.user.id), courseCards(), akademi().students.contact(viewer.user.id), akademi().access.refundRequests(viewer.user.id)]);
-  const latestRefunds = refunds.filter((refund, index) => refunds.findIndex(item => item.courseId === refund.courseId) === index && (refund.status !== "approved" || !access.some(item => item.courseId === refund.courseId)));
+  const active = new Set(access.map(item => item.courseId)), seen = new Set<string>();
+  // The newest request per course; an approved one is dropped once the course is bought again.
+  const latestRefunds = refunds.filter(refund => !seen.has(refund.courseId) && seen.add(refund.courseId) && (refund.status !== "approved" || !active.has(refund.courseId)));
   return <>
     <header className={accountHeader}><div><p className={kicker}>AKADEMİ · KİŞİSEL ALANINIZ</p><h1 className={accountTitle}>Merhaba, {viewer.user.name}.</h1><p>Eğitimleriniz ve hesabınız burada.</p></div></header>
     {!hintClosed && <ClaimHint />}

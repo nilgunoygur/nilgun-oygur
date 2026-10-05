@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LoaderCircle, LockKeyhole, Paperclip, Video } from "lucide-react";
 import { checkLessonAccess, getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
 import { useRouter } from "next/navigation";
@@ -65,14 +65,14 @@ function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onCo
   const furthest = useRef(start);
   const [watched, setWatched] = useState(isLive || !duration || hasWatched(start, duration));
   const locked = Boolean(prerequisite) || (!completed && !watched);
-  const accessLost = useRef(onAccessLost);
-  useEffect(() => { accessLost.current = onAccessLost; }, [onAccessLost]);
+  const accessLost = useEffectEvent(onAccessLost);
+  const hint = prerequisite ? `Önce “${prerequisite}” dersini tamamlayın.` : locked ? text.hint : undefined;
   useEffect(() => {
     if (!open) return;
     let active = true;
     const check = async () => {
       const result = await checkLessonAccess(lesson.id);
-      if (active && result.allowed === false) accessLost.current();
+      if (active && result.allowed === false) accessLost();
     };
     const visible = () => { if (document.visibilityState === "visible") void check(); };
     const timer = setInterval(() => { void check(); }, 15000);
@@ -94,9 +94,9 @@ function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onCo
   return <article className={`overflow-hidden rounded-[22px] border transition-colors ${completed ? "border-[#c7dccd] bg-[#f7faf5]" : "border-border bg-white"}`}>
     <div className="flex items-start gap-4 p-5 sm:items-center sm:gap-6 sm:p-7">
       <div className={`hidden size-14 shrink-0 items-center justify-center rounded-2xl sm:flex ${isLive ? "bg-[#f5ebdd] text-[#997348]" : "bg-mist text-forest"}`}>{isLive ? <Video size={24} /> : isAudio ? <Headphones size={24} /> : <CirclePlay size={26} />}</div>
-      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {text.label}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3>{prerequisite && <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground"><LockKeyhole className="size-3.5 shrink-0" />Önce “{prerequisite}” dersini tamamlayın.</p>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{lesson.documents.length > 0 && <span className="inline-flex items-center gap-1.5"><Paperclip size={13} />{lesson.documents.length} ödev PDF’i</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
+      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {text.label}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3>{prerequisite && <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground"><LockKeyhole className="size-3.5 shrink-0" />{hint}</p>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{lesson.documents.length > 0 && <span className="inline-flex items-center gap-1.5"><Paperclip size={13} />{lesson.documents.length} ödev PDF’i</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
       <div className="flex shrink-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
-        <label className={cn("flex items-center gap-2 text-sm", locked ? "cursor-not-allowed text-stone" : "cursor-pointer text-forest")} title={prerequisite ? `Önce ${prerequisite} dersini tamamlayın.` : locked ? text.hint : undefined}>
+        <label className={cn("flex items-center gap-2 text-sm", locked ? "cursor-not-allowed text-stone" : "cursor-pointer text-forest")} title={hint}>
           <Checkbox className="size-5 rounded-[5px] border-forest/40 bg-white data-checked:border-forest data-checked:bg-forest data-checked:text-white" aria-label={`${lesson.title}: ${text.done.toLocaleLowerCase("tr-TR")}`} checked={completed} disabled={pending || locked} onCheckedChange={value => startTransition(() => mark(value))} />
           <span className="hidden sm:inline">{pending ? "Kaydediliyor" : completed ? "Tamamlandı" : prerequisite ? "Önceki ders" : locked ? text.locked : text.done}</span>
         </label>

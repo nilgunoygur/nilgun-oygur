@@ -4,13 +4,13 @@ import { AuthEmail, authEmailText } from "../../emails/_components/auth-email.ts
 import { verifyCopy } from "../../emails/verify-email.tsx";
 import { resetCopy } from "../../emails/reset-password.tsx";
 import ContactMessage, { contactSubject, contactText, supportSubject } from "../../emails/contact-message.tsx";
+import RefundRequestEmail, { refundRequestText, type RefundRequestEmailProps } from "../../emails/refund-request.tsx";
+import { email as ownerInbox } from "../site.ts";
 import type { contactSchema, supportSchema } from "../contact-schema.ts";
 import type { EmailMessage } from "./outbox.ts";
 
-import RefundRequestEmail, { refundRequestText, type RefundRequestEmailProps } from "../../emails/refund-request.tsx";
-
 export async function refundRequestEmail(props: RefundRequestEmailProps): Promise<EmailMessage> {
-  return { to: "butunselsifaakademi@gmail.com", replyTo: props.email, subject: `Yeni iade talebi · Sipariş ${props.orderId}`, text: refundRequestText(props), html: await render(<RefundRequestEmail {...props} />) };
+  return { to: ownerInbox, replyTo: props.email, subject: `Yeni iade talebi · Sipariş ${props.orderId}`, text: refundRequestText(props), html: await render(<RefundRequestEmail {...props} />) };
 }
 
 const authCopy = { verification: verifyCopy, reset: resetCopy };

@@ -1,8 +1,8 @@
 "use client";
 
-import { queryOptions } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import type { CourseChange, productFormSchema, RefundDecisionInput } from "./owner-forms";
+import { refundStatuses, type CourseChange, type productFormSchema, type RefundDecisionInput, type RefundListParams } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
@@ -44,6 +44,7 @@ export const ownerQueryKeys = {
   transactions: (from: string, to: string) => [...ownerQueryKeys.all, "transactions", { from, to }] as const,
   muxLibrary: () => [...ownerQueryKeys.all, "mux-library"] as const,
   preview: (lessonId: string, playbackId?: string | null) => [...ownerQueryKeys.all, "preview", lessonId, playbackId] as const,
+  refundRequests: (params?: RefundListParams) => [...ownerQueryKeys.all, "refund-requests", ...(params ? [params] : [])] as const,
 };
 
 async function ownerFetch(url: string, init: RequestInit, fallback: string) {
@@ -81,12 +82,20 @@ export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
   });
 }
 
-
 const refundListSchema = z.object({
-  items: z.array(z.object({ id: z.string(), orderId: z.string(), courseId: z.string(), course: z.string(), name: z.string(), email: z.string(), reason: z.string(), amountKurus: z.number(), currency: z.string(), at: z.string(), status: z.enum(["pending", "approved", "declined"]), refundAmountKurus: z.number().nullable(), ownerNote: z.string().nullable(), decidedAt: z.string().nullable(), shopierRefundId: z.string().nullable(), completed: z.boolean() })),
-  total: z.number(), counts: z.record(z.string(), z.number()),
+  items: z.array(ownerRefundRequestSchema.extend({
+    course: z.string(), status: z.enum(refundStatuses), refundAmountKurus: z.number().nullable(), ownerNote: z.string().nullable(),
+    decidedAt: z.string().datetime().nullable(), shopierRefundId: z.string().nullable(), completed: z.boolean(),
+  })),
+  total: z.number(), pages: z.number(), counts: z.object({ pending: z.number(), approved: z.number(), declined: z.number() }),
 });
 export type OwnerRefundList = z.infer<typeof refundListSchema>;
-export function ownerRefundQueryOptions(status: string, search: string, page: number, initialData?: OwnerRefundList) {
-  return queryOptions({ queryKey: ["owner", "refund-requests", { status, search, page }], queryFn: async ({ signal }) => refundListSchema.parse(await (await ownerFetch(`/api/yonetim/refund-requests?${new URLSearchParams({ status, search, page: String(page) })}`, { signal }, "İade talepleri yüklenemedi.")).json()), initialData: status === "pending" && !search && page === 1 ? initialData : undefined, staleTime: 15000 });
+export function ownerRefundQueryOptions(params: RefundListParams, initialData?: OwnerRefundList) {
+  return queryOptions({
+    queryKey: ownerQueryKeys.refundRequests(params),
+    queryFn: async ({ signal }) => refundListSchema.parse(await (await ownerFetch(`/api/yonetim/refund-requests?${new URLSearchParams({ ...params, page: String(params.page) })}`, { signal }, "İade talepleri yüklenemedi.")).json()),
+    initialData: params.status === "pending" && !params.search && params.page === 1 ? initialData : undefined,
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  });
 }

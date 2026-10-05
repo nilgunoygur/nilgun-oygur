@@ -10,7 +10,8 @@ import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
 import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
-import { latestRefundRequest, pendingRefundRequests, requestRefund, listRefundRequests, studentRefundRequests, type RefundListInput, type RefundNotification } from "./refund-requests.ts";
+import type { RefundListParams } from "./owner-forms.ts";
+import { latestRefundRequest, pendingRefundRequests, requestRefund, listRefundRequests, studentRefundRequests, type RefundNotification } from "./refund-requests.ts";
 
 type Dependencies = {
   db: Database;
@@ -67,10 +68,10 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
     },
     owner: {
       overview: ownerOverview,
-      async refundRequests(input: RefundListInput = {}) {
+      async refundRequests(input: Partial<RefundListParams>) {
         const [result, catalog] = await Promise.all([listRefundRequests(db, input), products().catch(() => [])]);
         const titles = new Map(catalog.map(product => [product.id, product.title]));
-        return { ...result, items: result.items.map(item => ({ ...item, course: titles.get(item.productId) ?? item.course.replaceAll("-", " ") })) };
+        return { ...result, items: result.items.map(({ productId, ...item }) => ({ ...item, course: titles.get(productId) ?? item.course.replaceAll("-", " ") })) };
       },
       /** JSON-safe; shared by the page and GET /api/yonetim/courses. */
       async catalogSnapshot() {

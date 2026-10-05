@@ -7,6 +7,7 @@ import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia } from "@/
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowUpRight, Check, RefreshCw, Search, Undo2, X } from "lucide-react";
 import { ownerRefundQueryOptions, type OwnerRefundList } from "@/lib/akademi/owner-queries";
+import type { RefundListParams } from "@/lib/akademi/owner-forms";
 import { dateTimeLabel, formatMoney } from "@/lib/akademi/format";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -18,32 +19,34 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { RefundDecisionForm } from "./refund-decision-form";
 
 type Refund = OwnerRefundList["items"][number];
-const filters = [{ value: "pending", label: "Karar bekleyen" }, { value: "approved", label: "Onaylanan" }, { value: "declined", label: "Reddedilen" }, { value: "all", label: "Tümü" }];
+const filters: { value: RefundListParams["status"]; label: string }[] = [{ value: "pending", label: "Karar bekleyen" }, { value: "approved", label: "Onaylanan" }, { value: "declined", label: "Reddedilen" }, { value: "all", label: "Tümü" }];
+
 function statusLabel(row: Refund) {
   if (row.status === "pending") return "Karar bekliyor";
   if (row.status === "declined") return "Reddedildi";
   if (row.completed) return "İade tamamlandı";
   return row.shopierRefundId ? "Shopier’e gönderildi" : "Shopier’de kontrol edin";
 }
+
 export function OwnerRefundManagement({ initialData }: { initialData: OwnerRefundList }) {
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState<RefundListParams["status"]>("pending");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Refund | null>(null);
   const [decision, setDecision] = useState<"approve" | "decline" | null>(null);
   useEffect(() => { const timer = setTimeout(() => { setFilter(search.trim()); setPage(1); }, 250); return () => clearTimeout(timer); }, [search]);
-  const { data, isFetching, isError, refetch } = useQuery(ownerRefundQueryOptions(status, filter, page, initialData));
+  const { data, isFetching, isError, refetch } = useQuery(ownerRefundQueryOptions({ status, search: filter, page }, initialData));
   const counts = data?.counts ?? initialData.counts;
-  const totalCount = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  const pages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
+  const totalCount = counts.pending + counts.approved + counts.declined;
+  const pages = data?.pages ?? 1;
   return <>
     <div className="mb-8 grid gap-4 sm:grid-cols-3">
-      {[{ label: "Kararınızı bekleyen", value: counts.pending ?? 0, hint: "Öğrenci talepleri", accent: true }, { label: "Onaylanan talepler", value: counts.approved ?? 0, hint: "Shopier’e gönderilen veya kontrol bekleyen" }, { label: "Reddedilen talepler", value: counts.declined ?? 0, hint: "Karar geçmişi" }].map(item => <div key={item.label} className={cn("rounded-2xl border p-6", item.accent ? "border-forest bg-forest text-white" : "border-forest/10 bg-white")}><p className="text-sm font-medium">{item.label}</p><p className="my-3 text-4xl font-semibold tracking-tight tabular-nums">{item.value}</p><p className={cn("text-xs", item.accent ? "text-white/70" : "text-muted-foreground")}>{item.hint}</p></div>)}
+      {[{ label: "Kararınızı bekleyen", value: counts.pending, hint: "Öğrenci talepleri", accent: true }, { label: "Onaylanan talepler", value: counts.approved, hint: "Shopier’e gönderilen veya kontrol bekleyen" }, { label: "Reddedilen talepler", value: counts.declined, hint: "Karar geçmişi" }].map(item => <div key={item.label} className={cn("rounded-2xl border p-6", item.accent ? "border-forest bg-forest text-white" : "border-forest/10 bg-white")}><p className="text-sm font-medium">{item.label}</p><p className="my-3 text-4xl font-semibold tracking-tight tabular-nums">{item.value}</p><p className={cn("text-xs", item.accent ? "text-white/70" : "text-muted-foreground")}>{item.hint}</p></div>)}
     </div>
     <div className="overflow-hidden rounded-2xl border border-forest/10 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b p-5">
-        <Tabs value={status} onValueChange={value => { if (typeof value === "string") { setStatus(value); setPage(1); } }}><TabsList className="max-w-full flex-wrap group-data-horizontal/tabs:h-auto">{filters.map(tab => <TabsTrigger key={tab.value} value={tab.value} className="h-auto px-3 py-2">{tab.label}<span className="ml-2 text-xs tabular-nums text-muted-foreground">{tab.value === "all" ? totalCount : counts[tab.value] ?? 0}</span></TabsTrigger>)}</TabsList></Tabs>
+        <Tabs value={status} onValueChange={value => { const tab = filters.find(item => item.value === value); if (tab) { setStatus(tab.value); setPage(1); } }}><TabsList className="max-w-full flex-wrap group-data-horizontal/tabs:h-auto">{filters.map(tab => <TabsTrigger key={tab.value} value={tab.value} className="h-auto px-3 py-2">{tab.label}<span className="ml-2 text-xs tabular-nums text-muted-foreground">{tab.value === "all" ? totalCount : counts[tab.value]}</span></TabsTrigger>)}</TabsList></Tabs>
         <div className="flex w-full items-center gap-2 sm:w-auto"><div className="relative flex-1"><Search className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" /><Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Öğrenci, e-posta veya sipariş ara" aria-label="İade talebi ara" maxLength={100} className="w-full pl-9 sm:w-72" /></div><Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} aria-label="Talepleri yenile"><RefreshCw className={cn("size-4", isFetching && "animate-spin")} /></Button></div>
       </div>
       {isError ? <div role="alert" className="p-8 text-sm text-destructive">İade talepleri yüklenemedi. Yenile düğmesiyle tekrar deneyin.</div> : !data ? <p role="status" className="p-8 text-sm text-muted-foreground">Talepler yükleniyor…</p> : data.items.length === 0 ? <Empty className="py-12"><EmptyHeader><EmptyMedia variant="icon"><Undo2 /></EmptyMedia><EmptyTitle>{filter ? "Eşleşen talep yok" : "Bu bölümde talep yok"}</EmptyTitle><EmptyDescription>{status === "pending" && !filter ? "Yeni talepler burada görünür ve e-posta ile bildirilir." : "Diğer sekmelerden talep geçmişini inceleyebilirsiniz."}</EmptyDescription></EmptyHeader></Empty> : <Table className="table-fixed" aria-busy={isFetching}>

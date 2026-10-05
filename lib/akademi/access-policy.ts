@@ -19,7 +19,7 @@ export function hasActiveAccess(
     && now.getTime() < grant.expiresAt.getTime();
 }
 
-/** Issued provider tokens cannot be recalled; bound both media kinds to two minutes. */
+/** Mux tokens cannot be recalled once issued, so keep them short. */
 export const playbackLifetimeMs = { video: 120_000, audio: 120_000 };
 
 /** Whole-second JWT expiry, rounded down so it never extends past the grant. */
