@@ -174,7 +174,9 @@ export const liveSessions = pgTable("live_sessions", {
   lessonKind: lessonKind("lesson_kind").notNull().default("live"),
   startsAt: time("starts_at").notNull(),
   durationMinutes: integer("duration_minutes").notNull(),
-  zoomJoinUrl: text("zoom_join_url").notNull(),
+  zoomMeetingId: text("zoom_meeting_id").notNull(),
+  // Unused since zoom_meeting_id; drop once no deployment reads it.
+  zoomJoinUrl: text("zoom_join_url"),
   zoomPasscode: text("zoom_passcode").notNull(),
   status: liveStatus("status").notNull().default("scheduled"),
   calendarSequence: integer("calendar_sequence").notNull().default(0),

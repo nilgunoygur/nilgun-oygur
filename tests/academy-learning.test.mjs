@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
+import { zoomLinks, zoomMeetingId } from "../lib/akademi/zoom.ts";
 import { studentCourse, accessibleLesson, accessibleFile, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
 import { attachAsset, createLessons, deleteLesson, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
 import { addLessonFile, removeLessonFile } from "../lib/akademi/lesson-files.ts";
@@ -21,7 +22,7 @@ before(async () => {
   await db.insert(schema.courseAccess).values({ userId: "buyer", courseId: course.id, grantedBy: "owner", grantReason: "Test fixture", startsAt: new Date("2026-09-22"), expiresAt: new Date("2026-09-24") });
 });
 after(() => client.close());
-const input = (lesson, patch = {}) => ({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: "Lesson notes", status: "published", startsAt: "", durationMinutes: 60, joinUrl: "", passcode: "", liveStatus: "scheduled", ...patch });
+const input = (lesson, patch = {}) => ({ courseId: course.id, lessonId: lesson.id, title: lesson.title, description: "Lesson notes", status: "published", startsAt: "", durationMinutes: 60, meetingId: "", passcode: "", liveStatus: "scheduled", ...patch });
 
 test("the four-video + live template is private until published and cannot be duplicated", async () => {
   await createLessons(db, "owner", course.id, "template");
@@ -33,19 +34,19 @@ test("the four-video + live template is private until published and cannot be du
   assert.equal((await ownerLessons(db, course.id)).length, 5);
 });
 
-test("publishing requires a ready signed video or a dated HTTPS live session", async () => {
+test("publishing requires a ready signed video or a dated live session with a meeting number", async () => {
   await assert.rejects(() => updateLesson(db, "owner", input(video)), /videoyu/);
   await assert.rejects(() => updateLesson(db, "owner", input(live)), /geçerli/);
-  await assert.rejects(() => updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", joinUrl: "javascript:alert(1)" })), /geçerli/);
+  await assert.rejects(() => updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", meetingId: "javascript:alert(1)" })), /haneli/);
   const [asset] = await db.insert(schema.videoAssets).values({ muxAssetId: "asset-1", signedPlaybackId: "signed-1", status: "ready", durationSeconds: 120 }).returning();
   await db.update(schema.lessons).set({ videoAssetId: asset.id }).where(eq(schema.lessons.id, video.id));
   await updateLesson(db, "owner", input(video));
-  await updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", joinUrl: "https://zoom.us/j/123", passcode: "secret" }));
+  await updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", meetingId: "852-901-5944", passcode: "secret" }));
   const result = await studentCourse(db, "buyer", course.id, now);
   assert.equal(result.lessons.length, 2);
   assert.equal(result.lessons[1].startsAt.toISOString(), now.toISOString(), "editor dates use Istanbul time");
   const serialized = JSON.stringify(result);
-  for (const secret of ["secret", "zoom.us", "signed-1", "asset-1"]) assert.ok(!serialized.includes(secret), "course page does not expose media credentials");
+  for (const secret of ["secret", "8529015944", "signed-1", "asset-1"]) assert.ok(!serialized.includes(secret), "course page does not expose media credentials");
 });
 
 test("unpaid and expired users cannot read lessons or write progress", async () => {
@@ -73,10 +74,21 @@ test("a video completes only once 90% is watched; completion persists and can be
 test("live joining requires active access and the scheduled time window", async () => {
   assert.equal(await liveDestination(db, "other", live.id, now), null);
   assert.equal(await liveDestination(db, "buyer", live.id, new Date("2026-09-23T08:29:59Z")), null);
-  assert.deepEqual(await liveDestination(db, "buyer", live.id, now), { url: "https://zoom.us/j/123", passcode: "secret" });
+  assert.deepEqual(await liveDestination(db, "buyer", live.id, now), { meetingId: "8529015944", passcode: "secret" });
   assert.equal(await liveDestination(db, "buyer", live.id, new Date("2026-09-23T10:30:00Z")), null);
-  await updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", joinUrl: "https://zoom.us/j/123", liveStatus: "cancelled" }));
+  await updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", meetingId: "852-901-5944", liveStatus: "cancelled" }));
   assert.equal(await liveDestination(db, "buyer", live.id, now), null);
+});
+
+test("Zoom links carry the meeting, its passcode and the student's own name", () => {
+  assert.equal(zoomMeetingId("852 901-5944"), "8529015944");
+  for (const bad of ["", "12345678", "https://zoom.us/j/8529015944", "javascript:alert(1)"]) assert.equal(zoomMeetingId(bad), "");
+  assert.deepEqual(zoomLinks("8529015944", "a&b", "Ayşe Yılmaz"), {
+    desktop: "zoommtg://zoom.us/join?confno=8529015944&pwd=a%26b&uname=Ay%C5%9Fe%20Y%C4%B1lmaz",
+    mobile: "zoomus://zoom.us/join?confno=8529015944&pwd=a%26b&uname=Ay%C5%9Fe%20Y%C4%B1lmaz",
+    web: "https://zoom.us/j/8529015944",
+  });
+  assert.ok(!zoomLinks("8529015944", "", "A").desktop.includes("pwd"));
 });
 
 test("unpublishing a lesson or its module blocks existing direct links and mutations", async () => {
@@ -115,7 +127,7 @@ test("deleting a draft or published lesson removes it with its live session and 
   await createLessons(db, "owner", course.id, "live");
   const rows = await ownerLessons(db, course.id);
   const [draft, published] = [rows.at(-1).lesson, rows.find(row => row.lesson.status === "published").lesson];
-  await db.insert(schema.liveSessions).values({ lessonId: draft.id, startsAt: now, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/1", zoomPasscode: "" });
+  await db.insert(schema.liveSessions).values({ lessonId: draft.id, startsAt: now, durationMinutes: 60, zoomMeetingId: "8529015944", zoomPasscode: "" });
   await db.insert(schema.lessonProgress).values([draft, published].map(lesson => ({ userId: "buyer", lessonId: lesson.id })));
   await assert.rejects(() => deleteLesson(db, "owner", crypto.randomUUID(), draft.id), /bulunamadı/);
   for (const lesson of [draft, published]) await deleteLesson(db, "owner", course.id, lesson.id);

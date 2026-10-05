@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { z } from "zod";
 import { adminAuditLog, courses, lessonFiles, lessonProgress, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { lessonDocuments } from "./lesson-files.ts";
 import { lessonInput } from "./owner-forms.ts";
+import { zoomMeetingId } from "./zoom.ts";
 
 // The boundary authorizes an owner before calling these audited commands.
 
@@ -44,14 +44,14 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
       if (asset?.status !== "ready" || !asset.signedPlaybackId) throw new Error(`Yayınlamadan önce ${lesson.kind === "audio" ? "ses kaydını" : "videoyu"} yükleyin ve hazırlanmasını bekleyin.`);
     }
     if (lesson.kind === "live") {
-      const validUrl = z.url({ protocol: /^https$/ }).safeParse(input.joinUrl);
+      const meetingId = zoomMeetingId(input.meetingId);
       const startsAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(input.startsAt) ? new Date(`${input.startsAt}:00+03:00`) : new Date(NaN);
-      const ready = Number.isFinite(startsAt.getTime()) && validUrl.success;
-      if (!ready && (input.status === "published" || input.startsAt || input.joinUrl)) throw new Error("Canlı ders için geçerli bir tarih ve HTTPS toplantı bağlantısı girin.");
+      const ready = Number.isFinite(startsAt.getTime()) && !!meetingId;
+      if (!ready && (input.status === "published" || input.startsAt || input.meetingId)) throw new Error("Canlı ders için geçerli bir tarih ve Zoom toplantı numarası girin.");
       if (ready) {
         const [previous] = await tx.select().from(liveSessions).where(eq(liveSessions.lessonId, lesson.id));
         const changed = previous && (previous.startsAt.getTime() !== startsAt.getTime() || previous.durationMinutes !== input.durationMinutes || previous.status !== input.liveStatus);
-        const values = { startsAt, durationMinutes: input.durationMinutes, zoomJoinUrl: input.joinUrl, zoomPasscode: input.passcode, status: input.liveStatus, calendarSequence: (previous?.calendarSequence ?? 0) + (changed ? 1 : 0) };
+        const values = { startsAt, durationMinutes: input.durationMinutes, zoomMeetingId: meetingId, zoomPasscode: input.passcode, status: input.liveStatus, calendarSequence: (previous?.calendarSequence ?? 0) + (changed ? 1 : 0) };
         await tx.insert(liveSessions).values({ lessonId: lesson.id, ...values }).onConflictDoUpdate({ target: liveSessions.lessonId, set: values });
       }
     }
