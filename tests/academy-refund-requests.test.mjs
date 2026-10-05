@@ -82,6 +82,11 @@ test("approval removes access even for a partial payment refund; rejection resto
   assert.equal(await activeGrant(db, f.id, f.course.id), null, "approval removes course access even for a partial refund");
   assert.deepEqual(await activeCourseAccess(db, f.id), []);
   assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Kalanını da istiyorum."), "refunded");
+  const [module] = await db.insert(schema.modules).values({ courseId: f.course.id, title: "Module" }).returning();
+  const [lesson] = await db.insert(schema.lessons).values({ courseId: f.course.id, moduleId: module.id, slug: "lesson", title: "Lesson", kind: "video" }).returning();
+  await db.insert(schema.lessonProgress).values({ userId: f.id, lessonId: lesson.id });
+  await recordShopierOrder(db, { ...f.order, id: String(sequence++), dateCreated: new Date("2026-10-05T10:00:00+0300") });
+  assert.deepEqual(await db.select().from(schema.lessonProgress).where(eq(schema.lessonProgress.userId, f.id)), [], "buying again after an approved refund starts over");
   const rejected = await fixture();
 
   await akademi.access.requestRefund(rejected.id, rejected.course.id, "İade istiyorum.");

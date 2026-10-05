@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { courseAccess, courses, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
+import { courseAccess, courses, lessonProgress, lessons, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { buyerEmail, productTotalKurus, type ShopierOrder } from "../shopier/api.ts";
 import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
 import { adoptShopierContact } from "./student-contact.ts";
@@ -44,6 +44,10 @@ async function adoptContactSafely(db: Database, userId: string, order: ShopierOr
   try { await adoptShopierContact(db, userId, order); } catch { console.error("Shopier contact could not be copied to the student profile."); }
 }
 
+/** A refunded course starts over if it is bought again. */
+const forgetProgress = (tx: Database, userId: string, courseId: string) => tx.delete(lessonProgress).where(and(eq(lessonProgress.userId, userId),
+  inArray(lessonProgress.lessonId, tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.courseId, courseId)))));
+
 /** Refunds and claims of one order run one at a time. */
 export const lockShopierOrder = (tx: Database, orderId: string) => tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${orderId}))`);
 
@@ -68,6 +72,8 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
     const [approved] = current?.sourcePurchaseId ? await tx.select({ id: refundRequests.id }).from(refundRequests).where(and(eq(refundRequests.purchaseId, current.sourcePurchaseId), eq(refundRequests.status, "approved"))).limit(1) : [];
     const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(approved ? null : current, purchase.purchasedAt, purchase.accessDurationDays);
+    // A partial refund revokes nothing, so progress is dropped here.
+    if (approved) await forgetProgress(tx, userId, purchase.courseId);
     if (current) {
       await tx.update(courseAccess).set({ revokedAt: now, revocationReason: extendsPrevious ? "extended_by_purchase" : "expired_replaced" })
         .where(eq(courseAccess.id, current.id));
@@ -108,6 +114,7 @@ export async function rebuildRefundedExtension(db: Database, userId: string, cou
   // Release the unique active slot before restoring a surviving earlier purchase.
   await db.update(courseAccess).set({ revokedAt: new Date(), revocationReason: "shopier_full_refund" }).where(eq(courseAccess.id, current.id));
   if (remaining) await db.update(courseAccess).set({ startsAt: remaining.startsAt, expiresAt: remaining.expiresAt, revokedAt: null, revocationReason: null }).where(eq(courseAccess.id, remaining.grant.id));
+  else await forgetProgress(db, userId, courseId);
 }
 
 /** Grants every unclaimed purchase made with this verified email. Runs when the email is verified and on sign-in. */
