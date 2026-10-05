@@ -72,7 +72,7 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
     const [approved] = current?.sourcePurchaseId ? await tx.select({ id: refundRequests.id }).from(refundRequests).where(and(eq(refundRequests.purchaseId, current.sourcePurchaseId), eq(refundRequests.status, "approved"))).limit(1) : [];
     const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(approved ? null : current, purchase.purchasedAt, purchase.accessDurationDays);
-    // An approved request may refund only part of the payment, which revokes nothing: the progress is dropped here.
+    // A partial refund revokes nothing, so progress is dropped here.
     if (approved) await forgetProgress(tx, userId, purchase.courseId);
     if (current) {
       await tx.update(courseAccess).set({ revokedAt: now, revocationReason: extendsPrevious ? "extended_by_purchase" : "expired_replaced" })

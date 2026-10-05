@@ -119,13 +119,13 @@ test("refund of an extension preserves the earlier paid access and a new purchas
 });
 
 test("a refund that ends access erases lesson progress; one that leaves an earlier purchase keeps it", async () => {
-  const f = await fixture(), first = f.order(), second = f.order(2);
-  const [module] = await db.insert(schema.modules).values({ courseId: f.course.id, title: "Module" }).returning();
-  const [lesson] = await db.insert(schema.lessons).values({ courseId: f.course.id, moduleId: module.id, slug: "lesson", title: "Lesson", kind: "video" }).returning();
-  const other = await fixture();
-  const [otherModule] = await db.insert(schema.modules).values({ courseId: other.course.id, title: "Module" }).returning();
-  const [otherLesson] = await db.insert(schema.lessons).values({ courseId: other.course.id, moduleId: otherModule.id, slug: "lesson", title: "Lesson", kind: "video" }).returning();
-  await db.insert(schema.lessonProgress).values([lesson, otherLesson].map(l => ({ userId: f.id, lessonId: l.id, lastPositionSeconds: 90, completedAt: new Date() })));
+  const f = await fixture(), other = await fixture(), first = f.order(), second = f.order(2);
+  const lessonIn = async courseId => {
+    const [module] = await db.insert(schema.modules).values({ courseId, title: "Module" }).returning();
+    return (await db.insert(schema.lessons).values({ courseId, moduleId: module.id, slug: "lesson", title: "Lesson", kind: "video" }).returning())[0];
+  };
+  const lesson = await lessonIn(f.course.id), otherLesson = await lessonIn(other.course.id);
+  await db.insert(schema.lessonProgress).values([lesson, otherLesson].map(l => ({ userId: f.id, lessonId: l.id })));
   const progress = async () => (await db.select().from(schema.lessonProgress).where(eq(schema.lessonProgress.userId, f.id))).map(row => row.lessonId);
   await recordShopierOrder(db, first);
   await recordShopierOrder(db, second);
