@@ -6,7 +6,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { articles as importedArticles } from "@/lib/content";
-import { articleBodyText, articlePlainText, getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { articleBodyText, getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { richPlainText } from "@/lib/rich-text";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
@@ -28,7 +29,7 @@ export async function generateMetadata({
   const a = await findArticle(params);
   if (!a) return { robots: { index: false, follow: true } };
 
-  const description = articlePlainText(articleBodyText(a)).slice(0, 160);
+  const description = richPlainText(articleBodyText(a)).slice(0, 160);
   const image = { url: a.image, alt: a.title };
   return {
     title: a.title,
@@ -59,7 +60,7 @@ async function ArticleContent({ params }: { params: Promise<{ slug: string }> })
       <ArticleJsonLd
         type="BlogPosting"
         headline={a.title}
-        description={articlePlainText(articleBodyText(a)).slice(0, 160)}
+        description={richPlainText(articleBodyText(a)).slice(0, 160)}
         url={absoluteUrl(a.href)}
         mainEntityOfPage={absoluteUrl(a.href)}
         image={absoluteUrl(a.image)}

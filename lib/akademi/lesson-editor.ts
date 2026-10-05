@@ -3,8 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { adminAuditLog, courses, lessonFiles, lessonProgress, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { lessonDocuments } from "./lesson-files.ts";
-import { cleanRichHtml, richPlainText } from "../rich-text.ts";
-import { notesHtml } from "./lesson-notes.ts";
+import { cleanNotes, richPlainText } from "../rich-text.ts";
 import { lessonInput } from "./owner-forms.ts";
 
 // The boundary authorizes an owner before calling these audited commands.
@@ -55,7 +54,7 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
         await tx.insert(liveSessions).values({ lessonId: lesson.id, ...values }).onConflictDoUpdate({ target: liveSessions.lessonId, set: values });
       }
     }
-    const notes = cleanRichHtml(notesHtml(input.description), { images: false });
+    const notes = cleanNotes(input.description);
     await tx.update(lessons).set({ title: input.title, description: richPlainText(notes) ? notes : "", status: input.status }).where(eq(lessons.id, lesson.id));
     if (input.status === "published") await tx.update(modules).set({ status: "published" }).where(eq(modules.id, lesson.moduleId));
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.update", resourceType: "lesson", resourceId: lesson.id, reason: input.status === "published" ? "Ders yayınlandı / güncellendi" : "Taslak kaydedildi" });
@@ -77,7 +76,7 @@ export async function deleteLesson(db: Database, actorId: string, courseId: stri
   });
 }
 
-/** Attaches a ready Mux asset to a lesson (for a live lesson, its recording); stored `peaks` are kept when none are given. */
+/** Attaches a ready Mux asset to a lesson; stored `peaks` are kept when none are given. */
 export async function attachAsset(db: Database, actorId: string, lesson: { id: string; kind: string }, { muxAssetId, ...values }: { muxAssetId: string; signedPlaybackId: string; durationSeconds: number; aspectRatio?: string; peaks?: number[] }, reason: string) {
   await db.transaction(async tx => {
     const [asset] = await tx.insert(videoAssets).values({ muxAssetId, ...values, status: "ready" })

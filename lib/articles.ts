@@ -3,6 +3,8 @@ import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { io } from "next/cache";
 import { config } from "@/lib/config";
+import { escapeHtml, isRichHtml } from "@/lib/html";
+import { cleanRichHtml, richPlainText } from "@/lib/rich-text";
 import { articles as importedArticles } from "@/lib/content";
 import { getDatabase } from "@/lib/db";
 import { articleAssets, articleEdits } from "@/lib/db/schema";
@@ -11,12 +13,8 @@ type Article = (typeof importedArticles)[number] & { richBody?: string };
 type Edit = typeof articleEdits.$inferSelect;
 export const slugOf = (article: { href: string }) => article.href.slice("/blog/".length);
 export const uploadedImagePrefix = "/api/article-images/";
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
 export const articleBodyText = (article: Article) => article.richBody ?? article.body.map(block => block.tag.startsWith("h") ? `<h2>${escapeHtml(block.text)}</h2>` : `<p>${escapeHtml(block.text)}</p>`).join("");
 
-import { cleanRichHtml as cleanArticleHtml, richPlainText as articlePlainText } from "./rich-text";
-
-export { cleanArticleHtml, articlePlainText };
 
 export async function getArticleImageLibrary() {
   await io();
@@ -27,8 +25,8 @@ export async function getArticleImageLibrary() {
 }
 
 function mergeArticle(edit: Edit, original?: Article): Article {
-  const richBody = /^\s*</.test(edit.body) ? cleanArticleHtml(edit.body) : undefined;
-  const plainText = richBody ? articlePlainText(richBody) : "";
+  const richBody = isRichHtml(edit.body) ? cleanRichHtml(edit.body) : undefined;
+  const plainText = richBody ? richPlainText(richBody) : "";
   return {
     href: `/blog/${edit.slug}`,
     title: edit.title,

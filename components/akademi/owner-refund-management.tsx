@@ -67,7 +67,7 @@ export function OwnerRefundManagement({ initialData }: { initialData: OwnerRefun
         <DialogHeader className="pr-8"><DialogTitle className="leading-snug tracking-normal">{decision === "approve" ? "İadeyi onayla" : decision === "decline" ? "Talebi reddet" : "İade talebi"}</DialogTitle><DialogDescription>{selected && `${selected.name} · Sipariş #${selected.orderId}`}</DialogDescription></DialogHeader>
         {selected && <>
           {!decision && <><dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-            <div className="col-span-2"><dt className="text-xs text-muted-foreground">Eğitim</dt><dd className="mt-1"><Link href={`/yonetim/egitimler/${selected.course}`} className="font-medium hover:underline">{selected.course}</Link></dd></div>
+            <div className="col-span-2"><dt className="text-xs text-muted-foreground">Eğitim</dt><dd className="mt-1"><Link href={`/yonetim/egitimler/${selected.courseId}`} className="font-medium hover:underline">{selected.course}</Link></dd></div>
             <div className="col-span-2"><dt className="text-xs text-muted-foreground">E-posta</dt><dd className="mt-1 break-all">{selected.email}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Ödenen tutar</dt><dd className="mt-1">{formatMoney(selected.amountKurus, selected.currency)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Talep tarihi</dt><dd className="mt-1">{dateTimeLabel.format(new Date(selected.at))}</dd></div>

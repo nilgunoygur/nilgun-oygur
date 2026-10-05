@@ -7,7 +7,6 @@ import { getDatabase } from "@/lib/db";
 import { courseForRoute } from "@/lib/akademi/course-route";
 import { studentCourse } from "@/lib/akademi/learning";
 import { akademi, courseCards } from "@/lib/akademi/server";
-import { istanbulDay } from "@/lib/akademi/format";
 import { LessonChecklist } from "@/components/akademi/lesson-checklist";
 import { RefundRequestForm } from "@/components/akademi/refund-request-form";
 import { RefundNotice } from "@/components/akademi/refund-notice";
@@ -32,7 +31,7 @@ async function Content({ params }: { params: Promise<{ slug: string }> }) {
   const back = <Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm text-stone hover:text-forest"><ArrowLeft size={16} />Eğitimlerime dön</Link>;
   if (refund?.status === "pending" || refund?.status === "approved") return <>{back}<h1 className={accountTitle}>İade talebiniz</h1><RefundNotice status={refund.status} note={refund.ownerNote} /></>;
   if (!data) notFound();
-  return <>{back}<header className="mb-9"><p className={kicker}>AKADEMİ · ÖĞRENME ALANINIZ</p><h1 className={accountTitle}>{cards[data.course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="text-stone">Bir sonraki adımınız burada. İzleyin, uygulayın, kendinize zaman ayırın.</p><p className="mt-3 text-xs text-stone">Erişim bitişi: {expiry.format(data.grant.expiresAt)}</p></header><LessonChecklist today={istanbulDay(new Date())} lessons={data.lessons} />
+  return <>{back}<header className="mb-9"><p className={kicker}>AKADEMİ · ÖĞRENME ALANINIZ</p><h1 className={accountTitle}>{cards[data.course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="text-stone">Bir sonraki adımınız burada. İzleyin, uygulayın, kendinize zaman ayırın.</p><p className="mt-3 text-xs text-stone">Erişim bitişi: {expiry.format(data.grant.expiresAt)}</p></header><LessonChecklist lessons={data.lessons} />
     <section className="mt-14 border-t border-border pt-8 text-sm text-stone">
       {refund && <div className="mb-6"><RefundNotice status={refund.status} note={refund.ownerNote} /></div>}
       <details><summary className="cursor-pointer underline underline-offset-4">İade talep et</summary><div className="mt-5 max-w-xl"><RefundRequestForm courseId={courseId} /></div></details>

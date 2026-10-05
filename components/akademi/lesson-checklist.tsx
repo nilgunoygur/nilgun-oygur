@@ -9,7 +9,7 @@ import { lessonPrerequisites } from "@/lib/akademi/lesson-sequence";
 import type { studentCourse } from "@/lib/akademi/learning";
 import type { zoomLinks } from "@/lib/akademi/zoom";
 import { inlineLink, pillAction, richText } from "@/lib/styles";
-import { daysUntil, formatDuration } from "@/lib/akademi/format";
+import { formatDuration } from "@/lib/akademi/format";
 import { formatFileSize } from "@/lib/akademi/lesson-file-rules";
 import { hasWatched, playbackLifetimeMs } from "@/lib/akademi/access-policy";
 import { Badge } from "@/components/ui/badge";
@@ -25,13 +25,14 @@ async function celebrate() {
   void confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 }, colors: ["#224c40", "#4b999c", "#f1f5e9", "#e7d7bc"], disableForReducedMotion: true });
 }
 const date = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" });
+const ended = { cancelled: "Bu buluşma iptal edildi. Yeni tarih belirlendiğinde burada göreceksiniz.", completed: "Buluşma tamamlandı. Kaydı hazır olduğunda buradan izleyebilirsiniz." };
 const kinds = {
   video: { label: "VİDEO DERS", done: "İzledim", locked: "İzleyince açılır", hint: "Videoyu izledikten sonra işaretleyebilirsiniz.", again: "tekrar izleyebilirsiniz" },
   audio: { label: "SES DERSİ", done: "Dinledim", locked: "Dinleyince açılır", hint: "Kaydı dinledikten sonra işaretleyebilirsiniz.", again: "tekrar dinleyebilirsiniz" },
   live: { label: "CANLI BULUŞMA", done: "Katıldım", locked: "", hint: "", again: "tekrar açabilirsiniz" },
 };
 
-export function LessonChecklist({ lessons, today }: { lessons: Lesson[]; today: string }) {
+export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
@@ -64,19 +65,18 @@ export function LessonChecklist({ lessons, today }: { lessons: Lesson[]; today: 
       <div><p className="mb-2 text-[11px] font-semibold tracking-[1.6px] text-forest">HER ADIM SİZİNLE</p><h2 className="text-[28px]">{done === recorded.length && recorded.length ? "Bu yolculuğu tamamladınız." : "Kendi ritminizde ilerleyin."}</h2><p className="mt-2 text-sm text-stone">Bir dersi sonuna kadar izlediğinizde veya dinlediğinizde tamamlanır. Bir sonraki kayıtlı ders, önceki ders tamamlandığında açılır. Canlı Zoom buluşmalarını bu sıradan bağımsız açabilirsiniz.</p></div>
       <div className="w-full sm:w-52"><p className="mb-3 text-sm"><strong className="text-2xl text-forest">{done}</strong> / {recorded.length} kayıtlı ders tamamlandı</p><progress aria-label="Eğitim ilerlemesi" className="h-2 w-full overflow-hidden rounded-full accent-forest" max={Math.max(recorded.length, 1)} value={done} /></div>
     </div>
-    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} today={today} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
+    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
   </div>;
 }
 
-function LessonCard({ lesson, index, today, completed, prerequisite, open, onOpen, onComplete }: { lesson: Lesson; index: number; today: string; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void }) {
+function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onComplete }: { lesson: Lesson; index: number; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [destination, setDestination] = useState<ReturnType<typeof zoomLinks> | null>(null);
   const isLive = lesson.kind === "live", isAudio = lesson.kind === "audio";
   const text = kinds[lesson.kind];
-  const recorded = isLive && lesson.mediaReady;
-  const upcoming = isLive && !recorded && lesson.startsAt && (lesson.liveStatus === "scheduled" || lesson.liveStatus === "rescheduled");
-  const days = upcoming ? daysUntil(new Date(lesson.startsAt!), today) : -1;
+  const hasRecording = lesson.liveView === "recorded";
+  const closed = lesson.liveView === "cancelled" || lesson.liveView === "completed" ? ended[lesson.liveView] : null;
   const duration = lesson.durationSeconds ?? 0;
   const start = lesson.lastPositionSeconds ?? 0;
   const furthest = useRef(start);
@@ -98,20 +98,20 @@ function LessonCard({ lesson, index, today, completed, prerequisite, open, onOpe
   return <article className={`overflow-hidden rounded-[22px] border transition-colors ${completed ? "border-[#c7dccd] bg-[#f7faf5]" : "border-border bg-white"}`}>
     <div className="flex items-start gap-4 p-5 sm:items-center sm:gap-6 sm:p-7">
       <div className={`hidden size-14 shrink-0 items-center justify-center rounded-2xl sm:flex ${isLive ? "bg-[#f5ebdd] text-[#997348]" : "bg-mist text-forest"}`}>{isLive ? <Video size={24} /> : isAudio ? <Headphones size={24} /> : <CirclePlay size={26} />}</div>
-      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {text.label}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3>{prerequisite && <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground"><LockKeyhole className="size-3.5 shrink-0" />{hint}</p>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))}</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{lesson.documents.length > 0 && <span className="inline-flex items-center gap-1.5"><Paperclip size={13} />{lesson.documents.length} ödev PDF’i</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}{recorded && <span className="inline-flex items-center gap-1.5 text-forest"><CirclePlay size={14} />Kaydı izleyebilirsiniz</span>}{days >= 0 && <Badge variant="secondary">{days === 0 ? "Bugün" : days === 1 ? "Yarın" : `${days} gün kaldı`}</Badge>}</div></div>
+      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {text.label}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3>{prerequisite && <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground"><LockKeyhole className="size-3.5 shrink-0" />{hint}</p>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))}</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{lesson.documents.length > 0 && <span className="inline-flex items-center gap-1.5"><Paperclip size={13} />{lesson.documents.length} ödev PDF’i</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}{hasRecording && <span className="inline-flex items-center gap-1.5 text-forest"><CirclePlay size={14} />Kaydı izleyebilirsiniz</span>}{lesson.daysLeft !== null && lesson.daysLeft >= 0 && <Badge variant="secondary">{["Bugün", "Yarın"][lesson.daysLeft] ?? `${lesson.daysLeft} gün kaldı`}</Badge>}</div></div>
       <div className="flex shrink-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
         <label className={cn("flex items-center gap-2 text-sm", locked ? "cursor-not-allowed text-stone" : "cursor-pointer text-forest")} title={hint}>
           <Checkbox className="size-5 rounded-[5px] border-forest/40 bg-white data-checked:border-forest data-checked:bg-forest data-checked:text-white" aria-label={`${lesson.title}: ${text.done.toLocaleLowerCase("tr-TR")}`} checked={completed} disabled={pending || locked} onCheckedChange={value => startTransition(() => mark(value))} />
           <span className="hidden sm:inline">{pending ? "Kaydediliyor" : completed ? "Tamamlandı" : prerequisite ? "Önceki ders" : locked ? text.locked : text.done}</span>
         </label>
-        <button type="button" onClick={onOpen} disabled={Boolean(prerequisite)} aria-expanded={open} aria-controls={`lesson-${lesson.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm hover:bg-mist disabled:cursor-not-allowed disabled:opacity-50">{prerequisite ? "Kilitli" : recorded ? "Kaydı izle" : isLive ? "Detaylar" : "Dersi aç"}<ChevronDown size={15} className={open ? "rotate-180" : ""} /></button>
+        <button type="button" onClick={onOpen} disabled={Boolean(prerequisite)} aria-expanded={open} aria-controls={`lesson-${lesson.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm hover:bg-mist disabled:cursor-not-allowed disabled:opacity-50">{prerequisite ? "Kilitli" : hasRecording ? "Kaydı izle" : isLive ? "Detaylar" : "Dersi aç"}<ChevronDown size={15} className={open ? "rotate-180" : ""} /></button>
       </div>
     </div>
     {error && <p role="alert" className="px-7 pb-5 text-sm text-destructive">{error}</p>}
     {open && <div id={`lesson-${lesson.id}`} className="border-t border-border p-5 sm:p-7">
       {lesson.description && <div className={cn(richText, "mb-6 max-w-[75ch]")} dangerouslySetInnerHTML={{ __html: lesson.description }} />}
-      {recorded ? <><h4 className="mb-4 text-xl">Buluşmanın kaydı</h4><LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={start} onTime={progress} onEnded={finish} /></>
-        : isLive && !upcoming ? <p className="rounded-2xl bg-mist p-6 text-stone">{lesson.liveStatus === "cancelled" ? "Bu buluşma iptal edildi. Yeni tarih belirlendiğinde burada göreceksiniz." : lesson.liveStatus === "completed" ? "Buluşma tamamlandı. Kaydı hazır olduğunda buradan izleyebilirsiniz." : "Buluşmanın tarihi henüz belirlenmedi."}</p>
+      {hasRecording ? <><h4 className="mb-4 text-xl">Buluşmanın kaydı</h4><LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={start} onTime={progress} onEnded={finish} /></>
+        : closed ? <p className="rounded-2xl bg-mist p-6 text-stone">{closed}</p>
         : isLive ? <><div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><div className="flex flex-wrap gap-3">{([["desktop", "Bilgisayardan katıl"], ["mobile", "Telefondan katıl"]] as const).map(([device, label]) => <a key={device} href={destination[device]} className={pillAction}>{label} <ArrowUpRight size={16} /></a>)}</div><p className="mt-3 text-sm text-stone">Zoom uygulaması yüklü değilse <a href={destination.web} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">tarayıcıda açın</a>.{destination.passcode && <> Toplantı şifresi: {destination.passcode}</>}</p></div> : <button type="button" className={pillAction} disabled={pending} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div><LivePreparation /></>
         : !lesson.mediaReady ? <p className="rounded-2xl bg-mist p-6 text-stone">{isAudio ? "Ses kaydı" : "Video"} hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>
         : isAudio ? <AudioLesson lessonId={lesson.id} title={lesson.title} duration={duration} peaks={lesson.peaks} startTime={start} onTime={progress} onEnded={finish} />

@@ -1,8 +1,8 @@
 import sanitizeHtml from "sanitize-html";
+import { plainToHtml } from "./html.ts";
 
 export const richPlainText = (html: string) => sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim();
 
-/** Keeps only what the rich editor produces. */
 export function cleanRichHtml(value: string, { images = true } = {}) {
   return sanitizeHtml(value, {
     allowedTags: ["p", "h2", "h3", "h4", "strong", "b", "em", "i", "u", "s", "code", "ul", "ol", "li", "blockquote", "a", "br", "hr", ...(images ? ["img"] : [])],
@@ -17,3 +17,5 @@ export function cleanRichHtml(value: string, { images = true } = {}) {
     transformTags: { a: (_tag, attributes) => ({ tagName: "a", attribs: { href: attributes.href ?? "#", rel: "noopener noreferrer", target: "_blank" } }) },
   });
 }
+
+export const cleanNotes = (notes: string) => cleanRichHtml(plainToHtml(notes), { images: false });

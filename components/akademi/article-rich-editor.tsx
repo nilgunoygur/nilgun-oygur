@@ -51,7 +51,7 @@ const DIVIDER: ElementTransformer = {
 };
 const transformers: Transformer[] = [HEADING, QUOTE, UNORDERED_LIST, ORDERED_LIST, DIVIDER, BOLD_ITALIC_STAR, BOLD_STAR, ITALIC_STAR, STRIKETHROUGH, INLINE_CODE, LINK];
 
-/** Without `images` the editor has no image tools and is short, for notes. */
+/** No `images`: a short notes editor. */
 export function ArticleRichEditor({ initialHtml, onChange, images }: { initialHtml: string; onChange: (html: string) => void; images?: { choices: ImageChoice[]; upload: UploadImage } }) {
   const config = {
     namespace: "academy-article-editor",

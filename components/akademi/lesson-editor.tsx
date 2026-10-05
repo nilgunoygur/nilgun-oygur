@@ -5,7 +5,7 @@ import { LazyMotion, Reorder, domMax, useDragControls } from "motion/react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { createUpload } from "@mux/upchunk";
 import { put } from "@vercel/blob/client";
 import { CalendarDays, Check, CirclePlay, ExternalLink, Eye, FileText, GripVertical, Headphones, Library, Plus, Replace, Search, Trash2, Upload, type LucideIcon } from "lucide-react";
@@ -15,13 +15,13 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
 import { ArticleRichEditor } from "./article-rich-editor";
 import { DateTimeField } from "./date-time-field";
+import { PublishSwitch } from "./publish-switch";
 import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
@@ -32,7 +32,7 @@ import { formatFileSize, lessonFileProblem, lessonFileRules, lessonFileType, max
 import { measureAudio } from "@/lib/audio-peaks";
 import { LessonAudio } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
-import { notesHtml } from "@/lib/akademi/lesson-notes";
+import { plainToHtml } from "@/lib/html";
 import { pillAction } from "@/lib/styles";
 
 type Row = Awaited<ReturnType<typeof ownerLessons>>[number] & { video?: AttachedVideo };
@@ -119,7 +119,6 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
       startsAt: localDate(live?.startsAt), durationMinutes: String(live?.durationMinutes ?? 60), meetingId: live?.zoomMeetingId ?? "", passcode: live?.zoomPasscode ?? "", liveStatus: live?.status ?? "scheduled",
     },
   });
-  const status = useWatch({ control: form.control, name: "status" });
   const submit = form.handleSubmit(async (values) => {
     const result = await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.");
     if (result) toast.success(result.message);
@@ -135,10 +134,10 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
       <FormShell form={form} onSubmit={submit}>
         <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
         <ControlledField control={form.control} name="description" label="Açıklama / ders notları" description={isLive ? "Öğrenciler bunu buluşmadan önce okur: yanlarında ne olmalı, nasıl hazırlanmalılar?" : undefined}>
-          {field => <ArticleRichEditor initialHtml={notesHtml(lesson.description)} onChange={field.onChange} />}
+          {field => <ArticleRichEditor initialHtml={plainToHtml(field.value)} onChange={field.onChange} />}
         </ControlledField>
-        <ControlledField control={form.control} name="status" label="Görünürlük" description={visibilityHint[status]}>
-          {(field, id) => <div className="flex items-center gap-2.5 text-sm font-medium"><Switch id={id} ref={field.ref} checked={field.value === "published"} onCheckedChange={checked => field.onChange(checked ? "published" : "draft")} />{visibility[field.value]}</div>}
+        <ControlledField control={form.control} name="status" label="Görünürlük">
+          {(field, id) => <PublishSwitch id={id} ref={field.ref} status={field.value} onChange={field.onChange}>{visibility[field.value]}<span className="font-normal text-muted-foreground">· {visibilityHint[field.value]}</span></PublishSwitch>}
         </ControlledField>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
           <DateTimeField control={form.control} name="startsAt" label="Başlangıç" className="bg-white" />
@@ -210,7 +209,6 @@ const media = {
     search: "Kayıt adına göre ara…", empty: "Mux hesabınızda henüz ses kaydı yok. Buradan veya Mux panelinden yükledikten sonra görünür.", progress: "Ses kaydı yükleme ilerlemesi",
   },
 };
-// A live lesson's recording is a video shown to students in place of the join box.
 const recording = {
   ...media.video, heading: "BULUŞMANIN KAYDI", none: "Buluşma bittikten sonra kaydını buraya ekleyin; öğrenciler katılım kutusu yerine kaydı görür.",
   ready: "Kayıt hazır; öğrenciler artık buluşmanın kaydını izleyebilir.", uploadHint: "Zoom kaydı buradan doğrudan Mux’a yüklenir.",

@@ -2,10 +2,10 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { courses, lessonFiles, lessons, modules, lessonProgress, liveSessions, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
-import { cleanRichHtml } from "../rich-text.ts";
+import { cleanNotes } from "../rich-text.ts";
+import { daysUntil } from "./format.ts";
 import { lessonDocuments } from "./lesson-files.ts";
-import { notesHtml } from "./lesson-notes.ts";
-import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
+import { canJoinLiveSession, hasWatched, liveView } from "./access-policy.ts";
 import { lessonPrerequisites } from "./lesson-sequence.ts";
 
 const lessonOrder = () => [asc(modules.position), asc(modules.createdAt), asc(modules.id), asc(lessons.position), asc(lessons.createdAt), asc(lessons.id)];
@@ -29,7 +29,10 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(...lessonOrder());
   const documents = await lessonDocuments(db, rows.map(row => row.id));
-  return { course, grant, lessons: rows.map(row => ({ ...row, description: cleanRichHtml(notesHtml(row.description), { images: false }), documents: documents(row.id) })) };
+  return { course, grant, lessons: rows.map(row => {
+    const view = row.liveStatus && liveView(row.liveStatus, !!row.mediaReady);
+    return { ...row, description: cleanNotes(row.description), documents: documents(row.id), liveView: view, daysLeft: view === "upcoming" && row.startsAt ? daysUntil(row.startsAt, now) : null };
+  }) };
 }
 
 /** Rechecked by every progress, playback, and live-join request. */
@@ -76,6 +79,6 @@ export async function accessibleFile(db: Database, userId: string, fileId: strin
 
 export async function liveDestination(db: Database, userId: string, lessonId: string, now = new Date()) {
   const row = await accessibleLesson(db, userId, lessonId, now);
-  if (!row?.live || !canJoinLiveSession(row.live, row.grant, userId, row.lesson.courseId, now)) return null;
+  if (!row?.live || liveView(row.live.status, row.asset?.status === "ready") !== "upcoming" || !canJoinLiveSession(row.live, row.grant, userId, row.lesson.courseId, now)) return null;
   return { meetingId: row.live.zoomMeetingId, passcode: row.live.zoomPasscode };
 }

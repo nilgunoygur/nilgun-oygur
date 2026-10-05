@@ -7,11 +7,11 @@ export type CaptionState = "ready" | "preparing" | "failed" | "none";
 
 export const captionLanguage = { language_code: "tr", name: "Türkçe (otomatik)" } as const;
 
-/** Only videos show captions, so a recording is not transcribed. */
+/** Audio lessons show no captions, so they are not transcribed. */
 export const newAssetSettings = (lesson: { id: string; title: string; kind: "video" | "audio" | "live" }) => ({
   playback_policies: ["signed"], video_quality: "basic", passthrough: lesson.id,
   meta: { title: lesson.title.slice(0, 512), external_id: lesson.id },
-  ...(lesson.kind === "video" && { inputs: [{ generated_subtitles: [captionLanguage] }] }),
+  ...(lesson.kind !== "audio" && { inputs: [{ generated_subtitles: [captionLanguage] }] }),
 });
 
 export function describeAsset(asset: MuxAsset) {

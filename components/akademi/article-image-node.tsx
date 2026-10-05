@@ -7,7 +7,7 @@ import { useLexicalNodeSelection } from "@lexical/react/useLexicalNodeSelection"
 import { mergeRegister } from "@lexical/utils";
 import { cn } from "@/lib/utils";
 
-// Exports a plain <img>, the only image markup cleanArticleHtml keeps.
+// Exports a plain <img>, the only image markup cleanRichHtml keeps.
 
 type SerializedArticleImage = Spread<{ src: string; alt: string }, SerializedLexicalNode>;
 
