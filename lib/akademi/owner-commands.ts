@@ -26,7 +26,15 @@ async function audited(db: Database, actorId: string, entry: AuditEntry, change:
 
 export type CourseStatus = typeof courses.$inferSelect["status"];
 
-export function setCourseStatus(db: Database, actorId: string, courseId: string, status: CourseStatus) {
+export async function setCourseStatus(db: Database, actorId: string, courseId: string, status: CourseStatus, shopier: Pick<ShopierClient, "updateProduct">) {
+  const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
+  if (!course) return false;
+  // Visibility must reach Shopier before the site changes status. Repeating the command repairs drift.
+  const hidden = status !== "published";
+  await withShopier(db, actorId, { resourceType: "course", resourceId: courseId }, "course.visibility", hidden ? "mağazadan gizle" : "mağazada göster", async () => {
+    const product = await shopier.updateProduct(course.productId, { hidden });
+    if (Boolean(product.customListing) !== hidden) throw new OwnerInputError("Shopier mağaza görünürlüğünü güncellemedi. Yeniden deneyin.");
+  });
   return audited(db, actorId, { action: `course.${status}`, resourceType: "course", resourceId: courseId, reason: "Durum değiştirildi" }, async (tx) => {
     const changed = await tx.update(courses).set({ status }).where(eq(courses.id, courseId)).returning({ id: courses.id });
     return changed.length > 0;
@@ -66,8 +74,9 @@ async function withShopier<T>(db: Database, actorId: string, target: { resourceT
 export async function updateCourseProduct(db: Database, actorId: string, courseId: string, changes: ProductChanges, shopier: Pick<ShopierClient, "getProduct" | "updateProduct">) {
   const changed = (Object.keys(changes) as (keyof ProductChanges)[]).filter(key => changes[key] !== undefined);
   if (!changed.length) throw new OwnerInputError("Değiştirilecek bir alan yok.");
-  const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
+  const [course] = await db.select({ productId: courses.shopierProductId, status: courses.status }).from(courses).where(eq(courses.id, courseId)).limit(1);
   if (!course) throw new OwnerInputError("Eğitim bulunamadı.");
+  if (course.status === "published" && changes.hidden === true) throw new OwnerInputError("Yayındaki eğitim Shopier mağazasında görünür olmalıdır. Gizlemek için eğitimi taslağa alın.");
   const product = await shopier.getProduct(course.productId);
   if (!product || !isEditableProduct(product)) throw new OwnerInputError("Bu Shopier ürünü buradan düzenlenemiyor. Shopier panelinden kontrol edin.");
   // A discount is checked against the price it will sit beside, new or current.
@@ -84,7 +93,7 @@ export type NewCourse = NewProduct & { accessDurationDays: number; status: "draf
 
 /** Links the course right away instead of waiting for Shopier's webhook. */
 export async function createCourse(db: Database, actorId: string, { accessDurationDays, status, ...product }: NewCourse, shopier: Pick<ShopierClient, "createProduct">) {
-  const created = await withShopier(db, actorId, { resourceType: "catalog", resourceId: "shopier" }, "course.create", `yeni ürün “${product.title}”`, () => shopier.createProduct(product));
+  const created = await withShopier(db, actorId, { resourceType: "catalog", resourceId: "shopier" }, "course.create", `yeni ürün “${product.title}”`, () => shopier.createProduct({ ...product, hidden: status === "published" ? false : product.hidden }));
   const courseId = (await linkCourse(db, created, { accessDurationDays, status }))!;
   await db.insert(adminAuditLog).values({ actorId, action: "course.linked", resourceType: "course", resourceId: courseId, reason: `Shopier ürünü ${created.id} eğitim olarak bağlandı (${status})` });
   return { courseId, product: created };

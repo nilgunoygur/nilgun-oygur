@@ -49,7 +49,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     },
     onError: (error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error(error.message); },
     onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : "Değişiklik kaydedildi."); },
-    onSettled: (_data, error) => error ? invalidate() : undefined,
+    onSettled: invalidate,
   });
   const savingId = update.isPending ? update.variables.course.id : null;
   const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onError: error => toast.error(error.message), onSettled: invalidate });
@@ -190,11 +190,11 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
       </div>
       {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
     </div>
-    <CheckboxField control={form.control} name="listed" label="Shopier mağazasında listelensin" description="Kapalıyken ürün Shopier vitrininde görünmez. Sitedeki yayın durumunu değiştirmez." />
+    {course?.status === "published" ? <p className="text-sm text-muted-foreground">Yayındaki eğitim Shopier mağazasında da listelenir. Gizlemek için eğitimi taslağa alın.</p> : <CheckboxField control={form.control} name="listed" label="Shopier mağazasında listelensin" description="Eğitimi yayınladığınızda mağazada da görünür olur. Taslağa aldığınızda mağazadan gizlenir." />}
     {course ? <CheckboxField control={form.control} name="inStock" label="Satışa açık" description="Kapalıyken ürün Shopier’de tükendi görünür ve sitede satın alınamaz." />
       : <div className="grid gap-5 rounded-xl bg-muted/50 p-4 sm:grid-cols-2">
         <TextField control={form.control} name="accessDays" label="Erişim süresi (gün)" type="number" inputMode="numeric" step="1" min={1} className="bg-white" />
-        <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Kapalıyken taslak olarak eklenir; derslerini hazırlayınca yayınlarsınız." className="sm:pt-6" />
+        <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Yayınlandığında hem sitede hem Shopier mağazasında görünür olur." className="sm:pt-6" />
       </div>}
     <FormMessage />
     <DialogFooter><SubmitButton>{course ? "Shopier’e kaydet" : "Eğitimi oluştur"}</SubmitButton></DialogFooter>

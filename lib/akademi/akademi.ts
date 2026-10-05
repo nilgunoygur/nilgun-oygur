@@ -78,7 +78,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
         };
       },
       users: (params: UserListParams) => ownerUsers(db, params, now()),
-      setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
+      setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status, shopier),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
       updateCourseProduct: (actorId: string, courseId: string, changes: ProductChanges) => updateCourseProduct(db, actorId, courseId, changes, shopier),
       createCourse: (actorId: string, course: NewCourse) => createCourse(db, actorId, course, shopier),
