@@ -5,6 +5,7 @@ import { getDatabase } from "@/lib/db";
 import { getShopier } from "@/lib/shopier";
 import { createAkademi, type Akademi } from "./akademi";
 import { CATALOG_TAG, type CatalogCourse } from "./catalog";
+import type { RefundListParams } from "./owner-forms";
 
 // The server-only edge of the composition root: the env-built Akademi, and the cached catalog reads.
 
@@ -44,6 +45,12 @@ export async function courseCards(): Promise<Record<string, { title: string; ima
   cacheLife(catalogLife);
   if (!config().enabled.catalog) return {};
   try { return await akademi().catalog.cards(); } catch { return {}; }
+}
+
+/** The owner's refund list, titled from the cached catalog instead of a Shopier call per request. */
+export async function ownerRefundList(params: Partial<RefundListParams>) {
+  const [{ items, ...list }, cards] = await Promise.all([akademi().owner.refundRequests(params), courseCards()]);
+  return { ...list, items: items.map(({ productId, ...item }) => ({ ...item, course: cards[productId]?.title ?? item.course.replaceAll("-", " ") })) };
 }
 
 /** From an owner route handler: expire now, without re-rendering a page. */

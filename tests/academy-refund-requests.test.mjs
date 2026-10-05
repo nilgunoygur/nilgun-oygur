@@ -51,8 +51,8 @@ test("a student asks once per purchase, and only for a course they bought", asyn
   const other = await fixture();
   assert.equal(await akademi.access.requestRefund(f.id, other.course.id, "Benim olmayan eğitim."), "no_purchase");
   assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Dördüncü deneme."), "rate_limited");
-  const { refundRequests } = await akademi.owner.catalogSnapshot();
-  const listed = refundRequests.find(request => request.orderId === f.order.id);
+  assert.ok((await akademi.owner.catalogSnapshot()).pendingRefunds >= 1);
+  const [listed] = (await akademi.owner.refundRequests({ status: "pending", search: f.order.id })).items;
   assert.deepEqual([listed.courseId, listed.email, listed.reason, listed.amountKurus], [f.course.id, `${f.id}@example.com`, "Beklediğim gibi değildi.", 10000]);
 });
 
@@ -160,6 +160,17 @@ test("new refund requests atomically queue one owner email, addressed to the req
   const invalid = createAkademi({ db, shopier: {}, refundNotification: { encryptionKey: "short", siteUrl: "https://example.com" } });
   await assert.rejects(() => invalid.access.requestRefund(broken.id, broken.course.id, "E-posta hazırlanamadı"));
   assert.equal(await broken.request(), undefined, "a failed email enqueue rolls back the request so a retry can notify");
+});
+
+test("a decided request leaves the account page two weeks after the decision; a pending one stays", async () => {
+  const { studentRefundRequests } = await import("../lib/akademi/refund-requests.ts");
+  const f = await fixture(), { akademi } = shop();
+  await akademi.access.requestRefund(f.id, f.course.id, "Beklediğim gibi değildi.");
+  const statuses = async days => (await studentRefundRequests(db, f.id, new Date(Date.now() + days * 86_400_000))).map(row => row.status);
+  assert.deepEqual(await statuses(30), ["pending"]);
+  await akademi.owner.decideRefundRequest("owner", (await f.request()).id, { approve: false, note: "Uygun değil." });
+  assert.deepEqual(await statuses(13), ["declined"]);
+  assert.deepEqual(await statuses(15), []);
 });
 
 test("the refund management list preserves decision history, filters and paginates requests", async () => {

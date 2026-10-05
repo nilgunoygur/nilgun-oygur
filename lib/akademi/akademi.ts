@@ -11,7 +11,7 @@ import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
 import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
 import type { RefundListParams } from "./owner-forms.ts";
-import { latestRefundRequest, pendingRefundRequests, requestRefund, listRefundRequests, studentRefundRequests, type RefundNotification } from "./refund-requests.ts";
+import { latestRefundRequest, pendingRefundCount, requestRefund, listRefundRequests, studentRefundRequests, type RefundNotification } from "./refund-requests.ts";
 
 type Dependencies = {
   db: Database;
@@ -49,7 +49,7 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
         return requestRefund(db, userId, courseId, reason, refundNotification);
       },
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
-      refundRequests: (userId: string) => studentRefundRequests(db, userId),
+      refundRequests: (userId: string) => studentRefundRequests(db, userId, now()),
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
         const [refunds, orders] = await Promise.all([shopier.listSucceededRefunds(), shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000))]);
@@ -68,20 +68,16 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
     },
     owner: {
       overview: ownerOverview,
-      async refundRequests(input: Partial<RefundListParams>) {
-        const [result, catalog] = await Promise.all([listRefundRequests(db, input), products().catch(() => [])]);
-        const titles = new Map(catalog.map(product => [product.id, product.title]));
-        return { ...result, items: result.items.map(({ productId, ...item }) => ({ ...item, course: titles.get(productId) ?? item.course.replaceAll("-", " ") })) };
-      },
+      refundRequests: (input: Partial<RefundListParams>) => listRefundRequests(db, input),
       /** JSON-safe; shared by the page and GET /api/yonetim/courses. */
       async catalogSnapshot() {
-        const [{ courses, recentSales }, attention, refundReviews, refundRequests] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db), partialRefundReviews(db), pendingRefundRequests(db)]);
+        const [{ courses, recentSales }, attention, refundReviews, pendingRefunds] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db), partialRefundReviews(db), pendingRefundCount(db)]);
         return {
           courses,
           recentSales: recentSales.map(sale => ({ ...sale, claimed: Boolean(sale.claimed), at: sale.at.toISOString() })),
           attention: attention.map(item => ({ ...item, at: item.at.toISOString() })),
           refundReviews: refundReviews.map(item => ({ ...item, at: item.at.toISOString() })),
-          refundRequests: refundRequests.map(item => ({ ...item, at: item.at.toISOString() })),
+          pendingRefunds,
         };
       },
       users: (params: UserListParams) => ownerUsers(db, params, now()),

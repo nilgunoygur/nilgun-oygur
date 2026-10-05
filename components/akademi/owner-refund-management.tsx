@@ -63,7 +63,7 @@ export function OwnerRefundManagement({ initialData }: { initialData: OwnerRefun
     </div>
     <Dialog open={!!selected} onOpenChange={open => { if (!open) { setSelected(null); setDecision(null); } }}>
       <DialogContent className="max-h-[90vh] gap-6 overflow-y-auto sm:max-w-xl">
-        <DialogHeader className="pr-8"><DialogTitle>{decision === "approve" ? "İadeyi onayla" : decision === "decline" ? "Talebi reddet" : "İade talebi"}</DialogTitle><DialogDescription>{selected && `${selected.name} · Sipariş #${selected.orderId}`}</DialogDescription></DialogHeader>
+        <DialogHeader className="pr-8"><DialogTitle className="leading-snug tracking-normal">{decision === "approve" ? "İadeyi onayla" : decision === "decline" ? "Talebi reddet" : "İade talebi"}</DialogTitle><DialogDescription>{selected && `${selected.name} · Sipariş #${selected.orderId}`}</DialogDescription></DialogHeader>
         {selected && <>
           {!decision && <><dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
             <div className="col-span-2"><dt className="text-xs text-muted-foreground">Eğitim</dt><dd className="mt-1"><Link href={`/yonetim/egitimler/${selected.courseId}`} className="font-medium hover:underline">{selected.course}</Link></dd></div>

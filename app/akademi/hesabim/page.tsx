@@ -9,8 +9,9 @@ import { akademi, courseCards } from "@/lib/akademi/server";
 import { fallbackCover } from "@/lib/akademi/catalog";
 import { hasCompleteContact } from "@/lib/auth/contact";
 import { ClaimHint } from "@/components/akademi/claim-hint";
+import { Dismissible } from "@/components/akademi/dismissible";
 import { RefundNotice } from "@/components/akademi/refund-notice";
-import { claimHintCookie } from "@/lib/akademi/claim-schema";
+import { claimHintCookie, refundNoticeCookie, refundNoticeDays } from "@/lib/akademi/claim-schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { buttonVariants } from "@/components/ui/button";
@@ -30,15 +31,19 @@ export default function AccountPage() {
 
 async function Account() {
   const viewer = await studentPage();
-  const hintClosed = (await cookies()).has(claimHintCookie);
+  const closed = await cookies();
   const [access, cards, contact, refunds] = await Promise.all([akademi().access.active(viewer.user.id), courseCards(), akademi().students.contact(viewer.user.id), akademi().access.refundRequests(viewer.user.id)]);
   const active = new Set(access.map(item => item.courseId)), seen = new Set<string>();
   // The newest request per course; an approved one is dropped once the course is bought again.
-  const latestRefunds = refunds.filter(refund => !seen.has(refund.courseId) && seen.add(refund.courseId) && (refund.status !== "approved" || !active.has(refund.courseId)));
+  const latestRefunds = refunds.filter(refund => !seen.has(refund.courseId) && seen.add(refund.courseId) && (refund.status !== "approved" || !active.has(refund.courseId)) && !closed.has(refundNoticeCookie(refund.id)));
   return <>
     <header className={accountHeader}><div><p className={kicker}>AKADEMİ · KİŞİSEL ALANINIZ</p><h1 className={accountTitle}>Merhaba, {viewer.user.name}.</h1><p>Eğitimleriniz ve hesabınız burada.</p></div></header>
-    {!hintClosed && <ClaimHint />}
-    {latestRefunds.length > 0 && <section aria-label="İade talepleriniz" className="mb-10 grid gap-4">{latestRefunds.map(refund => <RefundNotice key={refund.id} status={refund.status} note={refund.ownerNote} course={cards[refund.productId]?.title ?? "Akademi eğitimi"} orderId={refund.orderId} />)}</section>}
+    {!closed.has(claimHintCookie) && <ClaimHint />}
+    {latestRefunds.length > 0 && <section aria-label="İade talepleriniz" className="mb-10 grid gap-4">{latestRefunds.map(refund => {
+      const notice = <RefundNotice key={refund.id} status={refund.status} note={refund.ownerNote} course={cards[refund.productId]?.title ?? "Akademi eğitimi"} orderId={refund.orderId} />;
+      // A pending request explains why the course is closed, so only a decided one can be dismissed.
+      return refund.status === "pending" ? notice : <Dismissible key={refund.id} cookie={refundNoticeCookie(refund.id)} days={refundNoticeDays} className="relative" closeClassName="absolute top-2 right-2">{notice}</Dismissible>;
+    })}</section>}
     {!hasCompleteContact(contact) && <Alert className="mb-10"><Phone /><AlertTitle>İletişim bilgilerinizi tamamlayın</AlertTitle><AlertDescription>Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi ekleyin. <Link href="/akademi/profil#iletisim" className="font-medium text-forest underline underline-offset-4">Profil ayarlarına git</Link></AlertDescription></Alert>}
     {access.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Öğrenme yolculuğunuz burada başlıyor.</EmptyTitle><EmptyDescription>Henüz aktif bir eğitim erişiminiz bulunmuyor. Size uygun eğitimleri keşfedebilirsiniz.</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ size: "pill" })} href="/akademi">Eğitimleri keşfet</Link></EmptyContent></Empty> : <div className="grid grid-cols-2 gap-8 max-tablet:grid-cols-1">{access.map(item => {
       const course = cards[item.shopierProductId];

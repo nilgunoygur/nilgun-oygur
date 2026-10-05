@@ -251,6 +251,8 @@ export const refundRequests = pgTable("refund_requests", {
   ...timestamps(),
 }, (t) => [
   uniqueIndex("refund_requests_pending_unique").on(t.purchaseId).where(sql`${t.status} = 'pending'`),
+  index("refund_requests_purchase_status_idx").on(t.purchaseId, t.status),
+  index("refund_requests_user_idx").on(t.userId),
   check("refund_requests_status_valid", sql`${t.status} IN ('pending', 'approved', 'declined')`),
   check("refund_requests_decision_consistent", sql`(${t.status} = 'pending') = (${t.decidedAt} IS NULL)`),
 ]);

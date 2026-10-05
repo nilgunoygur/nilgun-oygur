@@ -18,17 +18,15 @@ const attentionSchema = z.object({
   provider: z.string(), eventIdentity: z.string(), attempts: z.number(), error: z.string().nullable(), at: z.string().datetime(),
 });
 const refundReviewSchema = z.object({ id: z.string(), orderId: z.string(), amountKurus: z.number(), currency: z.string(), at: z.string().datetime() });
-const ownerRefundRequestSchema = refundReviewSchema.extend({ courseId: z.string(), name: z.string(), email: z.string(), reason: z.string() });
 export const ownerCatalogSnapshotSchema = z.object({
   courses: z.array(courseSchema),
   recentSales: z.array(saleSchema),
   attention: z.array(attentionSchema),
   refundReviews: z.array(refundReviewSchema),
-  refundRequests: z.array(ownerRefundRequestSchema),
+  pendingRefunds: z.number(),
 });
 export type OwnerCatalogSnapshot = z.infer<typeof ownerCatalogSnapshotSchema>;
 export type OwnerCourse = OwnerCatalogSnapshot["courses"][number];
-export type OwnerRefundRequest = OwnerCatalogSnapshot["refundRequests"][number];
 const ownerTransactionsSchema = z.object({
   items: z.array(z.object({
     id: z.string(), order: z.string(), kind: z.enum(["sale", "refund"]), at: z.string().datetime(),
@@ -83,7 +81,8 @@ export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
 }
 
 const refundListSchema = z.object({
-  items: z.array(ownerRefundRequestSchema.extend({
+  items: z.array(refundReviewSchema.extend({
+    courseId: z.string(), name: z.string(), email: z.string(), reason: z.string(),
     course: z.string(), status: z.enum(refundStatuses), refundAmountKurus: z.number().nullable(), ownerNote: z.string().nullable(),
     decidedAt: z.string().datetime().nullable(), shopierRefundId: z.string().nullable(), completed: z.boolean(),
   })),
