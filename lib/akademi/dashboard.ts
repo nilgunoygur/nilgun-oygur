@@ -1,7 +1,7 @@
 import { and, count, countDistinct, eq, gte, lt, sql } from "drizzle-orm";
 import { shopierPurchases, user } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
-import { buyerEmail, parsePriceKurus, type ShopierClient } from "../shopier/api.ts";
+import { buyerEmail, parsePriceKurus, refundedAt, type ShopierClient } from "../shopier/api.ts";
 import { istanbulDay } from "./format.ts";
 
 export type Period = "week" | "month" | "year" | "custom";
@@ -50,7 +50,7 @@ export async function recentShopierTransactions(shopier: Pick<ShopierClient, "li
     }));
     const returned = refunds.map(refund => ({
       id: `refund-${refund.id}`, order: refund.orderId, kind: "refund" as const,
-      at: refund.dateRefunded ?? refund.dateCreated, amount: -(parsePriceKurus(refund.total) ?? 0),
+      at: refundedAt(refund), amount: -(parsePriceKurus(refund.total) ?? 0),
       currency: refund.currency, title: refund.type === "full" ? "Tam iade" : "Kısmi iade", email: null,
     }));
     return { items: [...sales, ...returned].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 5), unavailable: false, refundsUnavailable };

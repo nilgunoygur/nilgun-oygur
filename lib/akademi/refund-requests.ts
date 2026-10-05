@@ -3,8 +3,6 @@ import { courseAccess, refundRequests, shopierPurchases, user } from "../db/sche
 import type { Database } from "../db/types.ts";
 import { hasFullRefund } from "./course-access.ts";
 
-// A student asks, the owner decides (owner-commands.ts); money only moves through Shopier.
-
 type RefundRequestOutcome = "requested" | "no_purchase" | "already_pending" | "refunded";
 
 /** A request is about the purchase behind the student's current access to the course. */

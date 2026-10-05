@@ -109,17 +109,17 @@ export async function decideRefundRequest(db: Database, actorId: string, request
   const target = { resourceType: "refund_request", resourceId: requestId };
   const pending = and(eq(refundRequests.id, requestId), eq(refundRequests.status, "pending"));
   const decided = { decidedBy: actorId, decidedAt: new Date(), ownerNote: decision.note || null };
-  const alreadyDecided = new OwnerInputError("Bu talep zaten sonuçlandırılmış.");
+  const alreadyDecided = () => new OwnerInputError("Bu talep zaten sonuçlandırılmış.");
   if (!decision.approve) {
     const declined = await audited(db, actorId, { action: "refund_request.declined", ...target, reason: decision.note || "İade talebi reddedildi" },
       async tx => (await tx.update(refundRequests).set({ status: "declined", ...decided }).where(pending).returning({ id: refundRequests.id })).length > 0);
-    if (!declined) throw alreadyDecided;
+    if (!declined) throw alreadyDecided();
     return null;
   }
   if (decision.amountKurus > await refundableKurus(db, request.orderId)) throw new OwnerInputError("İade tutarı siparişin kalan tutarını aşamaz.");
   // Claimed first, so two approvals cannot refund twice.
   const claimed = await db.update(refundRequests).set({ status: "approved", amountKurus: decision.amountKurus, ...decided }).where(pending).returning({ id: refundRequests.id });
-  if (!claimed.length) throw alreadyDecided;
+  if (!claimed.length) throw alreadyDecided();
   try {
     const refund = await withShopier(db, actorId, target, "refund_request.refund", `sipariş ${request.orderId} için ${formatMoney(decision.amountKurus)} iade`,
       () => shopier.createRefund(request.orderId, decision.amountKurus, decision.note || undefined));

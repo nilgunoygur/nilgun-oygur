@@ -20,7 +20,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundApprovalSchema, type CourseChange } from "@/lib/akademi/owner-forms";
+import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundDecisionSchema, type CourseChange, type RefundDecisionInput, type RefundDecisionValues } from "@/lib/akademi/owner-forms";
 import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
@@ -114,12 +114,12 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
 
 const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
 
-/** A decline ignores the amount. */
 function RefundDecisionForm({ request, approve, onDone }: { request: OwnerRefundRequest; approve: boolean; onDone: () => void }) {
   const client = useQueryClient();
-  const form = useForm({ resolver: zodResolver(refundApprovalSchema), mode: "onTouched", defaultValues: { amount: lira(request.amountKurus), note: "" } });
+  const form = useForm<RefundDecisionInput, unknown, RefundDecisionValues>({ resolver: zodResolver(refundDecisionSchema), mode: "onTouched",
+    defaultValues: approve ? { decision: "approve", amount: lira(request.amountKurus), note: "" } : { decision: "decline", note: "" } });
   const decide = useMutation({
-    mutationFn: ({ amount, note }: { amount: number; note: string }) => decideOwnerRefundRequest(request.id, approve ? { decision: "approve", amount, note } : { decision: "decline", note }),
+    mutationFn: (decision: RefundDecisionValues) => decideOwnerRefundRequest(request.id, decision),
     onSuccess: () => {
       client.setQueryData<OwnerCatalogSnapshot>(ownerQueryKeys.catalog(), current => current && { ...current, refundRequests: current.refundRequests.filter(item => item.id !== request.id) });
       toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone();
