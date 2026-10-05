@@ -160,7 +160,7 @@ export function ToolButton({ label, active, className, ...props }: React.Compone
     className={cn("text-stone hover:text-forest", active && "bg-mist text-forest", className)} {...props} />;
 }
 
-export function ArticleToolbar({ state, onImage }: { state: FormatState; onImage: () => void }) {
+export function ArticleToolbar({ state, onImage }: { state: FormatState; onImage?: () => void }) {
   const [editor] = useLexicalComposerContext();
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [linkOpen, setLinkOpen] = useState(false);
@@ -195,7 +195,7 @@ export function ArticleToolbar({ state, onImage }: { state: FormatState; onImage
     <ToolButton label="Numaralı liste" active={state.block === "number"} onClick={() => setBlock(editor, "number", state.block)}><ListOrdered /></ToolButton>
     <ToolButton label="Alıntı" active={state.block === "quote"} onClick={() => setBlock(editor, "quote", state.block)}><Quote /></ToolButton>
     {divider}
-    <ToolButton label="Görsel ekle" onClick={onImage}><ImagePlus /></ToolButton>
+    {onImage && <ToolButton label="Görsel ekle" onClick={onImage}><ImagePlus /></ToolButton>}
     <ToolButton label="Ayraç ekle" onClick={() => insertDivider(editor)}><Minus /></ToolButton>
     {divider}
     <ToolButton label="Biçimi temizle" onClick={() => clearFormatting(editor)}><RemoveFormatting /></ToolButton>

@@ -2,18 +2,18 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { courses, lessonFiles, lessons, modules, lessonProgress, liveSessions, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
+import { cleanNotes } from "../rich-text.ts";
+import { daysUntil } from "./format.ts";
 import { lessonDocuments } from "./lesson-files.ts";
-import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
+import { canJoinLiveSession, hasWatched, liveView } from "./access-policy.ts";
 import { lessonPrerequisites } from "./lesson-sequence.ts";
 
 const lessonOrder = () => [asc(modules.position), asc(modules.createdAt), asc(modules.id), asc(lessons.position), asc(lessons.createdAt), asc(lessons.id)];
 
 /** Private learning reads never depend on whether the product is still for sale. Homework PDFs are exposed by id only. */
-export async function studentCourse(db: Database, userId: string, courseId: string, now = new Date()) {
-  const grant = await activeGrant(db, userId, courseId, now);
+export async function studentCourse(db: Database, userId: string, course: typeof courses.$inferSelect, now = new Date()) {
+  const grant = await activeGrant(db, userId, course.id, now);
   if (!grant) return null;
-  const [course] = await db.select().from(courses).where(eq(courses.id, courseId));
-  if (!course) return null;
   const rows = await db.select({
     id: lessons.id, title: lessons.title, description: lessons.description, kind: lessons.kind,
     moduleTitle: modules.title, durationSeconds: videoAssets.durationSeconds,
@@ -24,10 +24,13 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .leftJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id))
     .leftJoin(liveSessions, eq(lessons.id, liveSessions.lessonId))
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
-    .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
+    .where(and(eq(lessons.courseId, course.id), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(...lessonOrder());
   const documents = await lessonDocuments(db, rows.map(row => row.id));
-  return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents(row.id) })) };
+  return { course, grant, lessons: rows.map(row => {
+    const view = row.liveStatus && liveView(row.liveStatus, !!row.mediaReady);
+    return { ...row, description: cleanNotes(row.description), documents: documents(row.id), liveView: view, daysLeft: view === "upcoming" && row.startsAt ? daysUntil(row.startsAt, now) : null };
+  }) };
 }
 
 /** Rechecked by every progress, playback, and live-join request. */
@@ -56,7 +59,7 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
   const accessible = await accessibleLesson(db, userId, lessonId, now);
   if (!accessible) throw new Error("FORBIDDEN");
   const duration = accessible.asset?.durationSeconds;
-  if (input.completed && duration) {
+  if (input.completed && duration && accessible.lesson.kind !== "live") {
     const [previous] = await db.select({ position: lessonProgress.lastPositionSeconds }).from(lessonProgress)
       .where(and(eq(lessonProgress.userId, userId), eq(lessonProgress.lessonId, lessonId)));
     if (!hasWatched(Math.max(previous?.position ?? 0, input.position ?? 0), duration)) throw new Error("NOT_WATCHED");
@@ -74,6 +77,6 @@ export async function accessibleFile(db: Database, userId: string, fileId: strin
 
 export async function liveDestination(db: Database, userId: string, lessonId: string, now = new Date()) {
   const row = await accessibleLesson(db, userId, lessonId, now);
-  if (!row?.live || !canJoinLiveSession(row.live, row.grant, userId, row.lesson.courseId, now)) return null;
+  if (!row?.live || liveView(row.live.status, row.asset?.status === "ready") !== "upcoming" || !canJoinLiveSession(row.live, row.grant, userId, row.lesson.courseId, now)) return null;
   return { meetingId: row.live.zoomMeetingId, passcode: row.live.zoomPasscode };
 }

@@ -38,7 +38,7 @@ async function Account() {
     {access.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Öğrenme yolculuğunuz burada başlıyor.</EmptyTitle><EmptyDescription>Henüz aktif bir eğitim erişiminiz bulunmuyor. Size uygun eğitimleri keşfedebilirsiniz.</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ size: "pill" })} href="/akademi">Eğitimleri keşfet</Link></EmptyContent></Empty> : <div className="grid grid-cols-2 gap-8 max-tablet:grid-cols-1">{access.map(item => {
       const course = cards[item.shopierProductId];
       const title = course?.title ?? "Akademi eğitimi";
-      const href = `/akademi/hesabim/${item.courseId}`;
+      const href = `/akademi/hesabim/${item.slug}`;
       return <article key={item.id} className="flex min-w-0 flex-col rounded-[24px] border border-[#e1e8dc] bg-white p-[10px] shadow-[0_6px_25px_#19392f08]">
         <Link href={href} aria-label={`${title} eğitimine devam et`} className="group relative block aspect-[1.65] overflow-hidden rounded-[17px] bg-mist">
           <Image src={course?.image ?? fallbackCover} alt="" fill sizes="(max-width: 760px) 90vw, (max-width: 1280px) 46vw, 590px" className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" />

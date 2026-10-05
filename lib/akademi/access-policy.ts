@@ -20,7 +20,11 @@ export function hasActiveAccess(
 }
 
 /** Mux tokens cannot be recalled once issued, so keep them short. */
-export const playbackLifetimeMs = { video: 120_000, audio: 120_000 };
+export const playbackLifetimeMs = { video: 120_000, audio: 120_000, live: 120_000 };
+
+/** A live lesson shows its recording once one is ready, whatever the session's status. */
+export const liveView = (status: LiveSession["status"], recordingReady: boolean) =>
+  recordingReady ? "recorded" : status === "cancelled" || status === "completed" ? status : "upcoming";
 
 /** Whole-second JWT expiry, rounded down so it never extends past the grant. */
 export function playbackExpiresAt(

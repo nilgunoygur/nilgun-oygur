@@ -6,12 +6,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { articles as importedArticles } from "@/lib/content";
-import { articleBodyText, articlePlainText, getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { articleBodyText, getPublicArticles, slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { richPlainText } from "@/lib/rich-text";
 import { normalizeSlug } from "@/lib/route-slug";
 import { BlogSection } from "@/components/site";
 import { CopyLink } from "@/components/sliders";
 import { ArticleReadTracker } from "@/components/analytics";
-import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
+import { articleMeta, articleText, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export function generateStaticParams() {
   return importedArticles.map((a) => ({ slug: slugOf(a) }));
@@ -28,7 +29,7 @@ export async function generateMetadata({
   const a = await findArticle(params);
   if (!a) return { robots: { index: false, follow: true } };
 
-  const description = articlePlainText(articleBodyText(a)).slice(0, 160);
+  const description = richPlainText(articleBodyText(a)).slice(0, 160);
   const image = { url: a.image, alt: a.title };
   return {
     title: a.title,
@@ -59,7 +60,7 @@ async function ArticleContent({ params }: { params: Promise<{ slug: string }> })
       <ArticleJsonLd
         type="BlogPosting"
         headline={a.title}
-        description={articlePlainText(articleBodyText(a)).slice(0, 160)}
+        description={richPlainText(articleBodyText(a)).slice(0, 160)}
         url={absoluteUrl(a.href)}
         mainEntityOfPage={absoluteUrl(a.href)}
         image={absoluteUrl(a.image)}
@@ -99,7 +100,7 @@ async function ArticleContent({ params }: { params: Promise<{ slug: string }> })
         </div>
         <div className="mx-auto mt-[70px] max-w-[760px] max-tablet:mt-10">
           <CopyLink />
-          {a.richBody ? <div className="[&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-mint [&_blockquote]:pl-5 [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[28px] [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[23px] [&_h4]:mt-7 [&_h4]:mb-3 [&_h4]:text-[19px] [&_h4]:font-semibold [&_hr]:my-10 [&_hr]:border-forest/15 [&_img]:my-8 [&_img]:w-full [&_img]:rounded-[20px] [&_code]:rounded [&_code]:bg-mist [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_blockquote]:my-6 [&_blockquote]:italic [&_li]:mb-2 [&_ol]:mb-6 [&_ol]:list-decimal [&_ol]:pl-7 [&_p]:mb-6 [&_p]:text-[19px] [&_p]:leading-[1.8] [&_p]:text-[#686866] [&_ul]:mb-6 [&_ul]:list-disc [&_ul]:pl-7 max-tablet:[&_p]:text-[17px]" dangerouslySetInnerHTML={{ __html: a.richBody }} /> : a.body.map((block, i) =>
+          {a.richBody ? <div className={articleText} dangerouslySetInnerHTML={{ __html: a.richBody }} /> : a.body.map((block, i) =>
             block.tag.startsWith("h") || block.text.endsWith(":") ? (
               <h2 key={i} className="mt-10 mb-4 text-[28px] tracking-[-0.5px] max-tablet:text-[25px]">{block.text}</h2>
             ) : (

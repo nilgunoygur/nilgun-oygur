@@ -23,16 +23,16 @@ export async function addLessonFile(db: Database, actorId: string, input: { less
     if (existing.length >= maxLessonDocuments) throw new Error(`Bir derse en fazla ${maxLessonDocuments} PDF eklenebilir.`);
     const [file] = await tx.insert(lessonFiles).values({ ...input, name }).returning();
     await tx.insert(adminAuditLog).values({ actorId, action: "file.add", resourceType: "lesson", resourceId: lesson.id, reason: `Ödev PDF’i eklendi: ${name}` });
-    return { file, courseId: lesson.courseId };
+    return { file };
   });
 }
 
 export async function removeLessonFile(db: Database, actorId: string, fileId: string) {
   return db.transaction(async tx => {
-    const [row] = await tx.select({ file: lessonFiles, courseId: lessons.courseId }).from(lessonFiles).innerJoin(lessons, eq(lessons.id, lessonFiles.lessonId)).where(eq(lessonFiles.id, fileId)).for("update");
-    if (!row) throw new Error("Dosya bulunamadı.");
-    await tx.delete(lessonFiles).where(eq(lessonFiles.id, row.file.id));
-    await tx.insert(adminAuditLog).values({ actorId, action: "file.remove", resourceType: "lesson", resourceId: row.file.lessonId, reason: `Ödev PDF’i silindi: ${row.file.name}` });
-    return { pathname: row.file.pathname, courseId: row.courseId };
+    const [file] = await tx.select().from(lessonFiles).where(eq(lessonFiles.id, fileId)).for("update");
+    if (!file) throw new Error("Dosya bulunamadı.");
+    await tx.delete(lessonFiles).where(eq(lessonFiles.id, file.id));
+    await tx.insert(adminAuditLog).values({ actorId, action: "file.remove", resourceType: "lesson", resourceId: file.lessonId, reason: `Ödev PDF’i silindi: ${file.name}` });
+    return { pathname: file.pathname };
   });
 }

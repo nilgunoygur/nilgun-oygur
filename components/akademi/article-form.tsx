@@ -109,7 +109,7 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
       </Field>
     )} />
     <ControlledField control={form.control} name="body" label="Yazı içeriği" className="sm:col-span-2">
-      {field => <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={images} upload={uploadImage} />}
+      {field => <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={{ choices: images, upload: uploadImage }} />}
     </ControlledField>
     <div className="grid gap-3 sm:col-span-2">
       <FormMessage />

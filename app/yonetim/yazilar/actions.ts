@@ -8,7 +8,8 @@ import { articleAssets, articleEdits } from "@/lib/db/schema";
 import { articles as importedArticles } from "@/lib/content";
 import { articleSlug } from "@/lib/akademi/slug";
 import { dayLabel } from "@/lib/akademi/format";
-import { articlePlainText, cleanArticleHtml, slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { slugOf, uploadedImagePrefix } from "@/lib/articles";
+import { cleanRichHtml, richPlainText } from "@/lib/rich-text";
 import { articleMinLength, articleSchema, articleStatus } from "@/lib/akademi/owner-forms";
 import type { FormState } from "@/components/akademi/form-status";
 
@@ -17,8 +18,8 @@ export async function saveArticle(values: z.input<typeof articleSchema>, request
   const parsed = articleSchema.safeParse(values);
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Yazı alanlarını kontrol edin." };
   const article = { ...parsed.data, status: articleStatus.parse(requestedStatus) };
-  const body = cleanArticleHtml(article.body);
-  if (articlePlainText(body).length < articleMinLength.length) return { status: "error", message: articleMinLength.message };
+  const body = cleanRichHtml(article.body);
+  if (richPlainText(body).length < articleMinLength.length) return { status: "error", message: articleMinLength.message };
   if (article.image.startsWith(uploadedImagePrefix)) {
     const imageId = article.image.slice(uploadedImagePrefix.length);
     const [found] = await getDatabase().select({ id: articleAssets.id }).from(articleAssets).where(eq(articleAssets.id, imageId)).limit(1);

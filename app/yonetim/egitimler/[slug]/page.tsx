@@ -1,11 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
+import { notFound, permanentRedirect } from "next/navigation";
 import { ownerPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
-import { courses } from "@/lib/db/schema";
+import { courseForRoute } from "@/lib/akademi/course-route";
 import { ownerLessons } from "@/lib/akademi/lesson-editor";
 import { courseCards } from "@/lib/akademi/server";
 import { attachedVideos, videoConfigured } from "@/lib/video/mux";
@@ -16,16 +14,17 @@ import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata = { title: "Ders içerikleri" };
-export default function EditCourse({ params }: { params: Promise<{ courseId: string }> }) {
+export default function EditCourse({ params }: { params: Promise<{ slug: string }> }) {
   return <section className={cn(pageWidth, ownerSection, "max-w-[1050px]")}><Suspense fallback={<PageLoader label="İçerikler yükleniyor" />}><Content params={params} /></Suspense></section>;
 }
-async function Content({ params }: { params: Promise<{ courseId: string }> }) {
+async function Content({ params }: { params: Promise<{ slug: string }> }) {
   await ownerPage();
-  const { courseId } = await params;
-  if (!z.uuid().safeParse(courseId).success) notFound();
+  const { slug } = await params;
   const db = getDatabase();
-  const [course] = await db.select().from(courses).where(eq(courses.id, courseId));
+  const course = await courseForRoute(db, slug);
   if (!course) notFound();
+  if (course.slug !== slug) permanentRedirect(`/yonetim/egitimler/${course.slug}`);
+  const courseId = course.id;
   const lessonsWithVideos = ownerLessons(db, courseId).then(async rows => {
     const videos = await attachedVideos(rows.map(row => row.asset));
     return rows.map(row => ({ ...row, video: row.asset?.muxAssetId ? videos[row.asset.muxAssetId] : undefined }));

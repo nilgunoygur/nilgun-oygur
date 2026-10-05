@@ -2,8 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { io } from "next/cache";
-import sanitizeHtml from "sanitize-html";
 import { config } from "@/lib/config";
+import { escapeHtml, isRichHtml } from "@/lib/html";
+import { cleanRichHtml, richPlainText } from "@/lib/rich-text";
 import { articles as importedArticles } from "@/lib/content";
 import { getDatabase } from "@/lib/db";
 import { articleAssets, articleEdits } from "@/lib/db/schema";
@@ -12,25 +13,8 @@ type Article = (typeof importedArticles)[number] & { richBody?: string };
 type Edit = typeof articleEdits.$inferSelect;
 export const slugOf = (article: { href: string }) => article.href.slice("/blog/".length);
 export const uploadedImagePrefix = "/api/article-images/";
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
 export const articleBodyText = (article: Article) => article.richBody ?? article.body.map(block => block.tag.startsWith("h") ? `<h2>${escapeHtml(block.text)}</h2>` : `<p>${escapeHtml(block.text)}</p>`).join("");
 
-export const articlePlainText = (html: string) => sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim();
-
-export function cleanArticleHtml(value: string) {
-  return sanitizeHtml(value, {
-    allowedTags: ["p", "h2", "h3", "h4", "strong", "b", "em", "i", "u", "s", "code", "ul", "ol", "li", "blockquote", "a", "br", "hr", "img"],
-    allowedAttributes: { a: ["href", "target", "rel"], img: ["src", "alt"], p: ["style"], h2: ["style"], h3: ["style"], h4: ["style"] },
-    // Alignment is the only inline style the editor produces.
-    allowedStyles: { "*": { "text-align": [/^(left|center|right|justify)$/] } },
-    allowedSchemes: ["http", "https", "mailto"],
-    // Images: site paths or https only.
-    allowedSchemesByTag: { img: ["https"] },
-    allowProtocolRelative: false,
-    exclusiveFilter: frame => frame.tag === "img" && !frame.attribs.src,
-    transformTags: { a: (_tag, attributes) => ({ tagName: "a", attribs: { href: attributes.href ?? "#", rel: "noopener noreferrer", target: "_blank" } }) },
-  });
-}
 
 export async function getArticleImageLibrary() {
   await io();
@@ -41,8 +25,8 @@ export async function getArticleImageLibrary() {
 }
 
 function mergeArticle(edit: Edit, original?: Article): Article {
-  const richBody = /^\s*</.test(edit.body) ? cleanArticleHtml(edit.body) : undefined;
-  const plainText = richBody ? articlePlainText(richBody) : "";
+  const richBody = isRichHtml(edit.body) ? cleanRichHtml(edit.body) : undefined;
+  const plainText = richBody ? richPlainText(richBody) : "";
   return {
     href: `/blog/${edit.slug}`,
     title: edit.title,

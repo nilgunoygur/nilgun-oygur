@@ -147,13 +147,13 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
 }
 
 const refundForGrant = (...statuses: ("pending" | "approved")[]) => sql<boolean>`exists (select 1 from ${refundRequests} where ${refundRequests.purchaseId} = ${courseAccess.sourcePurchaseId} and ${inArray(refundRequests.status, statuses)})`;
-export type ActiveAccess = AccessGrant & { id: string; shopierProductId: string; refundPending: boolean };
+export type ActiveAccess = AccessGrant & { id: string; slug: string; shopierProductId: string; refundPending: boolean };
 
 /** Unexpired grants, soonest expiry first; approved refunds are omitted. */
 export async function activeCourseAccess(db: Database, userId: string, now = new Date()): Promise<ActiveAccess[]> {
   const grants = await db.select({
     id: courseAccess.id, userId: courseAccess.userId, courseId: courseAccess.courseId, startsAt: courseAccess.startsAt,
-    expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt, shopierProductId: courses.shopierProductId, refundPending: refundForGrant("pending"),
+    expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt, slug: courses.slug, shopierProductId: courses.shopierProductId, refundPending: refundForGrant("pending"),
   }).from(courseAccess).innerJoin(courses, eq(courses.id, courseAccess.courseId))
     .where(and(eq(courseAccess.userId, userId), isNull(courseAccess.revokedAt), sql`not ${refundForGrant("approved")}`)).orderBy(asc(courseAccess.expiresAt));
   return grants.filter(grant => hasActiveAccess(grant, userId, grant.courseId, now));

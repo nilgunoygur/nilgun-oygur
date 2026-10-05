@@ -31,7 +31,7 @@ export async function getPlayback(lessonId: string) {
   try {
     const viewer = await requireStudent();
     const row = await accessibleLesson(getDatabase(), viewer.user.id, z.uuid().parse(lessonId));
-    if (!row || row.lesson.kind === "live" || row.asset?.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Bu derse şu anda erişilemiyor." };
+    if (!row || row.asset?.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Bu derse şu anda erişilemiyor." };
     const expiresAt = playbackExpiresAt(row.grant, viewer.user.id, row.lesson.courseId, new Date(), playbackLifetimeMs[row.lesson.kind]);
     if (!expiresAt) return { error: "Eğitim erişiminiz sona erdi." };
     return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, expiresAt), expiresAt };
