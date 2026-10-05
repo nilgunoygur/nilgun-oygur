@@ -19,8 +19,14 @@ export async function requestRefund(db: Database, userId: string, courseId: stri
     .innerJoin(shopierPurchases, eq(shopierPurchases.id, courseAccess.sourcePurchaseId))
     .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
   if (!purchase) return "no_purchase";
+  const [approved] = await db.select({ id: refundRequests.id }).from(refundRequests).where(and(eq(refundRequests.purchaseId, purchase.id), eq(refundRequests.status, "approved"))).limit(1);
+  if (approved) return "refunded";
   if (await hasFullRefund(db, purchase.orderId)) return "refunded";
   return db.transaction(async tx => {
+    // Serialize with an owner decision, so a repeat submission cannot slip past approval.
+    const existing = await tx.select({ status: refundRequests.status }).from(refundRequests).where(and(eq(refundRequests.purchaseId, purchase.id), or(eq(refundRequests.status, "pending"), eq(refundRequests.status, "approved")))).for("update");
+    if (existing.some(row => row.status === "approved")) return "refunded";
+    if (existing.some(row => row.status === "pending")) return "already_pending";
     const [inserted] = await tx.insert(refundRequests).values({ purchaseId: purchase.id, userId, reason }).onConflictDoNothing().returning({ id: refundRequests.id });
     if (!inserted) return "already_pending";
     if (notification) {
@@ -33,10 +39,19 @@ export async function requestRefund(db: Database, userId: string, courseId: stri
 }
 
 export async function latestRefundRequest(db: Database, userId: string, courseId: string) {
+  const [current] = await db.select({ purchaseId: courseAccess.sourcePurchaseId }).from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
+  if (current && !current.purchaseId) return null;
   const [request] = await db.select({ status: refundRequests.status, ownerNote: refundRequests.ownerNote }).from(refundRequests)
     .innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId))
-    .where(and(eq(refundRequests.userId, userId), eq(shopierPurchases.courseId, courseId))).orderBy(desc(refundRequests.createdAt)).limit(1);
+    .where(and(eq(refundRequests.userId, userId), eq(shopierPurchases.courseId, courseId), current?.purchaseId ? eq(refundRequests.purchaseId, current.purchaseId) : undefined)).orderBy(desc(refundRequests.createdAt)).limit(1);
   return request ?? null;
+}
+
+/** Status remains visible in the account after an approved course leaves the active list. */
+export function studentRefundRequests(db: Database, userId: string) {
+  return db.select({ id: refundRequests.id, courseId: courses.id, productId: courses.shopierProductId, orderId: shopierPurchases.shopierOrderId, status: refundRequests.status, ownerNote: refundRequests.ownerNote })
+    .from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId))
+    .where(eq(refundRequests.userId, userId)).orderBy(desc(refundRequests.createdAt), desc(refundRequests.id)).limit(10);
 }
 
 export function pendingRefundRequests(db: Database) {

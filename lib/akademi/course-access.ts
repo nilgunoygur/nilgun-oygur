@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { courseAccess, courses, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
+import { courseAccess, courses, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
 import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
 import { adoptShopierContact } from "./student-contact.ts";
@@ -67,7 +67,8 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
     await tx.update(shopierPurchases).set({ userId, claimedAt: now }).where(eq(shopierPurchases.id, purchase.id));
     const [current] = await tx.select().from(courseAccess)
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
-    const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(current, purchase.purchasedAt, purchase.accessDurationDays);
+    const [approved] = current?.sourcePurchaseId ? await tx.select({ id: refundRequests.id }).from(refundRequests).where(and(eq(refundRequests.purchaseId, current.sourcePurchaseId), eq(refundRequests.status, "approved"))).limit(1) : [];
+    const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(approved ? null : current, purchase.purchasedAt, purchase.accessDurationDays);
     if (current) {
       await tx.update(courseAccess).set({ revokedAt: now, revocationReason: extendsPrevious ? "extended_by_purchase" : "expired_replaced" })
         .where(eq(courseAccess.id, current.id));
@@ -139,15 +140,16 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   return outcome;
 }
 
-export type ActiveAccess = AccessGrant & { id: string; shopierProductId: string };
+const refundForGrant = (status: "pending" | "approved") => sql<boolean>`exists (select 1 from ${refundRequests} where ${refundRequests.purchaseId} = ${courseAccess.sourcePurchaseId} and ${refundRequests.status} = ${status})`;
+export type ActiveAccess = AccessGrant & { id: string; shopierProductId: string; refundPending: boolean };
 
-/** The student's grants that are usable right now, soonest expiry first. */
+/** Account cards for unexpired grants: flag suspended courses and omit approved refunds. */
 export async function activeCourseAccess(db: Database, userId: string, now = new Date()): Promise<ActiveAccess[]> {
   const grants = await db.select({
     id: courseAccess.id, userId: courseAccess.userId, courseId: courseAccess.courseId, startsAt: courseAccess.startsAt,
-    expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt, shopierProductId: courses.shopierProductId,
+    expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt, shopierProductId: courses.shopierProductId, refundPending: refundForGrant("pending"),
   }).from(courseAccess).innerJoin(courses, eq(courses.id, courseAccess.courseId))
-    .where(and(eq(courseAccess.userId, userId), isNull(courseAccess.revokedAt))).orderBy(asc(courseAccess.expiresAt));
+    .where(and(eq(courseAccess.userId, userId), isNull(courseAccess.revokedAt), sql`not ${refundForGrant("approved")}`)).orderBy(asc(courseAccess.expiresAt));
   return grants.filter(grant => hasActiveAccess(grant, userId, grant.courseId, now));
 }
 
@@ -155,6 +157,6 @@ export async function activeCourseAccess(db: Database, userId: string, now = new
 export async function activeGrant(db: Database, userId: string, courseId: string, now = new Date()): Promise<AccessGrant | null> {
   const [grant] = await db.select({
     userId: courseAccess.userId, courseId: courseAccess.courseId, startsAt: courseAccess.startsAt, expiresAt: courseAccess.expiresAt, revokedAt: courseAccess.revokedAt,
-  }).from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
+  }).from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt), sql`not ${refundForGrant("pending")}`, sql`not ${refundForGrant("approved")}`)).limit(1);
   return grant && hasActiveAccess(grant, userId, courseId, now) ? grant : null;
 }

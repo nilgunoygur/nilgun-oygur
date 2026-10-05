@@ -24,10 +24,10 @@ export function RefundDecisionForm({ request, approve, onDone }: { request: Owne
   });
   return <FormShell form={form} onSubmit={form.handleSubmit(values => decide.mutateAsync(values).catch(() => undefined))}>
     {approve && <TextField control={form.control} name="amount" label="İade tutarı (₺)" type="number" inputMode="decimal" step="0.01" min={1}
-      description={`Bu eğitim için ödenen: ${formatMoney(request.amountKurus, request.currency)}. Daha düşük bir tutar kısmi iade olur ve erişimi kapatmaz.`} />}
+      description={`Bu eğitim için ödenen: ${formatMoney(request.amountKurus, request.currency)}. Onayladığınızda eğitim öğrencinin hesabından kaldırılır. Daha düşük bir tutar kısmi ödeme iadesidir.`} />}
     <TextareaField control={form.control} name="note" label={approve ? "Alıcıya not (isteğe bağlı)" : "Ret nedeni (öğrenci görür)"} rows={3} maxLength={500} />
     <FormMessage />
-    <DialogFooter><SubmitButton variant={approve ? "destructive" : "default"} pendingLabel={approve ? "Shopier’e gönderiliyor…" : "Kaydediliyor…"}>{approve ? "Parayı iade et" : "Talebi reddet"}</SubmitButton></DialogFooter>
+    <DialogFooter className="mt-2 gap-3"><SubmitButton variant={approve ? "destructive" : "default"} pendingLabel={approve ? "Shopier’e gönderiliyor…" : "Kaydediliyor…"}>{approve ? "Parayı iade et" : "Talebi reddet"}</SubmitButton></DialogFooter>
   </FormShell>;
 }
 

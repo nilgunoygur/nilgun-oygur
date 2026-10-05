@@ -10,7 +10,7 @@ import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
 import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
-import { latestRefundRequest, pendingRefundRequests, requestRefund, listRefundRequests, type RefundListInput, type RefundNotification } from "./refund-requests.ts";
+import { latestRefundRequest, pendingRefundRequests, requestRefund, listRefundRequests, studentRefundRequests, type RefundListInput, type RefundNotification } from "./refund-requests.ts";
 
 type Dependencies = {
   db: Database;
@@ -48,6 +48,7 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
         return requestRefund(db, userId, courseId, reason, refundNotification);
       },
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
+      refundRequests: (userId: string) => studentRefundRequests(db, userId),
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
         const refunds = await shopier.listSucceededRefunds();

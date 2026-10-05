@@ -1,7 +1,10 @@
 "use client";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LoaderCircle, Paperclip, Video } from "lucide-react";
-import { getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
+import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LoaderCircle, LockKeyhole, Paperclip, Video } from "lucide-react";
+import { checkLessonAccess, getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
+import { useRouter } from "next/navigation";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { lessonPrerequisites } from "@/lib/akademi/lesson-sequence";
 import type { studentCourse } from "@/lib/akademi/learning";
 import { pillAction } from "@/lib/styles";
 import { formatDuration } from "@/lib/akademi/format";
@@ -27,7 +30,11 @@ const kinds = {
 export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
-  const done = completed.size;
+  const router = useRouter();
+  const [accessLost, setAccessLost] = useState(false);
+  const prerequisites = lessonPrerequisites(lessons, completed);
+  const recorded = lessons.filter(lesson => lesson.kind !== "live");
+  const done = recorded.filter(lesson => completed.has(lesson.id)).length;
   // Latest set, not this render's: two saves can finish back to back.
   const latest = useRef(completed);
   function complete(id: string, value: boolean) {
@@ -35,18 +42,19 @@ export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
     if (value) next.add(id); else next.delete(id);
     latest.current = next;
     setCompleted(next);
-    if (value && next.size === lessons.length) void celebrate();
+    if (value && recorded.some(lesson => lesson.id === id) && recorded.every(lesson => next.has(lesson.id))) void celebrate();
   }
+  if (accessLost) return <Alert><LockKeyhole /><AlertTitle>Derslere erişiminiz durduruldu</AlertTitle><AlertDescription>İade talebiniz veya eğitim erişiminizin durumu değişti. Güncel durum hesabınızda gösterilir.</AlertDescription></Alert>;
   return <div>
     <div className="mb-9 flex flex-wrap items-end justify-between gap-5 rounded-[24px] bg-mist p-7">
-      <div><p className="mb-2 text-[11px] font-semibold tracking-[1.6px] text-forest">HER ADIM SİZİNLE</p><h2 className="text-[28px]">{done === lessons.length && lessons.length ? "Bu yolculuğu tamamladınız." : "Kendi ritminizde ilerleyin."}</h2><p className="mt-2 text-sm text-stone">Bir dersi sonuna kadar izlediğinizde veya dinlediğinizde tamamlanır. Sonrasında kendiniz de işaretleyebilirsiniz.</p></div>
-      <div className="w-full sm:w-52"><p className="mb-3 text-sm"><strong className="text-2xl text-forest">{done}</strong> / {lessons.length} ders tamamlandı</p><progress aria-label="Eğitim ilerlemesi" className="h-2 w-full overflow-hidden rounded-full accent-forest" max={Math.max(lessons.length, 1)} value={done} /></div>
+      <div><p className="mb-2 text-[11px] font-semibold tracking-[1.6px] text-forest">HER ADIM SİZİNLE</p><h2 className="text-[28px]">{done === recorded.length && recorded.length ? "Bu yolculuğu tamamladınız." : "Kendi ritminizde ilerleyin."}</h2><p className="mt-2 text-sm text-stone">Bir dersi sonuna kadar izlediğinizde veya dinlediğinizde tamamlanır. Bir sonraki kayıtlı ders, önceki ders tamamlandığında açılır. Canlı Zoom buluşmalarını bu sıradan bağımsız açabilirsiniz.</p></div>
+      <div className="w-full sm:w-52"><p className="mb-3 text-sm"><strong className="text-2xl text-forest">{done}</strong> / {recorded.length} kayıtlı ders tamamlandı</p><progress aria-label="Eğitim ilerlemesi" className="h-2 w-full overflow-hidden rounded-full accent-forest" max={Math.max(recorded.length, 1)} value={done} /></div>
     </div>
-    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} open={selected === lesson.id} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
+    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onAccessLost={() => { setAccessLost(true); router.refresh(); }} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
   </div>;
 }
 
-function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { lesson: Lesson; index: number; completed: boolean; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void }) {
+function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onComplete, onAccessLost }: { lesson: Lesson; index: number; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void; onAccessLost: () => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [destination, setDestination] = useState<{ url: string; passcode: string } | null>(null);
@@ -56,7 +64,21 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
   const start = lesson.lastPositionSeconds ?? 0;
   const furthest = useRef(start);
   const [watched, setWatched] = useState(isLive || !duration || hasWatched(start, duration));
-  const locked = !completed && !watched;
+  const locked = Boolean(prerequisite) || (!completed && !watched);
+  const accessLost = useRef(onAccessLost);
+  useEffect(() => { accessLost.current = onAccessLost; }, [onAccessLost]);
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const check = async () => {
+      const result = await checkLessonAccess(lesson.id);
+      if (active && result.allowed === false) accessLost.current();
+    };
+    const visible = () => { if (document.visibilityState === "visible") void check(); };
+    const timer = setInterval(() => { void check(); }, 15000);
+    document.addEventListener("visibilitychange", visible);
+    return () => { active = false; clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
+  }, [open, lesson.id]);
   function progress(seconds: number) {
     furthest.current = Math.max(furthest.current, seconds);
     if (!watched && hasWatched(seconds, duration)) setWatched(true);
@@ -72,13 +94,13 @@ function LessonCard({ lesson, index, completed, open, onOpen, onComplete }: { le
   return <article className={`overflow-hidden rounded-[22px] border transition-colors ${completed ? "border-[#c7dccd] bg-[#f7faf5]" : "border-border bg-white"}`}>
     <div className="flex items-start gap-4 p-5 sm:items-center sm:gap-6 sm:p-7">
       <div className={`hidden size-14 shrink-0 items-center justify-center rounded-2xl sm:flex ${isLive ? "bg-[#f5ebdd] text-[#997348]" : "bg-mist text-forest"}`}>{isLive ? <Video size={24} /> : isAudio ? <Headphones size={24} /> : <CirclePlay size={26} />}</div>
-      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {text.label}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{lesson.documents.length > 0 && <span className="inline-flex items-center gap-1.5"><Paperclip size={13} />{lesson.documents.length} ödev PDF’i</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
+      <div className="min-w-0 flex-1"><p className="mb-2 text-[10px] font-semibold tracking-[1.6px] text-stone">{String(index + 1).padStart(2, "0")} · {text.label}</p><h3 className="text-[23px] leading-snug">{lesson.title}</h3>{prerequisite && <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground"><LockKeyhole className="size-3.5 shrink-0" />Önce “{prerequisite}” dersini tamamlayın.</p>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone">{isLive && lesson.startsAt ? <span className="inline-flex items-center gap-2"><CalendarDays size={14} />{date.format(new Date(lesson.startsAt))} · İstanbul</span> : <span>{lesson.durationSeconds ? formatDuration(lesson.durationSeconds) : lesson.moduleTitle}</span>}{lesson.documents.length > 0 && <span className="inline-flex items-center gap-1.5"><Paperclip size={13} />{lesson.documents.length} ödev PDF’i</span>}{isLive && lesson.liveStatus === "cancelled" && <span className="text-destructive">İptal edildi</span>}{isLive && lesson.liveStatus === "completed" && <span>Tamamlandı</span>}</div></div>
       <div className="flex shrink-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
-        <label className={cn("flex items-center gap-2 text-sm", locked ? "cursor-not-allowed text-stone" : "cursor-pointer text-forest")} title={locked ? text.hint : undefined}>
+        <label className={cn("flex items-center gap-2 text-sm", locked ? "cursor-not-allowed text-stone" : "cursor-pointer text-forest")} title={prerequisite ? `Önce ${prerequisite} dersini tamamlayın.` : locked ? text.hint : undefined}>
           <Checkbox className="size-5 rounded-[5px] border-forest/40 bg-white data-checked:border-forest data-checked:bg-forest data-checked:text-white" aria-label={`${lesson.title}: ${text.done.toLocaleLowerCase("tr-TR")}`} checked={completed} disabled={pending || locked} onCheckedChange={value => startTransition(() => mark(value))} />
-          <span className="hidden sm:inline">{pending ? "Kaydediliyor" : completed ? "Tamamlandı" : locked ? text.locked : text.done}</span>
+          <span className="hidden sm:inline">{pending ? "Kaydediliyor" : completed ? "Tamamlandı" : prerequisite ? "Önceki ders" : locked ? text.locked : text.done}</span>
         </label>
-        <button type="button" onClick={onOpen} aria-expanded={open} aria-controls={`lesson-${lesson.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm hover:bg-mist">{isLive ? "Detaylar" : "Dersi aç"}<ChevronDown size={15} className={open ? "rotate-180" : ""} /></button>
+        <button type="button" onClick={onOpen} disabled={Boolean(prerequisite)} aria-expanded={open} aria-controls={`lesson-${lesson.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm hover:bg-mist disabled:cursor-not-allowed disabled:opacity-50">{prerequisite ? "Kilitli" : isLive ? "Detaylar" : "Dersi aç"}<ChevronDown size={15} className={open ? "rotate-180" : ""} /></button>
       </div>
     </div>
     {error && <p role="alert" className="px-7 pb-5 text-sm text-destructive">{error}</p>}
@@ -162,7 +184,7 @@ function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerPro
       catch { if (active) setPlayback({ error: "Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın." }); }
     };
     void load();
-    const timer = setInterval(() => { void load(); }, 240000);
+    const timer = setInterval(() => { void load(); }, 60000);
     return () => { active = false; clearInterval(timer); };
   }, [lessonId, position]);
   if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><LoaderCircle className="animate-spin" aria-label="Video yükleniyor" /></div>;

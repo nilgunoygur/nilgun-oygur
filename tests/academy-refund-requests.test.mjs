@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { and, eq, isNull } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { shopierOrderSchema, shopierRefundSchema, createShopierClient, ShopierError } from "../lib/shopier/api.ts";
-import { recordShopierOrder } from "../lib/akademi/course-access.ts";
+import { recordShopierOrder, activeGrant, activeCourseAccess } from "../lib/akademi/course-access.ts";
 import { OwnerInputError } from "../lib/akademi/owner-commands.ts";
 import { createAkademi } from "../lib/akademi/akademi.ts";
 
@@ -71,7 +71,7 @@ test("approving the full amount refunds through Shopier, removes access and cann
   assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Bir daha."), "no_purchase");
 });
 
-test("a partial refund keeps access; a decline is shown to the student, who may ask again", async () => {
+test("approval removes access even for a partial payment refund; rejection restores it", async () => {
   const f = await fixture(), { akademi, sent } = shop();
   await akademi.access.requestRefund(f.id, f.course.id, "Yarısını geri istiyorum.");
   const first = await f.request();
@@ -79,16 +79,20 @@ test("a partial refund keeps access; a decline is shown to the student, who may 
   assert.equal((await f.request()).status, "pending");
   await akademi.owner.decideRefundRequest("owner", first.id, { approve: true, amountKurus: 4000, note: "" });
   assert.deepEqual(sent.map(s => [s.amountKurus, s.note]), [[4000, undefined]]);
-  assert.ok(await f.access(), "a partial refund does not close the course");
+  assert.equal(await activeGrant(db, f.id, f.course.id), null, "approval removes course access even for a partial refund");
+  assert.deepEqual(await activeCourseAccess(db, f.id), []);
+  assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Kalanını da istiyorum."), "refunded");
+  const rejected = await fixture();
 
-  await akademi.access.requestRefund(f.id, f.course.id, "Kalanını da istiyorum.");
-  const second = await f.request();
-  await assert.rejects(() => akademi.owner.decideRefundRequest("owner", second.id, { approve: true, amountKurus: 6001, note: "" }), /kalan tutarını aşamaz/);
+  await akademi.access.requestRefund(rejected.id, rejected.course.id, "İade istiyorum.");
+  const second = await rejected.request();
+  await assert.rejects(() => akademi.owner.decideRefundRequest("owner", second.id, { approve: true, amountKurus: 10001, note: "" }), /kalan tutarını aşamaz/);
   await akademi.owner.decideRefundRequest("owner", second.id, { approve: false, note: "Eğitimin yarısı izlenmiş." });
-  assert.deepEqual(await akademi.access.refundRequest(f.id, f.course.id), { status: "declined", ownerNote: "Eğitimin yarısı izlenmiş." });
+  assert.deepEqual(await akademi.access.refundRequest(rejected.id, rejected.course.id), { status: "declined", ownerNote: "Eğitimin yarısı izlenmiş." });
   assert.deepEqual(await audits(second.id), ["refund_request.declined"]);
   assert.equal(sent.length, 1);
-  assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Lütfen yeniden değerlendirin."), "requested");
+  assert.ok(await activeGrant(db, rejected.id, rejected.course.id), "rejection restores access");
+  assert.equal(await akademi.access.requestRefund(rejected.id, rejected.course.id, "Lütfen yeniden değerlendirin."), "requested");
 });
 
 test("a refusal from Shopier reopens the request; an unclear failure keeps it closed so the money is not sent twice", async () => {
@@ -103,7 +107,7 @@ test("a refusal from Shopier reopens the request; an unclear failure keeps it cl
   const silent = shop(async () => { throw new Error("timeout"); }).akademi;
   await assert.rejects(() => silent.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 10000, note: "" }), /timeout/);
   assert.deepEqual([(await f.request()).status, (await f.request()).shopierRefundId], ["approved", null]);
-  assert.ok(await f.access(), "access stays until Shopier confirms the refund");
+  assert.equal(await activeGrant(db, f.id, f.course.id), null, "an ambiguous approval blocks content while the owner checks Shopier");
   assert.equal((await db.select().from(schema.refundRequests).where(eq(schema.refundRequests.status, "pending"))).some(row => row.id === request.id), false);
 });
 
@@ -131,7 +135,8 @@ test("Shopier's accepted pending refund with an empty refund date is recorded wi
   await akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 10000, note: "" });
   assert.equal((await f.request()).shopierRefundId, "999");
   assert.equal(posts, 1);
-  assert.ok(await f.access(), "a pending refund keeps access until confirmation");
+  assert.equal(await activeGrant(db, f.id, f.course.id), null, "accepted approval removes access before payment completion");
+  assert.deepEqual(await activeCourseAccess(db, f.id), []);
   await assert.rejects(() => akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 10000, note: "" }), OwnerInputError);
   assert.equal(posts, 1, "approval cannot submit the same refund twice");
 });
