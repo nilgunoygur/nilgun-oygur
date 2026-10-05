@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { lessonPrerequisites } from "@/lib/akademi/lesson-sequence";
 import type { studentCourse } from "@/lib/akademi/learning";
+import type { zoomLinks } from "@/lib/akademi/zoom";
 import { pillAction } from "@/lib/styles";
 import { formatDuration } from "@/lib/akademi/format";
 import { formatFileSize } from "@/lib/akademi/lesson-file-rules";
@@ -69,7 +70,7 @@ export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
 function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onComplete }: { lesson: Lesson; index: number; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [destination, setDestination] = useState<{ desktop: string; mobile: string; web: string; passcode: string } | null>(null);
+  const [destination, setDestination] = useState<ReturnType<typeof zoomLinks> | null>(null);
   const isLive = lesson.kind === "live", isAudio = lesson.kind === "audio";
   const text = kinds[lesson.kind];
   const duration = lesson.durationSeconds ?? 0;
@@ -105,7 +106,7 @@ function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onCo
     {error && <p role="alert" className="px-7 pb-5 text-sm text-destructive">{error}</p>}
     {open && <div id={`lesson-${lesson.id}`} className="border-t border-border p-5 sm:p-7">
       {lesson.description && <p className="mb-6 max-w-[75ch] whitespace-pre-wrap leading-relaxed text-stone">{lesson.description}</p>}
-      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><div className="flex flex-wrap gap-3"><a href={destination.desktop} className={pillAction}>Bilgisayardan katıl <ArrowUpRight size={16} /></a><a href={destination.mobile} className={pillAction}>Telefondan katıl <ArrowUpRight size={16} /></a></div><p className="mt-3 text-sm text-stone">Zoom uygulaması yüklü değilse <a href={destination.web} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">tarayıcıda açın</a>.{destination.passcode && <> Toplantı şifresi: {destination.passcode}</>}</p></div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : !lesson.mediaReady ? <p className="rounded-2xl bg-mist p-6 text-stone">{isAudio ? "Ses kaydı" : "Video"} hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>
+      {isLive ? <div className="flex flex-wrap items-center gap-5 rounded-2xl bg-[#f8f2e9] p-6"><div className="flex-1"><h4 className="text-xl">Birlikte buluşalım.</h4><p className="mt-2 text-sm text-stone">{lesson.durationMinutes ?? 60} dakika · Katılım ders başlamadan 30 dakika önce açılır.</p></div>{destination ? <div><div className="flex flex-wrap gap-3">{([["desktop", "Bilgisayardan katıl"], ["mobile", "Telefondan katıl"]] as const).map(([device, label]) => <a key={device} href={destination[device]} className={pillAction}>{label} <ArrowUpRight size={16} /></a>)}</div><p className="mt-3 text-sm text-stone">Zoom uygulaması yüklü değilse <a href={destination.web} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">tarayıcıda açın</a>.{destination.passcode && <> Toplantı şifresi: {destination.passcode}</>}</p></div> : <button type="button" className={pillAction} disabled={pending || lesson.liveStatus === "cancelled" || lesson.liveStatus === "completed"} onClick={() => startTransition(async () => { setError(""); const result = await joinLive(lesson.id); if (result.destination) setDestination(result.destination); else setError(result.error ?? "Katılım henüz açılmadı."); })}>Katılımı aç <ArrowUpRight size={16} /></button>}</div> : !lesson.mediaReady ? <p className="rounded-2xl bg-mist p-6 text-stone">{isAudio ? "Ses kaydı" : "Video"} hazırlanıyor. Lütfen daha sonra yeniden deneyin.</p>
         : isAudio ? <AudioLesson lessonId={lesson.id} title={lesson.title} duration={duration} peaks={lesson.peaks} startTime={start} onTime={progress} onEnded={finish} />
         : <LessonPlayer lessonId={lesson.id} title={lesson.title} startTime={start} onTime={progress} onEnded={finish} />}
       {lesson.documents.length > 0 && <Homework documents={lesson.documents} />}

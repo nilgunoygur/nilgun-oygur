@@ -42,6 +42,6 @@ export async function joinLive(lessonId: string) {
   try {
     const viewer = await requireStudent();
     const destination = await liveDestination(getDatabase(), viewer.user.id, z.uuid().parse(lessonId));
-    return destination ? { destination: { ...zoomLinks(destination.meetingId, destination.passcode, viewer.user.name), passcode: destination.passcode } } : { error: "Katılım, dersin başlamasından 30 dakika önce açılır. Erişiminizin aktif olması gerekir." };
+    return destination ? { destination: zoomLinks(destination.meetingId, destination.passcode, viewer.user.name) } : { error: "Katılım, dersin başlamasından 30 dakika önce açılır. Erişiminizin aktif olması gerekir." };
   } catch { return { error: "Canlı derse katılım doğrulanamadı." }; }
 }

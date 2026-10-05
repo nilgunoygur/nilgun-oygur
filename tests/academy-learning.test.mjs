@@ -86,7 +86,7 @@ test("Zoom links carry the meeting, its passcode and the student's own name", ()
   assert.deepEqual(zoomLinks("8529015944", "a&b", "Ayşe Yılmaz"), {
     desktop: "zoommtg://zoom.us/join?confno=8529015944&pwd=a%26b&uname=Ay%C5%9Fe%20Y%C4%B1lmaz",
     mobile: "zoomus://zoom.us/join?confno=8529015944&pwd=a%26b&uname=Ay%C5%9Fe%20Y%C4%B1lmaz",
-    web: "https://zoom.us/j/8529015944",
+    web: "https://zoom.us/j/8529015944", passcode: "a&b",
   });
   assert.ok(!zoomLinks("8529015944", "", "A").desktop.includes("pwd"));
 });

@@ -175,7 +175,7 @@ export const liveSessions = pgTable("live_sessions", {
   startsAt: time("starts_at").notNull(),
   durationMinutes: integer("duration_minutes").notNull(),
   zoomMeetingId: text("zoom_meeting_id").notNull(),
-  // Unused since zoom_meeting_id; drop once no deployment reads it.
+  // Unused. Remove it here and deploy before dropping the column.
   zoomJoinUrl: text("zoom_join_url"),
   zoomPasscode: text("zoom_passcode").notNull(),
   status: liveStatus("status").notNull().default("scheduled"),

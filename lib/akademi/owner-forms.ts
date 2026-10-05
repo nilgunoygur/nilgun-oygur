@@ -86,7 +86,7 @@ export const lessonFormSchema = z.object({
   status: z.enum(["draft", "published"]),
   startsAt: z.string(),
   durationMinutes: number("Süre", 1, 1440, "integer"),
-  meetingId: z.string().trim().max(40, "Toplantı numarası çok uzun.").refine(value => !value || zoomMeetingId(value), "Zoom toplantı numarası 9–11 haneli olmalıdır."),
+  meetingId: z.string().trim().refine(value => !value || zoomMeetingId(value), "Zoom toplantı numarası 9–11 haneli olmalıdır.").transform(zoomMeetingId),
   passcode: z.string().trim().max(100, "Şifre en fazla 100 karakter olabilir."),
   liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]),
 });
