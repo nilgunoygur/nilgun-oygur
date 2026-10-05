@@ -118,6 +118,23 @@ test("refund of an extension preserves the earlier paid access and a new purchas
   assert.equal((await f.current()).expiresAt.getTime(), first.dateCreated.getTime() + 60 * DAY);
 });
 
+test("a refund that ends access erases lesson progress; one that leaves an earlier purchase keeps it", async () => {
+  const f = await fixture(), first = f.order(), second = f.order(2);
+  const [module] = await db.insert(schema.modules).values({ courseId: f.course.id, title: "Module" }).returning();
+  const [lesson] = await db.insert(schema.lessons).values({ courseId: f.course.id, moduleId: module.id, slug: "lesson", title: "Lesson", kind: "video" }).returning();
+  const other = await fixture();
+  const [otherModule] = await db.insert(schema.modules).values({ courseId: other.course.id, title: "Module" }).returning();
+  const [otherLesson] = await db.insert(schema.lessons).values({ courseId: other.course.id, moduleId: otherModule.id, slug: "lesson", title: "Lesson", kind: "video" }).returning();
+  await db.insert(schema.lessonProgress).values([lesson, otherLesson].map(l => ({ userId: f.id, lessonId: l.id, lastPositionSeconds: 90, completedAt: new Date() })));
+  const progress = async () => (await db.select().from(schema.lessonProgress).where(eq(schema.lessonProgress.userId, f.id))).map(row => row.lessonId);
+  await recordShopierOrder(db, first);
+  await recordShopierOrder(db, second);
+  await recordShopierRefund(db, refund(second));
+  assert.equal((await progress()).length, 2, "the first purchase still gives access");
+  await recordShopierRefund(db, refund(first));
+  assert.deepEqual(await progress(), [otherLesson.id], "only the refunded course is forgotten");
+});
+
 test("refund of an earlier purchase removes only its days, including through three extensions", async () => {
   const f = await fixture(), first = f.order(), second = f.order(2), third = f.order(3);
   for (const order of [first, second, third]) await recordShopierOrder(db, order);
