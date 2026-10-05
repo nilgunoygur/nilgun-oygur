@@ -7,7 +7,7 @@ import { FormMessage, FormShell, SubmitButton, submitAction, TextareaField } fro
 
 export function RefundRequestForm({ courseId }: { courseId: string }) {
   const form = useForm({ resolver: zodResolver(refundRequestSchema), mode: "onTouched", defaultValues: { reason: "" } });
-  // On success the action refreshes the page, which then shows the request's status instead of this form.
+  // No success state: the action's refresh replaces this form.
   const submit = form.handleSubmit(values => submitAction(form, () => requestRefund(courseId, values), "İade talebi şu anda alınamıyor. Lütfen biraz sonra yeniden deneyin."));
 
   return <FormShell form={form} onSubmit={submit}>

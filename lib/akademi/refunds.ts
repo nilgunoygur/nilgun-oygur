@@ -1,16 +1,15 @@
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
-import { toKurus, type ShopierRefund } from "../shopier/api.ts";
+import { refundedAt, toKurus, type ShopierRefund } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
 import { lockShopierOrder, rebuildRefundedExtension } from "./course-access.ts";
 
-/** Only succeeded refunds change access. */
 export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
   if (refund.status !== "succeeded") return "refund_pending_or_failed";
   return db.transaction(async tx => {
     await lockShopierOrder(tx, refund.orderId);
     const inserted = await tx.insert(shopierRefunds).values({ id: refund.id, shopierOrderId: refund.orderId, type: refund.type,
-      amountKurus: toKurus(refund.total), currency: refund.currency, refundedAt: refund.dateRefunded ?? refund.dateCreated,
+      amountKurus: toKurus(refund.total), currency: refund.currency, refundedAt: refundedAt(refund),
     }).onConflictDoNothing().returning({ id: shopierRefunds.id });
     if (!inserted.length) return "refund_duplicate";
     // Partial refunds name no product; kept for owner review.
@@ -27,7 +26,7 @@ export async function recordShopierRefund(db: Database, refund: ShopierRefund) {
   });
 }
 
-/** Skips refunds already stored. */
+/** Skips stored refunds without opening a transaction for each. */
 export async function recordNewShopierRefunds(db: Database, refunds: ShopierRefund[]) {
   if (!refunds.length) return;
   const known = new Set((await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(inArray(shopierRefunds.id, refunds.map(r => r.id)))).map(r => r.id));

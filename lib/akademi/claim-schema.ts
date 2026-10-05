@@ -5,7 +5,7 @@ import { emailField } from "../auth/forms.ts";
 export const claimHintCookie = "akademi-claim-hint";
 
 const orderNumber = (pattern: RegExp) => z.string().trim().transform(value => value.replace(/^#\s*/, "")).pipe(z.string().regex(pattern, "Sipariş numarası yalnızca rakamlardan oluşur."));
-export const orderNumberField = orderNumber(/^\d{5,20}$/);
+const orderNumberField = orderNumber(/^\d{5,20}$/);
 export const optionalOrderNumberField = orderNumber(/^(\d{5,20})?$/);
 
 export const claimSchema = z.object({

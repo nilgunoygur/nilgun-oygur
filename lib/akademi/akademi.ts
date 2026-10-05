@@ -39,7 +39,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       async claimOrder(userId: string, orderNumber: string, shopierEmail: string) {
         if (!await consumeAttempt(db, `shopier-claim:${userId}`, { max: 5, windowMs: 3_600_000, now: now().getTime() })) return "rate_limited" as const;
         const order = await shopier.getOrder(orderNumber.trim());
-        if (order) for (const refund of await shopier.listSucceededRefunds()) if (refund.orderId === order.id) await recordShopierRefund(db, refund);
+        if (order) await recordNewShopierRefunds(db, await shopier.listSucceededRefunds({ orderId: order.id }));
         return claimShopierOrder(db, order, shopierEmail, userId);
       },
       async requestRefund(userId: string, courseId: string, reason: string) {
@@ -49,9 +49,8 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
-        const refunds = await shopier.listSucceededRefunds();
+        const [refunds, orders] = await Promise.all([shopier.listSucceededRefunds(), shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000))]);
         await recordNewShopierRefunds(db, refunds);
-        const orders = await shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000));
         let purchases = 0, granted = 0;
         for (const order of orders) {
           const result = await recordShopierOrder(db, order);
@@ -78,7 +77,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
         };
       },
       users: (params: UserListParams) => ownerUsers(db, params, now()),
-      setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status),
+      setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status, shopier),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
       updateCourseProduct: (actorId: string, courseId: string, changes: ProductChanges) => updateCourseProduct(db, actorId, courseId, changes, shopier),
       createCourse: (actorId: string, course: NewCourse) => createCourse(db, actorId, course, shopier),

@@ -224,11 +224,11 @@ export const shopierPurchases = pgTable("shopier_purchases", {
   check("shopier_purchases_duration_valid", sql`${t.accessDurationDays} > 0`),
   check("shopier_purchases_claim_consistent", sql`(${t.userId} IS NULL) = (${t.claimedAt} IS NULL)`),
 ]);
-// Successful refunds are retained even when they arrive before the order notification.
+// No order FK: a refund can arrive before its order.
 export const shopierRefunds = pgTable("shopier_refunds", {
   id: text("id").primaryKey(),
   shopierOrderId: text("shopier_order_id").notNull(),
-  type: text("type").notNull(),
+  type: text("type", { enum: ["full", "partial"] }).notNull(),
   amountKurus: integer("amount_kurus").notNull(),
   currency: text("currency").notNull(),
   refundedAt: time("refunded_at").notNull(),
@@ -237,7 +237,6 @@ export const shopierRefunds = pgTable("shopier_refunds", {
   check("shopier_refunds_type_valid", sql`${t.type} IN ('full', 'partial')`),
   check("shopier_refunds_amount_valid", sql`${t.amountKurus} >= 0`),
 ]);
-// A student's request to refund one purchase.
 export const refundRequests = pgTable("refund_requests", {
   id: id(),
   purchaseId: uuid("purchase_id").notNull().references(() => shopierPurchases.id),

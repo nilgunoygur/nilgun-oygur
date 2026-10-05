@@ -20,7 +20,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundApprovalSchema, type CourseChange } from "@/lib/akademi/owner-forms";
+import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundDecisionSchema, type CourseChange, type RefundDecisionInput } from "@/lib/akademi/owner-forms";
 import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
@@ -49,7 +49,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     },
     onError: (error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error(error.message); },
     onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : "Değişiklik kaydedildi."); },
-    onSettled: (_data, error) => error ? invalidate() : undefined,
+    onSettled: invalidate,
   });
   const savingId = update.isPending ? update.variables.course.id : null;
   const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onError: error => toast.error(error.message), onSettled: invalidate });
@@ -114,12 +114,12 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
 
 const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed(2).replace(/\.00$/, "") : "";
 
-/** A decline ignores the amount. */
 function RefundDecisionForm({ request, approve, onDone }: { request: OwnerRefundRequest; approve: boolean; onDone: () => void }) {
   const client = useQueryClient();
-  const form = useForm({ resolver: zodResolver(refundApprovalSchema), mode: "onTouched", defaultValues: { amount: lira(request.amountKurus), note: "" } });
+  const form = useForm({ resolver: zodResolver(refundDecisionSchema), mode: "onTouched",
+    defaultValues: approve ? { decision: "approve", amount: lira(request.amountKurus), note: "" } : { decision: "decline", note: "" } });
   const decide = useMutation({
-    mutationFn: ({ amount, note }: { amount: number; note: string }) => decideOwnerRefundRequest(request.id, approve ? { decision: "approve", amount, note } : { decision: "decline", note }),
+    mutationFn: (decision: RefundDecisionInput) => decideOwnerRefundRequest(request.id, decision),
     onSuccess: () => {
       client.setQueryData<OwnerCatalogSnapshot>(ownerQueryKeys.catalog(), current => current && { ...current, refundRequests: current.refundRequests.filter(item => item.id !== request.id) });
       toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone();
@@ -190,11 +190,11 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
       </div>
       {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
     </div>
-    <CheckboxField control={form.control} name="listed" label="Shopier mağazasında listelensin" description="Kapalıyken ürün Shopier vitrininde görünmez. Sitedeki yayın durumunu değiştirmez." />
+    {course?.status === "published" ? <p className="text-sm text-muted-foreground">Yayındaki eğitim Shopier mağazasında da listelenir. Gizlemek için eğitimi taslağa alın.</p> : <CheckboxField control={form.control} name="listed" label="Shopier mağazasında listelensin" description="Eğitimi yayınladığınızda mağazada da görünür olur. Taslağa aldığınızda mağazadan gizlenir." />}
     {course ? <CheckboxField control={form.control} name="inStock" label="Satışa açık" description="Kapalıyken ürün Shopier’de tükendi görünür ve sitede satın alınamaz." />
       : <div className="grid gap-5 rounded-xl bg-muted/50 p-4 sm:grid-cols-2">
         <TextField control={form.control} name="accessDays" label="Erişim süresi (gün)" type="number" inputMode="numeric" step="1" min={1} className="bg-white" />
-        <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Kapalıyken taslak olarak eklenir; derslerini hazırlayınca yayınlarsınız." className="sm:pt-6" />
+        <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Yayınlandığında hem sitede hem Shopier mağazasında görünür olur." className="sm:pt-6" />
       </div>}
     <FormMessage />
     <DialogFooter><SubmitButton>{course ? "Shopier’e kaydet" : "Eğitimi oluştur"}</SubmitButton></DialogFooter>

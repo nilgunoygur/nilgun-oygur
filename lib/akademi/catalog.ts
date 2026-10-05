@@ -97,7 +97,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   };
 }
 
-/** The new course's id, or undefined when already linked. Hidden products start as drafts unless `settings` says otherwise. */
+/** Undefined when already linked. Without `settings`, a hidden product starts as a draft. */
 export async function linkCourse(db: Database, product: Pick<ShopierProduct, "id" | "title" | "customListing">, settings?: { accessDurationDays: number; status: "draft" | "published" }) {
   const slug = courseSlug(product.title) || `egitim-${product.id}`;
   const [taken] = await db.select({ id: courses.id }).from(courses).where(eq(courses.slug, slug)).limit(1);

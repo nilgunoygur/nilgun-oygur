@@ -6,7 +6,7 @@ import { OwnerInputError } from "@/lib/akademi/owner-commands";
 import { kurus, productFailure, refuse } from "@/lib/akademi/product-request";
 import { ShopierError } from "@/lib/shopier/api";
 
-export async function POST(request: Request, { params }: { params: Promise<{ requestId: string }> }) {
+export async function POST(request: Request, { params }: RouteContext<"/api/yonetim/refund-requests/[requestId]">) {
   const viewer = await ownerRoute();
   if (viewer instanceof Response) return viewer;
   const requestId = z.uuid().safeParse((await params).requestId);

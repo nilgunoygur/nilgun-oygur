@@ -6,6 +6,9 @@ import { z } from "zod";
 import { claimSchema, refundRequestSchema, type ClaimInput } from "@/lib/akademi/claim-schema";
 import type { FormState } from "@/components/akademi/form-status";
 
+const student = () => requireStudent().catch(() => null);
+const signedOut: FormState = { status: "error", message: "Lütfen yeniden giriş yapın." };
+
 const messages = {
   granted: "Eğitiminiz hesabınıza eklendi.",
   already_yours: "Bu sipariş zaten hesabınızda.",
@@ -18,8 +21,8 @@ const messages = {
 } as const;
 
 export async function claimOrder(values: ClaimInput): Promise<FormState> {
-  let viewer;
-  try { viewer = await requireStudent(); } catch { return { status: "error", message: "Lütfen yeniden giriş yapın." }; }
+  const viewer = await student();
+  if (!viewer) return signedOut;
   const input = claimSchema.safeParse(values);
   if (!input.success) return { status: "error", message: input.error.issues[0].message };
   try {
@@ -40,8 +43,8 @@ const refundMessages = {
 } as const;
 
 export async function requestRefund(courseId: string, values: z.input<typeof refundRequestSchema>): Promise<FormState> {
-  let viewer;
-  try { viewer = await requireStudent(); } catch { return { status: "error", message: "Lütfen yeniden giriş yapın." }; }
+  const viewer = await student();
+  if (!viewer) return signedOut;
   const input = refundRequestSchema.safeParse(values);
   if (!z.uuid().safeParse(courseId).success || !input.success) return { status: "error", message: input.error?.issues[0].message ?? "Geçersiz istek." };
   try {
