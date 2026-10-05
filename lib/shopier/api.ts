@@ -37,7 +37,7 @@ export const shopierRefundSchema = z.object({
   status: z.enum(["pending", "failed", "succeeded"]),
   type: z.enum(["full", "partial"]),
   dateCreated: shopierDate,
-  dateRefunded: shopierDate.nullish(),
+  dateRefunded: z.preprocess(value => value === "" ? null : value, shopierDate.nullish()),
   currency: z.string(),
   total: z.string(),
 });

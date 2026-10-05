@@ -117,3 +117,66 @@ test("the Shopier client posts a refund as a decimal amount and rejects bad inpu
   for (const [order, amount] of [["../orders", 100], ["123456", 0], ["123456", 1.5]]) await assert.rejects(() => api.createRefund(order, amount), /Invalid Shopier refund/);
   assert.equal(calls.length, 2);
 });
+
+test("Shopier's accepted pending refund with an empty refund date is recorded without an approval error", async () => {
+  const f = await fixture();
+  let posts = 0;
+  const api = createShopierClient("token", async () => {
+    posts++;
+    return Response.json({ id: "999", orderId: f.order.id, status: "pending", type: "full", currency: "TRY", total: "100.00", dateCreated: "2026-10-05T14:16:00+0300", dateRefunded: "" });
+  });
+  const akademi = shop(api.createRefund).akademi;
+  await akademi.access.requestRefund(f.id, f.course.id, "Beklediğim gibi değildi.");
+  const request = await f.request();
+  await akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 10000, note: "" });
+  assert.equal((await f.request()).shopierRefundId, "999");
+  assert.equal(posts, 1);
+  assert.ok(await f.access(), "a pending refund keeps access until confirmation");
+  await assert.rejects(() => akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 10000, note: "" }), OwnerInputError);
+  assert.equal(posts, 1, "approval cannot submit the same refund twice");
+});
+
+test("new refund requests atomically queue one owner email, addressed to the requested inbox", async () => {
+  const { createEmailOutbox } = await import("../lib/email/outbox.ts");
+  const key = "test-refund-email-key-0123456789abcdef";
+  const f = await fixture();
+  const akademi = createAkademi({ db, shopier: {}, refundNotification: { encryptionKey: key, siteUrl: "https://www.nilgunoygur.com" } });
+  assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Bir sorum var <script>alert(1)</script>"), "requested");
+  assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Tekrar soruyorum"), "already_pending");
+  const sent = [];
+  await createEmailOutbox(db, key).deliverBatch(async message => { sent.push(message); return "email-1"; });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "butunselsifaakademi@gmail.com");
+  assert.equal(sent[0].replyTo, `${f.id}@example.com`);
+  assert.match(sent[0].text, new RegExp(f.order.id));
+  assert.match(sent[0].text, /\/yonetim\/iadeler/);
+  assert.match(sent[0].html, /&lt;script&gt;/);
+  const broken = await fixture();
+  const invalid = createAkademi({ db, shopier: {}, refundNotification: { encryptionKey: "short", siteUrl: "https://example.com" } });
+  await assert.rejects(() => invalid.access.requestRefund(broken.id, broken.course.id, "E-posta hazırlanamadı"));
+  assert.equal(await broken.request(), undefined, "a failed email enqueue rolls back the request so a retry can notify");
+});
+
+test("the refund management list preserves decision history, filters and paginates requests", async () => {
+  const { listRefundRequests } = await import("../lib/akademi/refund-requests.ts");
+  const f = await fixture(), { akademi } = shop();
+  await akademi.access.requestRefund(f.id, f.course.id, "Karar verin.");
+  const request = await f.request();
+  assert.equal((await listRefundRequests(db, { status: "pending", search: f.order.id })).items[0].id, request.id);
+  await akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 10000, note: "Onaylandı" });
+  const history = await listRefundRequests(db, { status: "approved", search: f.order.id });
+  assert.equal(history.total, 1);
+  assert.equal(history.items[0].completed, true);
+  assert.equal(history.items[0].ownerNote, "Onaylandı");
+  assert.equal((await listRefundRequests(db, { status: "pending", search: f.order.id })).total, 0);
+  assert.equal((await listRefundRequests(db, { search: "%" })).total, 0, "search wildcards are literal");
+  for (let index = 0; index < 21; index++) {
+    const entry = await fixture();
+    await akademi.access.requestRefund(entry.id, entry.course.id, "Sayfalama talebi");
+  }
+  const first = await listRefundRequests(db, { page: 1 });
+  const second = await listRefundRequests(db, { page: 2 });
+  assert.equal(first.items.length, 20);
+  assert.ok(second.items.length > 0);
+  assert.ok(second.items.every(row => !first.items.some(other => row.id === other.id)));
+});

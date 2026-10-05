@@ -26,7 +26,7 @@ for (const route of authRoutes) {
   assert.match(html, /<h1[ >]/, `${route} should have a heading`);
   assert.match(html, /name="robots" content="noindex, nofollow"/, `${route} must not be indexed`);
 }
-for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar"]) {
+for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar", "/yonetim/iadeler"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
   const location = new URL(response.headers.get("location"), origin);
@@ -45,7 +45,7 @@ assert.ok([401, 503].includes(unsigned.status), "unsigned Shopier webhooks are r
 const anyId = "00000000-0000-4000-8000-000000000000";
 assert.equal((await fetch(new URL(`/api/lesson-files/${anyId}`, origin), { redirect: "manual" })).status, 401, "lesson files require a session");
 const product = () => { const body = new FormData(); body.set("data", "{}"); return body; };
-for (const [method, path] of [["GET", "/api/yonetim/courses"], ["POST", "/api/yonetim/courses"], ["PUT", `/api/yonetim/courses/${anyId}/product`], ["POST", `/api/yonetim/refund-requests/${anyId}`]]) {
+for (const [method, path] of [["GET", "/api/yonetim/refund-requests"], ["GET", "/api/yonetim/courses"], ["POST", "/api/yonetim/courses"], ["PUT", `/api/yonetim/courses/${anyId}/product`], ["POST", `/api/yonetim/refund-requests/${anyId}`]]) {
   const response = await fetch(new URL(path, origin), { method, body: method === "GET" ? undefined : product() });
   assert.equal(response.status, 403, `${method} ${path} requires the owner`);
 }

@@ -78,3 +78,13 @@ export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
     staleTime: 20_000,
   });
 }
+
+
+const refundListSchema = z.object({
+  items: z.array(z.object({ id: z.string(), orderId: z.string(), courseId: z.string(), course: z.string(), name: z.string(), email: z.string(), reason: z.string(), amountKurus: z.number(), currency: z.string(), at: z.string(), status: z.enum(["pending", "approved", "declined"]), refundAmountKurus: z.number().nullable(), ownerNote: z.string().nullable(), decidedAt: z.string().nullable(), shopierRefundId: z.string().nullable(), completed: z.boolean() })),
+  total: z.number(), counts: z.record(z.string(), z.number()),
+});
+export type OwnerRefundList = z.infer<typeof refundListSchema>;
+export function ownerRefundQueryOptions(status: string, search: string, page: number, initialData?: OwnerRefundList) {
+  return queryOptions({ queryKey: ["owner", "refund-requests", { status, search, page }], queryFn: async ({ signal }) => refundListSchema.parse(await (await ownerFetch(`/api/yonetim/refund-requests?${new URLSearchParams({ status, search, page: String(page) })}`, { signal }, "İade talepleri yüklenemedi.")).json()), initialData: status === "pending" && !search && page === 1 ? initialData : undefined, staleTime: 15000 });
+}
