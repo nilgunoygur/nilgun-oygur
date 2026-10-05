@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
-import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LoaderCircle, LockKeyhole, Paperclip, Video } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { skipToken, useQuery } from "@tanstack/react-query";
+import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LockKeyhole, Paperclip, Video } from "lucide-react";
 import { checkLessonAccess, getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -9,8 +10,9 @@ import type { studentCourse } from "@/lib/akademi/learning";
 import { pillAction } from "@/lib/styles";
 import { formatDuration } from "@/lib/akademi/format";
 import { formatFileSize } from "@/lib/akademi/lesson-file-rules";
-import { hasWatched } from "@/lib/akademi/access-policy";
+import { hasWatched, playbackLifetimeMs } from "@/lib/akademi/access-policy";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { LessonAudio } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
@@ -31,7 +33,17 @@ export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
-  const [accessLost, setAccessLost] = useState(false);
+  // A refund or changed prerequisite closes the lessons mid-session; once lost, the check stops.
+  const access = useQuery({
+    queryKey: lessonQueryKeys.access(selected),
+    queryFn: selected ? async () => { const result = await checkLessonAccess(selected); if (result.allowed === false) router.refresh(); return result; } : skipToken,
+    refetchInterval: query => stillAllowed(query) && accessCheckMs,
+    refetchOnWindowFocus: stillAllowed,
+    refetchOnReconnect: stillAllowed,
+    staleTime: 0,
+    gcTime: 0,
+  });
+  const accessLost = access.data?.allowed === false;
   const prerequisites = lessonPrerequisites(lessons, completed);
   const recorded = lessons.filter(lesson => lesson.kind !== "live");
   const done = recorded.filter(lesson => completed.has(lesson.id)).length;
@@ -50,11 +62,11 @@ export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
       <div><p className="mb-2 text-[11px] font-semibold tracking-[1.6px] text-forest">HER ADIM SİZİNLE</p><h2 className="text-[28px]">{done === recorded.length && recorded.length ? "Bu yolculuğu tamamladınız." : "Kendi ritminizde ilerleyin."}</h2><p className="mt-2 text-sm text-stone">Bir dersi sonuna kadar izlediğinizde veya dinlediğinizde tamamlanır. Bir sonraki kayıtlı ders, önceki ders tamamlandığında açılır. Canlı Zoom buluşmalarını bu sıradan bağımsız açabilirsiniz.</p></div>
       <div className="w-full sm:w-52"><p className="mb-3 text-sm"><strong className="text-2xl text-forest">{done}</strong> / {recorded.length} kayıtlı ders tamamlandı</p><progress aria-label="Eğitim ilerlemesi" className="h-2 w-full overflow-hidden rounded-full accent-forest" max={Math.max(recorded.length, 1)} value={done} /></div>
     </div>
-    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onAccessLost={() => { setAccessLost(true); router.refresh(); }} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
+    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
   </div>;
 }
 
-function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onComplete, onAccessLost }: { lesson: Lesson; index: number; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void; onAccessLost: () => void }) {
+function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onComplete }: { lesson: Lesson; index: number; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [destination, setDestination] = useState<{ url: string; passcode: string } | null>(null);
@@ -65,20 +77,7 @@ function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onCo
   const furthest = useRef(start);
   const [watched, setWatched] = useState(isLive || !duration || hasWatched(start, duration));
   const locked = Boolean(prerequisite) || (!completed && !watched);
-  const accessLost = useEffectEvent(onAccessLost);
   const hint = prerequisite ? `Önce “${prerequisite}” dersini tamamlayın.` : locked ? text.hint : undefined;
-  useEffect(() => {
-    if (!open) return;
-    let active = true;
-    const check = async () => {
-      const result = await checkLessonAccess(lesson.id);
-      if (active && result.allowed === false) accessLost();
-    };
-    const visible = () => { if (document.visibilityState === "visible") void check(); };
-    const timer = setInterval(() => { void check(); }, 15000);
-    document.addEventListener("visibilitychange", visible);
-    return () => { active = false; clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
-  }, [open, lesson.id]);
   function progress(seconds: number) {
     furthest.current = Math.max(furthest.current, seconds);
     if (!watched && hasWatched(seconds, duration)) setWatched(true);
@@ -140,17 +139,24 @@ type PlayerProps = { lessonId: string; title: string; startTime: number; onTime:
 type Playback = Awaited<ReturnType<typeof getPlayback>>;
 const playable = (playback: Playback) => playback.playbackId && playback.tokens ? { playbackId: playback.playbackId, tokens: playback.tokens } : null;
 
-// One token lasts a sitting; the player asks for another only if playback fails.
+const lessonQueryKeys = {
+  access: (lessonId: string | null) => ["lesson-access", lessonId] as const,
+  playback: (kind: "audio" | "video", lessonId: string) => ["lesson-playback", kind, lessonId] as const,
+};
+// Never reuse a cached token; a focus refetch would restart the player.
+const playbackQuery = { staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false, refetchOnReconnect: false } as const;
+const accessCheckMs = 30_000;
+/** The video renews its token this far into the token's life. */
+const renewAt = 0.75;
+const stillAllowed = (query: { state: { data?: { allowed: boolean | null } } }) => query.state.data?.allowed !== false;
+
+// The audio player asks for another token only when playback fails.
 function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { duration: number; peaks: number[] | null }) {
-  const [playback, setPlayback] = useState<Playback | null>(null);
   const { savePosition, progressError } = useSavedPosition(lessonId, startTime, onTime);
-  useEffect(() => {
-    let active = true;
-    getPlayback(lessonId).then(result => { if (active) setPlayback(result); }, () => { if (active) setPlayback({ error: "Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın." }); });
-    return () => { active = false; };
-  }, [lessonId]);
+  const { data: playback, isError } = useQuery({ queryKey: lessonQueryKeys.playback("audio", lessonId), queryFn: () => getPlayback(lessonId), ...playbackQuery });
+  if (isError) return <p role="alert" className="rounded-2xl bg-mist p-6">Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın.</p>;
   const source = playback && playable(playback);
-  if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><LoaderCircle className="animate-spin motion-reduce:animate-none" aria-label="Ses kaydı yükleniyor" /></div>;
+  if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><Spinner size={32} aria-label="Ses kaydı yükleniyor" /></div>;
   if (!source) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
   return <div><LessonAudio {...source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => playable(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }
@@ -173,21 +179,16 @@ function Homework({ documents }: { documents: Document[] }) {
 }
 
 function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerProps) {
-  const [playback, setPlayback] = useState<Playback | null>(null);
   const { position, savePosition, progressError, setProgressError } = useSavedPosition(lessonId, startTime, onTime);
   const playing = useRef(false);
-  const [resume, setResume] = useState({ time: startTime, playing: false });
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try { const result = await getPlayback(lessonId); if (active) { setResume({ time: position.current, playing: playing.current }); setPlayback(result); } }
-      catch { if (active) setPlayback({ error: "Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın." }); }
-    };
-    void load();
-    const timer = setInterval(() => { void load(); }, 60000);
-    return () => { active = false; clearInterval(timer); };
-  }, [lessonId, position]);
-  if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><LoaderCircle className="animate-spin" aria-label="Video yükleniyor" /></div>;
+  // Each renewal remounts the player, so it records where to resume; a failed one leaves the current player running.
+  const { data: playback, isError } = useQuery({
+    queryKey: lessonQueryKeys.playback("video", lessonId),
+    queryFn: async () => ({ ...await getPlayback(lessonId), resume: { time: position.current, playing: playing.current } }),
+    ...playbackQuery, refetchInterval: playbackLifetimeMs.video * renewAt, refetchIntervalInBackground: true,
+  });
+  if (isError && !playback) return <p role="alert" className="rounded-2xl bg-mist p-6">Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın.</p>;
+  if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><Spinner size={32} className="text-forest" aria-label="Video yükleniyor" /></div>;
   if (playback.error || !playback.playbackId) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
-  return <div><LessonVideo key={playback.expiresAt} playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} startTime={resume.time} autoPlay={resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => setProgressError("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
+  return <div><LessonVideo key={playback.expiresAt} playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} startTime={playback.resume.time} autoPlay={playback.resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => setProgressError("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }

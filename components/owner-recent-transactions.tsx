@@ -11,7 +11,7 @@ import { ownerTransactionsQueryOptions } from "@/lib/akademi/owner-queries";
 export function OwnerRecentTransactions({ from, to }: { from: string; to: string }) {
   const { data, isPending, isError, isFetching } = useQuery(ownerTransactionsQueryOptions(from, to));
 
-  if (isPending) return <div className="flex min-h-32 items-center justify-center"><Spinner className="size-5 text-forest" aria-label="İşlemler yükleniyor" /></div>;
+  if (isPending) return <div className="flex min-h-32 items-center justify-center"><Spinner size={28} className="text-forest" aria-label="İşlemler yükleniyor" /></div>;
   if (!data) return <p className="mt-6 text-sm text-stone" role="status">Shopier işlemleri şu anda yüklenemiyor. Birazdan yeniden deneyin.</p>;
   return <>
     {isError && <p className="mt-3 text-sm text-stone" role="status">Yenileme başarısız oldu; son yüklenen veriler gösteriliyor.</p>}

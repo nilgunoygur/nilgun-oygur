@@ -13,10 +13,11 @@ import { filesConfigured } from "@/lib/files/storage";
 import { CourseEditor } from "@/components/akademi/lesson-editor";
 import { ownerSection, accountTitle, kicker, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata = { title: "Ders içerikleri" };
 export default function EditCourse({ params }: { params: Promise<{ courseId: string }> }) {
-  return <section className={cn(pageWidth, ownerSection, "max-w-[1050px]")}><Suspense fallback={<p>İçerikler yükleniyor…</p>}><Content params={params} /></Suspense></section>;
+  return <section className={cn(pageWidth, ownerSection, "max-w-[1050px]")}><Suspense fallback={<PageLoader label="İçerikler yükleniyor" />}><Content params={params} /></Suspense></section>;
 }
 async function Content({ params }: { params: Promise<{ courseId: string }> }) {
   await ownerPage();

@@ -1,0 +1,2 @@
+CREATE INDEX "refund_requests_purchase_status_idx" ON "refund_requests" USING btree ("purchase_id","status");--> statement-breakpoint
+CREATE INDEX "refund_requests_user_idx" ON "refund_requests" USING btree ("user_id");

@@ -12,12 +12,13 @@ import { RefundRequestForm } from "@/components/akademi/refund-request-form";
 import { RefundNotice } from "@/components/akademi/refund-notice";
 import { accountPage, accountTitle, kicker, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata = { title: "Eğitimim", robots: { index: false, follow: false }, referrer: "no-referrer" as const };
 const expiry = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: "Europe/Istanbul" });
 
 export default function CourseLearning({ params }: { params: Promise<{ courseId: string }> }) {
-  return <section className={cn(pageWidth, accountPage, "max-w-[1100px]")}><Suspense fallback={<p role="status">Eğitiminiz yükleniyor…</p>}><Content params={params} /></Suspense></section>;
+  return <section className={cn(pageWidth, accountPage, "max-w-[1100px]")}><Suspense fallback={<PageLoader label="Eğitiminiz yükleniyor" />}><Content params={params} /></Suspense></section>;
 }
 async function Content({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;

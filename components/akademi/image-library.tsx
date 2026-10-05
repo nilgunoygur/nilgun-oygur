@@ -2,7 +2,8 @@
 
 import { useRef, useTransition } from "react";
 import Image from "next/image";
-import { Check, ImagePlus, LoaderCircle } from "lucide-react";
+import { Check, ImagePlus } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,6 @@ export function ImageUploadButton({ upload, onUploaded, children, label }: { upl
       const input = event.currentTarget, file = input.files?.[0];
       if (file) startUpload(async () => { const choice = await upload(file); if (choice) onUploaded(choice); input.value = ""; });
     }} />
-    <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => fileRef.current?.click()}>{pending ? <LoaderCircle className="animate-spin" /> : <ImagePlus />} {children}</Button>
+    <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => fileRef.current?.click()}>{pending ? <Spinner /> : <ImagePlus />} {children}</Button>
   </>;
 }

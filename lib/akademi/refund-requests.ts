@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, isNull, ilike, or, count } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ilike, or, count } from "drizzle-orm";
 import { courseAccess, courses, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { hasFullRefund } from "./course-access.ts";
+import { refundNoticeDays } from "./claim-schema.ts";
 import { refundPageSize, type RefundListParams, type RefundStatus } from "./owner-forms.ts";
 import { createEmailOutbox } from "../email/outbox.ts";
 import { refundRequestEmail } from "../email/templates.tsx";
@@ -13,23 +14,23 @@ type RefundRequestOutcome = "requested" | "no_purchase" | "already_pending" | "r
 
 /** A request is about the purchase behind the student's current access to the course. */
 export async function requestRefund(db: Database, userId: string, courseId: string, reason: string, notification?: RefundNotification): Promise<RefundRequestOutcome> {
-  const [purchase] = await db.select({ id: shopierPurchases.id, orderId: shopierPurchases.shopierOrderId }).from(courseAccess)
-    .innerJoin(shopierPurchases, eq(shopierPurchases.id, courseAccess.sourcePurchaseId))
+  const [purchase] = await db.select({ id: shopierPurchases.id, orderId: shopierPurchases.shopierOrderId, amountKurus: shopierPurchases.amountKurus, currency: shopierPurchases.currency, course: courses.slug, name: user.name, email: user.email }).from(courseAccess)
+    .innerJoin(shopierPurchases, eq(shopierPurchases.id, courseAccess.sourcePurchaseId)).innerJoin(courses, eq(courses.id, courseAccess.courseId)).innerJoin(user, eq(user.id, courseAccess.userId))
     .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
   if (!purchase) return "no_purchase";
   if (await hasFullRefund(db, purchase.orderId)) return "refunded";
+  const id = crypto.randomUUID();
+  // Rendered here so the transaction holds its row lock only for the writes.
+  const email = notification && { key: notification.encryptionKey, message: await refundRequestEmail({ requestId: id, name: purchase.name, email: purchase.email, course: purchase.course, orderId: purchase.orderId,
+    amount: formatMoney(purchase.amountKurus, purchase.currency), reason, siteUrl: notification.siteUrl.replace(/\/$/, "") }) };
   return db.transaction(async tx => {
     // Row lock: a repeat submission cannot race an owner approval.
     const existing = await tx.select({ status: refundRequests.status }).from(refundRequests).where(and(eq(refundRequests.purchaseId, purchase.id), or(eq(refundRequests.status, "pending"), eq(refundRequests.status, "approved")))).for("update");
     if (existing.some(row => row.status === "approved")) return "refunded";
     if (existing.some(row => row.status === "pending")) return "already_pending";
-    const [inserted] = await tx.insert(refundRequests).values({ purchaseId: purchase.id, userId, reason }).onConflictDoNothing().returning({ id: refundRequests.id });
+    const [inserted] = await tx.insert(refundRequests).values({ id, purchaseId: purchase.id, userId, reason }).onConflictDoNothing().returning({ id: refundRequests.id });
     if (!inserted) return "already_pending";
-    if (notification) {
-      const [details] = await tx.select({ name: user.name, email: user.email, course: courses.slug, amount: shopierPurchases.amountKurus, currency: shopierPurchases.currency }).from(shopierPurchases)
-        .innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).innerJoin(user, eq(user.id, userId)).where(eq(shopierPurchases.id, purchase.id));
-      await createEmailOutbox(tx, notification.encryptionKey).enqueue(await refundRequestEmail({ requestId: inserted.id, ...details, orderId: purchase.orderId, amount: formatMoney(details.amount, details.currency), reason, siteUrl: notification.siteUrl.replace(/\/$/, "") }));
-    }
+    if (email) await createEmailOutbox(tx, email.key).enqueue(email.message);
     return "requested";
   });
 }
@@ -43,18 +44,15 @@ export async function latestRefundRequest(db: Database, userId: string, courseId
   return request ?? null;
 }
 
-export function studentRefundRequests(db: Database, userId: string) {
+/** Pending requests, and decided ones for `refundNoticeDays` after the decision. */
+export function studentRefundRequests(db: Database, userId: string, now: Date) {
   return db.select({ id: refundRequests.id, courseId: courses.id, productId: courses.shopierProductId, orderId: shopierPurchases.shopierOrderId, status: refundRequests.status, ownerNote: refundRequests.ownerNote })
     .from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId))
-    .where(eq(refundRequests.userId, userId)).orderBy(desc(refundRequests.createdAt), desc(refundRequests.id)).limit(10);
+    .where(and(eq(refundRequests.userId, userId), or(eq(refundRequests.status, "pending"), gt(refundRequests.decidedAt, new Date(now.getTime() - refundNoticeDays * 86_400_000)))))
+    .orderBy(desc(refundRequests.createdAt), desc(refundRequests.id)).limit(10);
 }
 
-export function pendingRefundRequests(db: Database) {
-  return db.select({ id: refundRequests.id, orderId: shopierPurchases.shopierOrderId, courseId: shopierPurchases.courseId, name: user.name, email: user.email,
-    reason: refundRequests.reason, amountKurus: shopierPurchases.amountKurus, currency: shopierPurchases.currency, at: refundRequests.createdAt,
-  }).from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(user, eq(user.id, refundRequests.userId))
-    .where(eq(refundRequests.status, "pending")).orderBy(asc(refundRequests.createdAt)).limit(50);
-}
+export const pendingRefundCount = (db: Database) => db.$count(refundRequests, eq(refundRequests.status, "pending"));
 
 export async function listRefundRequests(db: Database, { status = "all", search = "", page = 1 }: Partial<RefundListParams> = {}) {
   const pattern = `%${search.replace(/[\\%_]/g, "\\$&")}%`;

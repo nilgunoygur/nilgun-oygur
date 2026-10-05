@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
 import { authDestination, nextParam, verificationCallback } from "@/lib/auth/navigation";
+import { postLoginDestination } from "@/app/akademi/hesabim/profile-actions";
 import { backupCodeSchema, emailLinkSchema, loginSchema, resetSchema, totpSchema } from "@/lib/auth/forms";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -50,14 +51,18 @@ function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean
   const router = useRouter();
   const [mfa, setMfa] = useState<"totp" | "backup" | null>(null);
   const form = useForm({ resolver: zodResolver(loginSchema), mode: "onTouched", defaultValues: { email: "", password: "", remember: true } });
-  const enter = () => { track("login", { method: "email" }); router.replace(authDestination(destination)); router.refresh(); };
+  const enter = async () => {
+    track("login", { method: "email" });
+    router.replace(await postLoginDestination(destination).catch(() => authDestination(destination)));
+    router.refresh();
+  };
   if (mfa) return <CodeForm key={mfa} backup={mfa === "backup"} onToggle={() => setMfa(mfa === "backup" ? "totp" : "backup")} onVerified={enter} />;
 
   const submit = form.handleSubmit(async ({ email, password, remember }) => {
     onSubmitStart();
     const result = await authAttempt(form, () => authClient.signIn.email({ email, password, rememberMe: remember }));
     if (!result) return;
-    if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) setMfa("totp"); else enter();
+    if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) setMfa("totp"); else await enter();
   });
   return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
     <FormMessage />
@@ -71,10 +76,10 @@ function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean
   </FormShell>;
 }
 
-function CodeForm({ backup, onToggle, onVerified }: { backup: boolean; onToggle: () => void; onVerified: () => void }) {
+function CodeForm({ backup, onToggle, onVerified }: { backup: boolean; onToggle: () => void; onVerified: () => Promise<void> }) {
   const form = useForm({ resolver: zodResolver(backup ? backupCodeSchema : totpSchema), mode: "onTouched", defaultValues: { code: "" } });
   const submit = form.handleSubmit(async ({ code }) => {
-    if (await authAttempt(form, () => backup ? authClient.twoFactor.verifyBackupCode({ code }) : authClient.twoFactor.verifyTotp({ code, trustDevice: false }))) onVerified();
+    if (await authAttempt(form, () => backup ? authClient.twoFactor.verifyBackupCode({ code }) : authClient.twoFactor.verifyTotp({ code, trustDevice: false }))) await onVerified();
   });
   return <FormShell form={form} onSubmit={submit} size="lg">
     <FormMessage />

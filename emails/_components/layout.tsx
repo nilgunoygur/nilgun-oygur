@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { Body, Button, Column, Container, Head, Heading, Hr, Html, Img, Link, Preview, Row, Section, Text } from "react-email";
 import { nav, publicOrigin, socials } from "../../lib/site.ts";
 
@@ -142,6 +142,15 @@ export function Paragraph({ children }: { children: ReactNode }) {
 
 export function Small({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <Text className="muted" style={{ ...small, ...style }}>{children}</Text>;
+}
+
+/** Someone's own words in a panel; line breaks become <br> because Outlook ignores white-space: pre-wrap. */
+export function MessagePanel({ children }: { children: string }) {
+  return (
+    <Section className="panel" style={{ backgroundColor: colors.panel, borderRadius: 20, padding: "22px 24px" }}>
+      <Text className="ink" style={{ ...text, margin: 0 }}>{children.split("\n").map((line, index) => <Fragment key={index}>{index > 0 && <br />}{line}</Fragment>)}</Text>
+    </Section>
+  );
 }
 
 export function ActionButton({ href, children }: { href: string; children: ReactNode }) {

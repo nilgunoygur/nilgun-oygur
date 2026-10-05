@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Header } from "@/components/header";
+import { QueryProvider } from "@/components/query-provider";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { getPublishedBanner } from "@/lib/banner";
 import { Footer } from "@/components/site";
@@ -48,11 +49,13 @@ export default async function RootLayout({
   const { analyticsId } = config();
   const site = (
     <MotionProvider>
+      <QueryProvider>
       {banner && <AnnouncementBar config={banner} />}
       <Header />
       <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
       <Footer consentSettings={Boolean(analyticsId)} />
       <Toaster position="top-right" richColors />
+      </QueryProvider>
     </MotionProvider>
   );
   return (

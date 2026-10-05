@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { accountCard, accountPage, kicker, pageWidth, textLink } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { getViewer } from "@/lib/auth/viewer";
+import { Spinner } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Satın aldığınız eğitime ulaşın", robots: { index: false, follow: false } };
 
@@ -17,7 +18,7 @@ export default function PurchaseReturnPage() {
       <p className="mt-5 mb-9 max-w-xl leading-relaxed text-stone">Shopier’den satın aldığınız eğitime Nilgün Oygur Akademi hesabınızdan ulaşabilirsiniz. Ödemeniz onaylandıktan sonra eğitiminiz hesabınızda görünür.</p>
       <div className={cn(accountCard, "bg-mist")}>
         <BookOpen className="mb-4 size-7 text-forest" aria-hidden="true" />
-        <Suspense fallback={<p className="text-stone">Hesap seçenekleri yükleniyor…</p>}><ReturnAccountActions /></Suspense>
+        <Suspense fallback={<div className="flex justify-center py-6 text-forest"><Spinner size={28} aria-label="Hesap seçenekleri yükleniyor" /></div>}><ReturnAccountActions /></Suspense>
       </div>
       <div className="mt-6 grid gap-6 sm:grid-cols-2">
         <div className={accountCard}><ShoppingBag className="mb-4 size-6 text-forest" aria-hidden="true" /><h2 className="text-2xl">Eğitiminiz görünmüyor mu?</h2><p className="mt-3 mb-5 leading-relaxed text-stone">Bildirim henüz ulaşmadıysa veya Shopier’de farklı bir e-posta kullandıysanız sipariş numaranız ve satın alma e-postanızla eğitimi ekleyin.</p><Link href="/akademi/siparis-ekle" className={textLink}>Shopier siparişimi ekle <ArrowUpRight className="size-4" aria-hidden="true" /></Link></div>

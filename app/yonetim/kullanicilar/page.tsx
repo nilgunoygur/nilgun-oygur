@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Form from "next/form";
 import Link from "next/link";
-import { ArrowLeft, Search, ShieldCheck } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { dateTimeLabel, dayLabel } from "@/lib/akademi/format";
@@ -12,10 +12,11 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
-import { Spinner } from "@/components/ui/spinner";
+import { PageLoader } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { pageWidth, backLink, ownerKicker, ownerPanel, ownerSection, ownerTitle } from "@/lib/styles";
+import { pageWidth, ownerKicker, ownerPanel, ownerSection, ownerTitle } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { OwnerBackLink } from "@/components/akademi/owner-back-link";
 
 export const metadata = { title: "Kullanıcılar" };
 type SearchParams = Promise<UserListParams>;
@@ -33,7 +34,7 @@ function usersHref(filter: Filter, changes: Partial<Filter>) {
 
 export default function OwnerUsers({ searchParams }: { searchParams: SearchParams }) {
   return <section className={cn(pageWidth, ownerSection)}>
-    <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Spinner className="size-6 text-forest" aria-label="Kullanıcılar yükleniyor" /></div>}><Users searchParams={searchParams} /></Suspense>
+    <Suspense fallback={<PageLoader label="Kullanıcılar yükleniyor" />}><Users searchParams={searchParams} /></Suspense>
   </section>;
 }
 
@@ -47,7 +48,7 @@ async function Users({ searchParams }: { searchParams: SearchParams }) {
   ] as const;
 
   return <>
-    <Link href="/yonetim" className={backLink}><ArrowLeft className="size-4" /> Genel bakış</Link>
+    <OwnerBackLink />
     <header className="mb-9"><p className={ownerKicker}>HESAP YÖNETİMİ</p><h1 className={ownerTitle}>Kullanıcılar</h1><p className="mt-2 text-[16px] text-stone">Kayıtlı hesapları, yöneticileri ve öğrencileri görün.</p></header>
 
     <Card className={ownerPanel}><CardContent>

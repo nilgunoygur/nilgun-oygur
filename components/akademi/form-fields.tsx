@@ -1,7 +1,8 @@
 "use client";
 import { useId, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { Controller, FormProvider, useFormState, type Control, type ControllerRenderProps, type FieldPath, type FieldValues, type UseFormReturn } from "react-hook-form";
-import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { authErrorMessage } from "@/lib/auth/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ export function FormShell<T extends FieldValues, C, U>({ form, onSubmit, size = 
 export function SubmitButton({ children, pendingLabel = "Kaydediliyor…", disabled, ...button }: ComponentProps<typeof Button> & { pendingLabel?: string }) {
   const { isSubmitting } = useFormState();
   return <Button type="submit" disabled={isSubmitting || disabled} {...button}>
-    {isSubmitting ? <><LoaderCircle data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />{pendingLabel}</> : children}
+    {isSubmitting ? <><Spinner />{pendingLabel}</> : children}
   </Button>;
 }
 

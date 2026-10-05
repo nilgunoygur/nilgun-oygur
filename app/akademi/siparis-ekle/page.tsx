@@ -7,11 +7,12 @@ import { ClaimOrderForm } from "@/components/akademi/claim-order-form";
 import { CourseAddExample } from "@/components/akademi/course-add-examples";
 import { pageWidth, accountPage, kicker, accountCard } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Shopier siparişi ekle", robots: { index: false, follow: false } };
 
 export default function ClaimPage() {
-  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><p className="text-stone">Sipariş sayfası yükleniyor…</p></main>}><ClaimContent /></Suspense>;
+  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><PageLoader label="Sipariş sayfası yükleniyor" /></main>}><ClaimContent /></Suspense>;
 }
 
 async function ClaimContent() {

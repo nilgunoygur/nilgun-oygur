@@ -8,11 +8,12 @@ import { akademi } from "@/lib/akademi/server";
 import { ProfileSettings } from "@/components/akademi/profile-settings";
 import { pageWidth, accountPage, kicker } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Profil ayarları", robots: { index: false, follow: false } };
 
 export default function ProfilePage() {
-  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><p className="text-stone">Profil yükleniyor…</p></main>}><ProfileContent /></Suspense>;
+  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><PageLoader label="Profil yükleniyor" /></main>}><ProfileContent /></Suspense>;
 }
 
 async function ProfileContent() {

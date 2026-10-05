@@ -2,6 +2,7 @@
 export const pageWidth = "mx-auto max-w-[1280px] px-8 max-tablet:px-[22px]";
 export const eyebrow = "mb-[14px] text-[24px] font-medium tracking-[1px] text-primary max-tablet:text-[19px]";
 export const kicker = "mb-[18px] text-[11px] font-semibold tracking-[1.8px] text-foreground";
+export const inlineLink = "font-medium text-forest underline underline-offset-4";
 export const textLink = "inline-flex items-center gap-2 border-b border-primary pb-[5px]";
 export const centeredHero = "px-6 pt-[180px] pb-[110px] text-center max-tablet:pt-[145px] max-tablet:pb-20";
 export const accountPage = "min-h-[65vh] pt-[155px] pb-[100px] max-[681px]:pt-[125px]";

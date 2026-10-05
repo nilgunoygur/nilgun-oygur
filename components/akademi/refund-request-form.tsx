@@ -1,14 +1,19 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
+import { accountQueryRoot } from "@/lib/akademi/account-query";
 import { requestRefund } from "@/app/akademi/hesabim/actions";
 import { refundRequestSchema } from "@/lib/akademi/claim-schema";
 import { FormMessage, FormShell, SubmitButton, submitAction, TextareaField } from "./form-fields";
 
 export function RefundRequestForm({ courseId }: { courseId: string }) {
   const form = useForm({ resolver: zodResolver(refundRequestSchema), mode: "onTouched", defaultValues: { reason: "" } });
-  // No success state: the action's refresh replaces this form.
-  const submit = form.handleSubmit(values => submitAction(form, () => requestRefund(courseId, values), "İade talebi şu anda alınamıyor. Lütfen biraz sonra yeniden deneyin."));
+  const client = useQueryClient();
+  // No success state: the action's refresh replaces this form, and the header menu picks up the new notice.
+  const submit = form.handleSubmit(async values => {
+    if (await submitAction(form, () => requestRefund(courseId, values), "İade talebi şu anda alınamıyor. Lütfen biraz sonra yeniden deneyin.")) void client.invalidateQueries({ queryKey: accountQueryRoot });
+  });
 
   return <FormShell form={form} onSubmit={submit}>
     <TextareaField control={form.control} name="reason" label="İade nedeniniz" rows={4} maxLength={1000}

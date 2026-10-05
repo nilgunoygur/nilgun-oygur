@@ -1,6 +1,6 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Column, Link, Row, Section, Text } from "react-email";
-import { ActionButton, EmailLayout, Small, colors, kicker, text } from "./_components/layout.tsx";
+import { ActionButton, EmailLayout, MessagePanel, Small, colors, kicker, text } from "./_components/layout.tsx";
 
 type Props = { name: string; email: string; message: string; siteUrl: string; support?: boolean; orderNumber?: string };
 
@@ -36,10 +36,7 @@ export default function ContactMessage({ name, email, message, siteUrl, support,
         <Detail label="E-POSTA"><Link className="link" href={`mailto:${email}`} style={{ color: colors.forest }}>{email}</Link></Detail>
         {orderNumber && <Detail label="SİPARİŞ">{orderNumber}</Detail>}
       </Section>
-      <Section className="panel" style={{ backgroundColor: colors.panel, borderRadius: 20, padding: "22px 24px" }}>
-        {/* Outlook ignores white-space: pre-wrap. */}
-        <Text className="ink" style={{ ...text, margin: 0 }}>{message.split("\n").map((line, index) => <Fragment key={index}>{index > 0 && <br />}{line}</Fragment>)}</Text>
-      </Section>
+      <MessagePanel>{message}</MessagePanel>
       <ActionButton href={`mailto:${email}?subject=${encodeURIComponent(`Re: ${support ? supportSubject : contactSubject}`)}`}>Yanıtla</ActionButton>
       <Small style={{ margin: 0 }}>Bu e-postayı yanıtladığınızda yanıtınız doğrudan {email} adresine gider.</Small>
     </EmailLayout>
