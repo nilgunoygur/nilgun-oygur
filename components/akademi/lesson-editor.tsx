@@ -141,7 +141,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
           {(field, id) => <div className="flex items-center gap-2.5 text-sm font-medium"><Switch id={id} ref={field.ref} checked={field.value === "published"} onCheckedChange={checked => field.onChange(checked ? "published" : "draft")} />{visibility[field.value]}</div>}
         </ControlledField>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
-          <DateTimeField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" className="bg-white" />
+          <DateTimeField control={form.control} name="startsAt" label="Başlangıç" className="bg-white" />
           <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
           <div className="sm:col-span-2"><TextField control={form.control} name="meetingId" label="Zoom toplantı numarası" description="Katılım bağlantıları her öğrenci için kendi adıyla otomatik oluşturulur." inputMode="numeric" placeholder="852 901 5944" maxLength={40} className="bg-white" /></div>
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
