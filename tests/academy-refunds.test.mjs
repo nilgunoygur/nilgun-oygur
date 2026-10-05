@@ -196,7 +196,9 @@ test("refund API paginates, ignores unsuccessful refunds and rejects truncation"
   const api = createShopierClient("token", async url => { calls.push(url); return Response.json(url.includes("page=1") ? Array.from({ length: 50 }, () => refund(order)) : [refund(order, { status: "failed" }), refund(order)]); });
   assert.equal((await api.listSucceededRefunds()).length, 51);
   assert.equal(calls.length, 2);
-  await assert.rejects(() => api.listSucceededRefunds(1), /page limit/);
+  await assert.rejects(() => api.listSucceededRefunds({ maxPages: 1 }), /page limit/);
+  await api.listSucceededRefunds({ orderId: order.id });
+  assert.match(calls.at(-1), new RegExp(`&orderId=${order.id}$`), "a claim asks Shopier for one order's refunds");
 });
 
 test("migration backfills historical extension links from proven dates", async () => {

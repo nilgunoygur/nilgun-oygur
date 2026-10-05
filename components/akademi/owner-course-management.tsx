@@ -20,7 +20,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundDecisionSchema, type CourseChange, type RefundDecisionInput, type RefundDecisionValues } from "@/lib/akademi/owner-forms";
+import { courseAccessSchema, coverRules, productFormSchema, productKeys, refundDecisionSchema, type CourseChange, type RefundDecisionInput } from "@/lib/akademi/owner-forms";
 import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
@@ -116,10 +116,10 @@ const lira = (kurus: number | null | undefined) => kurus ? (kurus / 100).toFixed
 
 function RefundDecisionForm({ request, approve, onDone }: { request: OwnerRefundRequest; approve: boolean; onDone: () => void }) {
   const client = useQueryClient();
-  const form = useForm<RefundDecisionInput, unknown, RefundDecisionValues>({ resolver: zodResolver(refundDecisionSchema), mode: "onTouched",
+  const form = useForm({ resolver: zodResolver(refundDecisionSchema), mode: "onTouched",
     defaultValues: approve ? { decision: "approve", amount: lira(request.amountKurus), note: "" } : { decision: "decline", note: "" } });
   const decide = useMutation({
-    mutationFn: (decision: RefundDecisionValues) => decideOwnerRefundRequest(request.id, decision),
+    mutationFn: (decision: RefundDecisionInput) => decideOwnerRefundRequest(request.id, decision),
     onSuccess: () => {
       client.setQueryData<OwnerCatalogSnapshot>(ownerQueryKeys.catalog(), current => current && { ...current, refundRequests: current.refundRequests.filter(item => item.id !== request.id) });
       toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone();

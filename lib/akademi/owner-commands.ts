@@ -29,7 +29,7 @@ export type CourseStatus = typeof courses.$inferSelect["status"];
 export async function setCourseStatus(db: Database, actorId: string, courseId: string, status: CourseStatus, shopier: Pick<ShopierClient, "updateProduct">) {
   const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
   if (!course) return false;
-  // Visibility must reach Shopier before the site changes status. Repeating the command repairs drift.
+  // Shopier first, so a refused change never publishes; a repeat repairs drift.
   const hidden = status !== "published";
   await withShopier(db, actorId, { resourceType: "course", resourceId: courseId }, "course.visibility", hidden ? "mağazadan gizle" : "mağazada göster", async () => {
     const product = await shopier.updateProduct(course.productId, { hidden });

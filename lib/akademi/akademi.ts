@@ -39,7 +39,7 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       async claimOrder(userId: string, orderNumber: string, shopierEmail: string) {
         if (!await consumeAttempt(db, `shopier-claim:${userId}`, { max: 5, windowMs: 3_600_000, now: now().getTime() })) return "rate_limited" as const;
         const order = await shopier.getOrder(orderNumber.trim());
-        if (order) await recordNewShopierRefunds(db, (await shopier.listSucceededRefunds()).filter(refund => refund.orderId === order.id));
+        if (order) await recordNewShopierRefunds(db, await shopier.listSucceededRefunds({ orderId: order.id }));
         return claimShopierOrder(db, order, shopierEmail, userId);
       },
       async requestRefund(userId: string, courseId: string, reason: string) {

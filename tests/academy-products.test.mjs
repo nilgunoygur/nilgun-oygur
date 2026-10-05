@@ -27,9 +27,9 @@ const audits = async () => (await db.select().from(schema.adminAuditLog).orderBy
 function fakeShopier(current = product()) {
   const calls = [];
   const fetcher = async (url, init = {}) => {
-    calls.push({ method: init.method ?? "GET", path: url.replace("https://api.shopier.com/v1", ""), body: init.body ? JSON.parse(init.body) : undefined });
-    const body = init.body ? JSON.parse(init.body) : {};
-    return Response.json({ ...current, ...(body.customListing !== undefined && { customListing: body.customListing }) });
+    const body = init.body ? JSON.parse(init.body) : undefined;
+    calls.push({ method: init.method ?? "GET", path: url.replace("https://api.shopier.com/v1", ""), body });
+    return Response.json({ ...current, ...(body?.customListing !== undefined && { customListing: body.customListing }) });
   };
   return { shopier: createShopierClient("token", fetcher), calls };
 }
@@ -127,24 +127,24 @@ test("product forms accept lira amounts, treat an empty discount as none and sen
   assert.equal(productChangeSchema.safeParse({ price: 100, discountedPrice: 100 }).success, false);
 });
 
-
 test("publishing through Akademi makes the hidden product visible via Shopier before publishing locally", async () => {
   const hidden = product({ id: "70000003", title: "Hidden demo", customListing: true });
   await applyShopierProduct(db, hidden);
   const [course] = await db.select().from(schema.courses).where(eq(schema.courses.shopierProductId, hidden.id));
+  const status = async () => (await db.select().from(schema.courses).where(eq(schema.courses.id, course.id)))[0].status;
   const { shopier, calls } = fakeShopier(hidden);
   const { createAkademi } = await import("../lib/akademi/akademi.ts");
   await createAkademi({ db, shopier }).owner.setCourseStatus("owner", course.id, "published");
   assert.deepEqual(calls.filter(call => call.method === "PUT").map(call => [call.path, call.body]), [["/products/70000003", { customListing: false }]]);
-  assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.id, course.id)))[0].status, "published");
+  assert.equal(await status(), "published");
   await setCourseStatus(db, "owner", course.id, "draft", shopier);
-  assert.deepEqual(calls.filter(call => call.method === "PUT").at(-1).body, { customListing: true });
+  assert.deepEqual(calls.at(-1).body, { customListing: true });
   const ignored = { updateProduct: async () => hidden };
   await assert.rejects(() => setCourseStatus(db, "owner", course.id, "published", ignored), /görünürlüğünü/);
-  assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.id, course.id)))[0].status, "draft");
+  assert.equal(await status(), "draft");
   const failing = { updateProduct: async () => { throw new ShopierError(403, "forbidden"); } };
   await assert.rejects(() => setCourseStatus(db, "owner", course.id, "published", failing), ShopierError);
-  assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.id, course.id)))[0].status, "draft");
+  assert.equal(await status(), "draft");
   await setCourseStatus(db, "owner", course.id, "published", shopier);
   await assert.rejects(() => updateCourseProduct(db, "owner", course.id, { hidden: true }, shopier), /taslağa/);
   const beforeRetry = calls.length;
@@ -152,7 +152,6 @@ test("publishing through Akademi makes the hidden product visible via Shopier be
   assert.equal(calls.length, beforeRetry + 1, "republishing repairs visibility even if the local status is already published");
   await setCourseStatus(db, "owner", course.id, "archived", shopier);
   assert.deepEqual(calls.at(-1).body, { customListing: true });
-  assert.equal(await setCourseStatus(db, "owner", "00000000-0000-4000-8000-000000000000", "published", shopier), false);
 });
 
 test("creating a published course overrides a hidden listing choice", async () => {

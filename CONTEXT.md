@@ -2,7 +2,7 @@
 
 **Course**: a Shopier product linked to the site (`courses` row: slug, access duration, owner status). Title, description, image and price live in Shopier; the owner can edit them from the site, which writes to Shopier.
 
-**Sellable course**: a published course whose product is in stock, digital and priced in TRY above zero. Publishing from the app first makes the product visible in Shopier via its API; drafting or archiving hides it from the Shopier store. Published courses cannot be hidden through the app's product editor. Direct changes in Shopier remain independent; repeating the app's status command repairs visibility drift. Decided only by the Catalog module.
+**Sellable course**: a published course whose product is in stock, digital and priced in TRY above zero. Changing a course's status from the app sets its Shopier store visibility first (published is listed, anything else hidden), and the product editor cannot hide a published course. Repeating the status command repairs drift from edits made in Shopier. Decided only by the Catalog module.
 
 **Purchase**: one paid Shopier order line for a course, keyed by order and course, matched to a student by the buyer email.
 
