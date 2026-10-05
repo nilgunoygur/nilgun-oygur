@@ -112,7 +112,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
     resolver: zodResolver(lessonFormSchema), mode: "onTouched",
     defaultValues: {
       title: lesson.title, description: lesson.description, status: lesson.status,
-      startsAt: localDate(live?.startsAt), durationMinutes: String(live?.durationMinutes ?? 60), joinUrl: live?.zoomJoinUrl ?? "", passcode: live?.zoomPasscode ?? "", liveStatus: live?.status ?? "scheduled",
+      startsAt: localDate(live?.startsAt), durationMinutes: String(live?.durationMinutes ?? 60), meetingId: live?.zoomMeetingId ?? "", passcode: live?.zoomPasscode ?? "", liveStatus: live?.status ?? "scheduled",
     },
   });
   const submit = form.handleSubmit(async (values) => {
@@ -134,7 +134,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
           <DateTimeField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" className="bg-white" />
           <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
-          <div className="sm:col-span-2"><TextField control={form.control} name="joinUrl" label="Toplantı bağlantısı" type="url" placeholder="https://…" maxLength={2048} className="bg-white" /></div>
+          <div className="sm:col-span-2"><TextField control={form.control} name="meetingId" label="Zoom toplantı numarası" description="Katılım bağlantıları her öğrenci için kendi adıyla otomatik oluşturulur." inputMode="numeric" placeholder="852 901 5944" maxLength={40} className="bg-white" /></div>
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
           <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
         </div>}

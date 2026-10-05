@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zoomMeetingId } from "./zoom.ts";
 
 // Each schema accepts its own output, so the server can re-parse what the form submits.
 
@@ -85,7 +86,7 @@ export const lessonFormSchema = z.object({
   status: z.enum(["draft", "published"]),
   startsAt: z.string(),
   durationMinutes: number("Süre", 1, 1440, "integer"),
-  joinUrl: z.string().trim().max(2048, "Bağlantı çok uzun.").refine(value => !value || /^https:\/\/\S+$/.test(value), "Toplantı için geçerli bir https:// bağlantısı girin."),
+  meetingId: z.string().trim().refine(value => !value || zoomMeetingId(value), "Zoom toplantı numarası 9–11 haneli olmalıdır.").transform(zoomMeetingId),
   passcode: z.string().trim().max(100, "Şifre en fazla 100 karakter olabilir."),
   liveStatus: z.enum(["scheduled", "rescheduled", "cancelled", "completed"]),
 });
