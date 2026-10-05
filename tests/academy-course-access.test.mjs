@@ -250,17 +250,18 @@ test("owner commands write their audit entry only when something changed, in the
   const { setCourseStatus, setAccessDuration } = await import("../lib/akademi/owner-commands.ts");
   await db.insert(schema.owners).values({ userId: "student-b" });
   const audits = () => db.select().from(schema.adminAuditLog);
-  assert.equal(await setCourseStatus(db, "student-b", course.id, "draft"), true);
+  const shopier = { updateProduct: async (_id, changes) => ({ customListing: changes.hidden }) };
+  assert.equal(await setCourseStatus(db, "student-b", course.id, "draft", shopier), true);
   assert.equal(await setAccessDuration(db, "student-b", course.id, 90), true);
-  assert.deepEqual((await audits()).map(a => [a.action, a.reason]), [["course.draft", "Durum değiştirildi"], ["course.access_duration", "90 gün"]]);
+  assert.deepEqual((await audits()).map(a => [a.action, a.reason]), [["course.visibility_requested", "Shopier’den istendi: mağazadan gizle"], ["course.visibility_done", "Shopier’de yapıldı: mağazadan gizle"], ["course.draft", "Durum değiştirildi"], ["course.access_duration", "90 gün"]]);
   const missing = "00000000-0000-4000-8000-000000000000";
-  assert.equal(await setCourseStatus(db, "student-b", missing, "draft"), false);
+  assert.equal(await setCourseStatus(db, "student-b", missing, "draft", shopier), false);
   assert.equal(await setAccessDuration(db, "student-b", missing, 30), false);
-  assert.equal((await audits()).length, 2, "no audit row for a course that does not exist");
+  assert.equal((await audits()).length, 4, "no audit row for a course that does not exist");
   await assert.rejects(() => setAccessDuration(db, "student-b", course.id, 0));
-  await assert.rejects(() => setCourseStatus(db, "no-such-user", course.id, "published"));
+  await assert.rejects(() => setCourseStatus(db, "no-such-user", course.id, "published", shopier));
   assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.id, course.id)))[0].status, "draft", "a failed audit rolls the change back");
-  await setCourseStatus(db, "student-b", course.id, "published");
+  await setCourseStatus(db, "student-b", course.id, "published", shopier);
 });
 
 test("the composed Akademi claims orders through Shopier, limits attempts and replays recent orders", async () => {

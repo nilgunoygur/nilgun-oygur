@@ -1,6 +1,6 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import { courseAccess, courses, providerEvents, shopierPurchases } from "../db/schema.ts";
-import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
+import { buyerEmail, productTotalKurus, type ShopierOrder } from "../shopier/api.ts";
 import type { Database } from "../db/types.ts";
 import { hasFullRefund } from "./course-access.ts";
 
@@ -17,12 +17,13 @@ export async function verifyShopierDelivery(db: Database, order: ShopierOrder) {
   const recorded = order.paymentStatus === "paid" && linked.length > 0 && linked.every(course => {
     const purchase = purchases.find(p => p.courseId === course.id);
     return purchase && purchase.buyerEmail === buyerEmail(order) && purchase.currency === order.currency
-      && purchase.amountKurus === order.lineItems.filter(line => line.productId === course.shopierProductId).reduce((total, line) => total + toKurus(line.total), 0);
+      && purchase.amountKurus === productTotalKurus(order, course.shopierProductId);
   });
   const accessRecorded = recorded && !refunded && purchases.every(p => p.userId && grants.some(g =>
     g.sourcePurchaseId === p.id && g.userId === p.userId && g.courseId === p.courseId
     && (g.revokedAt === null || g.revocationReason === "extended_by_purchase")));
-  return { orderId: order.id, webhookProcessed: receipts.length > 0, purchaseRecorded: recorded,
+  const webhookProcessed = receipts.length > 0;
+  return { orderId: order.id, webhookProcessed, purchaseRecorded: recorded,
     accessRecorded, fullRefundRecorded: refunded, unclaimedCourses: purchases.filter(p => !p.userId).length,
-    verified: receipts.length > 0 && recorded && accessRecorded };
+    verified: webhookProcessed && accessRecorded };
 }

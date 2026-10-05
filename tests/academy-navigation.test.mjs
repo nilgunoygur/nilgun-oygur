@@ -19,12 +19,11 @@ test("auth failures use Turkish messages instead of exposing provider details", 
 });
 
 test("course claiming survives login and email verification without accepting external redirects", () => {
-  for (const path of ["/akademi/siparis-ekle"]) {
-    assert.equal(authDestination(path), path);
-    const callback = new URL(verificationCallback(path), "https://www.nilgunoygur.com");
-    assert.equal(callback.pathname, "/akademi/giris");
-    assert.equal(callback.searchParams.get("verified"), "1");
-    assert.equal(callback.searchParams.get("next"), path);
-  }
+  const path = "/akademi/siparis-ekle";
+  assert.equal(authDestination(path), path);
+  const callback = new URL(verificationCallback(path), "https://www.nilgunoygur.com");
+  assert.equal(callback.pathname, "/akademi/giris");
+  assert.equal(callback.searchParams.get("verified"), "1");
+  assert.equal(callback.searchParams.get("next"), path);
   assert.equal(new URL(verificationCallback("https://evil.example"), "https://www.nilgunoygur.com").searchParams.get("next"), "/akademi/hesabim");
 });

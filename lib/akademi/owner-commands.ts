@@ -26,7 +26,15 @@ async function audited(db: Database, actorId: string, entry: AuditEntry, change:
 
 export type CourseStatus = typeof courses.$inferSelect["status"];
 
-export function setCourseStatus(db: Database, actorId: string, courseId: string, status: CourseStatus) {
+export async function setCourseStatus(db: Database, actorId: string, courseId: string, status: CourseStatus, shopier: Pick<ShopierClient, "updateProduct">) {
+  const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
+  if (!course) return false;
+  // Shopier first, so a refused change never publishes; a repeat repairs drift.
+  const hidden = status !== "published";
+  await withShopier(db, actorId, { resourceType: "course", resourceId: courseId }, "course.visibility", hidden ? "mağazadan gizle" : "mağazada göster", async () => {
+    const product = await shopier.updateProduct(course.productId, { hidden });
+    if (Boolean(product.customListing) !== hidden) throw new OwnerInputError("Shopier mağaza görünürlüğünü güncellemedi. Yeniden deneyin.");
+  });
   return audited(db, actorId, { action: `course.${status}`, resourceType: "course", resourceId: courseId, reason: "Durum değiştirildi" }, async (tx) => {
     const changed = await tx.update(courses).set({ status }).where(eq(courses.id, courseId)).returning({ id: courses.id });
     return changed.length > 0;
@@ -66,8 +74,9 @@ async function withShopier<T>(db: Database, actorId: string, target: { resourceT
 export async function updateCourseProduct(db: Database, actorId: string, courseId: string, changes: ProductChanges, shopier: Pick<ShopierClient, "getProduct" | "updateProduct">) {
   const changed = (Object.keys(changes) as (keyof ProductChanges)[]).filter(key => changes[key] !== undefined);
   if (!changed.length) throw new OwnerInputError("Değiştirilecek bir alan yok.");
-  const [course] = await db.select({ productId: courses.shopierProductId }).from(courses).where(eq(courses.id, courseId)).limit(1);
+  const [course] = await db.select({ productId: courses.shopierProductId, status: courses.status }).from(courses).where(eq(courses.id, courseId)).limit(1);
   if (!course) throw new OwnerInputError("Eğitim bulunamadı.");
+  if (course.status === "published" && changes.hidden === true) throw new OwnerInputError("Yayındaki eğitim Shopier mağazasında görünür olmalıdır. Gizlemek için eğitimi taslağa alın.");
   const product = await shopier.getProduct(course.productId);
   if (!product || !isEditableProduct(product)) throw new OwnerInputError("Bu Shopier ürünü buradan düzenlenemiyor. Shopier panelinden kontrol edin.");
   // A discount is checked against the price it will sit beside, new or current.
@@ -84,7 +93,7 @@ export type NewCourse = NewProduct & { accessDurationDays: number; status: "draf
 
 /** Links the course right away instead of waiting for Shopier's webhook. */
 export async function createCourse(db: Database, actorId: string, { accessDurationDays, status, ...product }: NewCourse, shopier: Pick<ShopierClient, "createProduct">) {
-  const created = await withShopier(db, actorId, { resourceType: "catalog", resourceId: "shopier" }, "course.create", `yeni ürün “${product.title}”`, () => shopier.createProduct(product));
+  const created = await withShopier(db, actorId, { resourceType: "catalog", resourceId: "shopier" }, "course.create", `yeni ürün “${product.title}”`, () => shopier.createProduct({ ...product, hidden: status === "published" ? false : product.hidden }));
   const courseId = (await linkCourse(db, created, { accessDurationDays, status }))!;
   await db.insert(adminAuditLog).values({ actorId, action: "course.linked", resourceType: "course", resourceId: courseId, reason: `Shopier ürünü ${created.id} eğitim olarak bağlandı (${status})` });
   return { courseId, product: created };
@@ -100,17 +109,17 @@ export async function decideRefundRequest(db: Database, actorId: string, request
   const target = { resourceType: "refund_request", resourceId: requestId };
   const pending = and(eq(refundRequests.id, requestId), eq(refundRequests.status, "pending"));
   const decided = { decidedBy: actorId, decidedAt: new Date(), ownerNote: decision.note || null };
-  const alreadyDecided = new OwnerInputError("Bu talep zaten sonuçlandırılmış.");
+  const alreadyDecided = () => new OwnerInputError("Bu talep zaten sonuçlandırılmış.");
   if (!decision.approve) {
     const declined = await audited(db, actorId, { action: "refund_request.declined", ...target, reason: decision.note || "İade talebi reddedildi" },
       async tx => (await tx.update(refundRequests).set({ status: "declined", ...decided }).where(pending).returning({ id: refundRequests.id })).length > 0);
-    if (!declined) throw alreadyDecided;
+    if (!declined) throw alreadyDecided();
     return null;
   }
   if (decision.amountKurus > await refundableKurus(db, request.orderId)) throw new OwnerInputError("İade tutarı siparişin kalan tutarını aşamaz.");
   // Claimed first, so two approvals cannot refund twice.
   const claimed = await db.update(refundRequests).set({ status: "approved", amountKurus: decision.amountKurus, ...decided }).where(pending).returning({ id: refundRequests.id });
-  if (!claimed.length) throw alreadyDecided;
+  if (!claimed.length) throw alreadyDecided();
   try {
     const refund = await withShopier(db, actorId, target, "refund_request.refund", `sipariş ${request.orderId} için ${formatMoney(decision.amountKurus)} iade`,
       () => shopier.createRefund(request.orderId, decision.amountKurus, decision.note || undefined));

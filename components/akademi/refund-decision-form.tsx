@@ -5,16 +5,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/akademi/format";
 import { decideOwnerRefundRequest, ownerQueryKeys, type OwnerCatalogSnapshot, type OwnerRefundRequest } from "@/lib/akademi/owner-queries";
-import { refundApprovalSchema } from "@/lib/akademi/owner-forms";
+import { refundDecisionSchema, type RefundDecisionInput } from "@/lib/akademi/owner-forms";
 import { DialogFooter } from "@/components/ui/dialog";
 import { FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 const lira = (kurus: number) => (kurus / 100).toFixed(2).replace(/\.00$/, "");
-/** A decline ignores the amount. */
 export function RefundDecisionForm({ request, approve, onDone }: { request: OwnerRefundRequest; approve: boolean; onDone: () => void }) {
   const client = useQueryClient();
-  const form = useForm({ resolver: zodResolver(refundApprovalSchema), mode: "onTouched", defaultValues: { amount: lira(request.amountKurus), note: "" } });
+  const form = useForm({ resolver: zodResolver(refundDecisionSchema), mode: "onTouched",
+    defaultValues: approve ? { decision: "approve", amount: lira(request.amountKurus), note: "" } : { decision: "decline", note: "" } });
   const decide = useMutation({
-    mutationFn: ({ amount, note }: { amount: number; note: string }) => decideOwnerRefundRequest(request.id, approve ? { decision: "approve", amount, note } : { decision: "decline", note }),
+    mutationFn: (decision: RefundDecisionInput) => decideOwnerRefundRequest(request.id, decision),
     onSuccess: () => {
       client.setQueryData<OwnerCatalogSnapshot>(ownerQueryKeys.catalog(), current => current && { ...current, refundRequests: current.refundRequests.filter(item => item.id !== request.id) });
       toast.success(approve ? "İade Shopier’e gönderildi." : "İade talebi reddedildi."); onDone();

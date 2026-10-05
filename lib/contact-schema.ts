@@ -14,5 +14,4 @@ export const contactSchema = z.object({
     .min(10, "Mesajınız en az 10 karakter olmalıdır.")
     .max(5000, "Mesajınız en fazla 5000 karakter olabilir."),
 });
-/** A contact message with an optional Shopier order number. */
 export const supportSchema = contactSchema.extend({ orderNumber: optionalOrderNumberField });

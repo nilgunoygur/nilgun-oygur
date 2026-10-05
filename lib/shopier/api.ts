@@ -42,6 +42,7 @@ export const shopierRefundSchema = z.object({
   total: z.string(),
 });
 export type ShopierRefund = z.output<typeof shopierRefundSchema>;
+export const refundedAt = (refund: ShopierRefund) => refund.dateRefunded ?? refund.dateCreated;
 
 const id = z.union([z.string(), z.number()]).transform(String);
 export const shopierProductSchema = z.object({
@@ -159,6 +160,9 @@ export function toKurus(amount: string): number {
   return kurus;
 }
 
+export const productTotalKurus = (order: ShopierOrder, productId: string) =>
+  order.lineItems.filter(item => item.productId === productId).reduce((sum, item) => sum + toKurus(item.total), 0);
+
 /** Shopier-Signature = hex HMAC-SHA256(raw body, webhook token). */
 export function isValidWebhookSignature(rawBody: string, signature: string | null, token: string): boolean {
   if (!signature || !token) return false;
@@ -200,11 +204,12 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       return response.json() as Promise<T>;
     }
   }
-  // Shopier answers 500 to refund date filters, so read every page.
-  async function listSucceededRefunds(maxPages = 20) {
+  // Shopier answers 500 to refund date filters, so read every page; `orderId` narrows it to one order.
+  async function listSucceededRefunds({ orderId, maxPages = 20 }: { orderId?: string; maxPages?: number } = {}) {
+    const filter = orderId ? `&orderId=${orderId}` : "";
     const refunds: ShopierRefund[] = [];
     for (let page = 1; page <= maxPages; page++) {
-      const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded`));
+      const batch = z.array(shopierRefundSchema).parse(await call(`/refunds?limit=50&page=${page}&sort=dateDesc&status=succeeded${filter}`));
       refunds.push(...batch.filter(refund => refund.status === "succeeded"));
       if (batch.length < 50) return refunds;
     }
@@ -221,7 +226,6 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         throw error;
       }
     },
-    /** Shopier later fires refund.updated. */
     async createRefund(orderId: string, amountKurus: number, note?: string) {
       if (!isShopierId(orderId) || !Number.isInteger(amountKurus) || amountKurus <= 0) throw new Error("Invalid Shopier refund.");
       return shopierRefundSchema.parse(await call("/refunds", { method: "POST", body: JSON.stringify({ orderId, amount: amount(amountKurus), ...(note && { note }) }) }));
@@ -250,7 +254,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
       const [rawOrders, refundResult] = await Promise.all([
         call<unknown>(`/orders?${query}`),
         listSucceededRefunds().then(
-          all => ({ refunds: all.filter(refund => (refund.dateRefunded ?? refund.dateCreated) >= start && (refund.dateRefunded ?? refund.dateCreated) < end), unavailable: false }),
+          all => ({ refunds: all.filter(refund => refundedAt(refund) >= start && refundedAt(refund) < end), unavailable: false }),
           () => ({ refunds: [] as ShopierRefund[], unavailable: true })),
       ]);
       return {

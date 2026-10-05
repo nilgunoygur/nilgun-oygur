@@ -18,8 +18,8 @@ console.log(
   `All ${Object.keys(pages).length} content routes return 200 and include a heading. Unknown route returns 404.`,
 );
 
-const authRoutes = ["giris", "kayit", "sifremi-unuttum", "sifre-yenile", "dogrulama", "satin-alim-sonrasi", "egitim-ekleme"];
-for (const route of authRoutes) {
+const noindexRoutes = ["giris", "kayit", "sifremi-unuttum", "sifre-yenile", "dogrulama", "satin-alim-sonrasi", "egitim-ekleme"];
+for (const route of noindexRoutes) {
   const response = await fetch(new URL(`/akademi/${route}`, origin));
   assert.equal(response.status, 200, route);
   const html = await response.text();
@@ -50,4 +50,4 @@ for (const [method, path] of [["GET", "/api/yonetim/refund-requests"], ["GET", "
   assert.equal(response.status, 403, `${method} ${path} requires the owner`);
 }
 console.log("Lesson files require a session; creating and editing Shopier products and deciding refund requests require the owner.");
-console.log("Five auth screens are noindex; account/owner routes redirect anonymous users; email and Shopier workers require authorization; unsigned webhooks are rejected.");
+console.log("Auth and guide screens are noindex; account/owner routes redirect anonymous users; email and Shopier workers require authorization; unsigned webhooks are rejected.");

@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { courseAccess, courses, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
-import { buyerEmail, toKurus, type ShopierOrder } from "../shopier/api.ts";
+import { buyerEmail, productTotalKurus, type ShopierOrder } from "../shopier/api.ts";
 import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
 import { adoptShopierContact } from "./student-contact.ts";
 import type { Database } from "../db/types.ts";
@@ -24,7 +24,7 @@ export async function recordShopierOrder(db: Database, order: ShopierOrder): Pro
     shopierOrderId: order.id,
     courseId: course.id,
     buyerEmail: email,
-    amountKurus: order.lineItems.filter(item => item.productId === course.productId).reduce((sum, item) => sum + toKurus(item.total), 0),
+    amountKurus: productTotalKurus(order, course.productId),
     currency: order.currency,
     accessDurationDays: course.days,
     purchasedAt: order.dateCreated,
@@ -51,7 +51,6 @@ export async function hasFullRefund(db: Database, orderId: string) {
   const [refund] = await db.select({ id: shopierRefunds.id }).from(shopierRefunds).where(and(eq(shopierRefunds.shopierOrderId, orderId), eq(shopierRefunds.type, "full"))).limit(1);
   return !!refund;
 }
-
 
 // Claims an unclaimed purchase and grants access in one transaction; active access is extended.
 export async function claimPurchase(db: Database, purchaseId: string, userId: string, now = new Date()): Promise<boolean> {
