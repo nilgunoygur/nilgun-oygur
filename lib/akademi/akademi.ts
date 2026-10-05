@@ -49,7 +49,12 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
         return requestRefund(db, userId, courseId, reason, refundNotification);
       },
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
-      refundRequests: (userId: string) => studentRefundRequests(db, userId, now()),
+      /** The newest request per course; an approved one is dropped once the course is bought again. */
+      async refundNotices(userId: string) {
+        const [requests, access] = await Promise.all([studentRefundRequests(db, userId, now()), activeCourseAccess(db, userId, now())]);
+        const active = new Set(access.map(item => item.courseId)), seen = new Set<string>();
+        return requests.filter(request => !seen.has(request.courseId) && seen.add(request.courseId) && (request.status !== "approved" || !active.has(request.courseId)));
+      },
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
         const [refunds, orders] = await Promise.all([shopier.listSucceededRefunds(), shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000))]);

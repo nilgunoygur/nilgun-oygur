@@ -1,8 +1,10 @@
 "use server";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { refresh } from "next/cache";
 import { requireStudent } from "@/lib/auth/viewer";
 import { getAuth } from "@/lib/auth";
+import { akademi, courseCards } from "@/lib/akademi/server";
+import { refundNoticeCookie } from "@/lib/akademi/claim-schema";
 import type { z } from "zod";
 import { profileInput } from "@/lib/auth/profile";
 import { contactInput, type ContactInput } from "@/lib/auth/contact";
@@ -10,7 +12,11 @@ import type { FormState } from "@/components/akademi/form-status";
 
 export async function accountOptions() {
   const viewer = await requireStudent();
-  return { isOwner: viewer.owner };
+  const [requests, cards, closed] = await Promise.all([akademi().access.refundNotices(viewer.user.id), courseCards(), cookies()]);
+  // A pending request explains why a course is closed, so only a decided one can be dismissed.
+  const notices = requests.filter(request => request.status === "pending" || !closed.has(refundNoticeCookie(request.id)))
+    .map(request => ({ id: request.id, status: request.status, note: request.ownerNote, orderId: request.orderId, course: cards[request.productId]?.title ?? "Akademi eğitimi" }));
+  return { isOwner: viewer.owner, notices };
 }
 
 export async function saveProfile(input: z.input<typeof profileInput>): Promise<FormState> {
