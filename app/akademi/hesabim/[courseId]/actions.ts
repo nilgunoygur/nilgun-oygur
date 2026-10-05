@@ -4,6 +4,7 @@ import { requireStudent } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { accessibleLesson, liveDestination, saveProgress } from "@/lib/akademi/learning";
 import { playbackExpiresAt, playbackLifetimeMs } from "@/lib/akademi/access-policy";
+import { zoomLinks } from "@/lib/akademi/zoom";
 import { playbackTokens } from "@/lib/video/mux";
 
 const progressInput = z.object({ lessonId: z.uuid(), completed: z.boolean().optional(), position: z.number().int().min(0).max(604800).optional() });
@@ -41,6 +42,6 @@ export async function joinLive(lessonId: string) {
   try {
     const viewer = await requireStudent();
     const destination = await liveDestination(getDatabase(), viewer.user.id, z.uuid().parse(lessonId));
-    return destination ? { destination } : { error: "Katılım, dersin başlamasından 30 dakika önce açılır. Erişiminizin aktif olması gerekir." };
+    return destination ? { destination: zoomLinks(destination.meetingId, destination.passcode, viewer.user.name) } : { error: "Katılım, dersin başlamasından 30 dakika önce açılır. Erişiminizin aktif olması gerekir." };
   } catch { return { error: "Canlı derse katılım doğrulanamadı." }; }
 }

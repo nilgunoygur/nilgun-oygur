@@ -75,5 +75,5 @@ export async function accessibleFile(db: Database, userId: string, fileId: strin
 export async function liveDestination(db: Database, userId: string, lessonId: string, now = new Date()) {
   const row = await accessibleLesson(db, userId, lessonId, now);
   if (!row?.live || !canJoinLiveSession(row.live, row.grant, userId, row.lesson.courseId, now)) return null;
-  return { url: row.live.zoomJoinUrl, passcode: row.live.zoomPasscode };
+  return { meetingId: row.live.zoomMeetingId, passcode: row.live.zoomPasscode };
 }

@@ -30,7 +30,7 @@ async function fixture() {
   const [module] = await db.insert(schema.modules).values({ courseId: course.id, title: "Module", status: "published" }).returning();
   const [asset] = await db.insert(schema.videoAssets).values({ muxAssetId: id, signedPlaybackId: id, status: "ready", durationSeconds: 100 }).returning();
   const steps = await db.insert(schema.lessons).values(["video", "live", "audio", "video"].map((kind, position) => ({ courseId: course.id, moduleId: module.id, title: `Step ${position + 1}`, slug: `step-${position + 1}`, kind, position, status: "published", videoAssetId: kind === "live" ? null : asset.id }))).returning();
-  await db.insert(schema.liveSessions).values({ lessonId: steps[1].id, startsAt: now, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/1", zoomPasscode: "" });
+  await db.insert(schema.liveSessions).values({ lessonId: steps[1].id, startsAt: now, durationMinutes: 60, zoomMeetingId: "8529015944", zoomPasscode: "" });
   const [file] = await db.insert(schema.lessonFiles).values({ lessonId: steps[2].id, name: "Material.pdf", pathname: `${id}.pdf`, mime: "application/pdf", sizeBytes: 100 }).returning();
   return { id, course, steps, file, order };
 }
