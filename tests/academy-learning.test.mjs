@@ -31,7 +31,7 @@ test("the four-video + live template is private until published and cannot be du
   const rows = await ownerLessons(db, course.id);
   assert.deepEqual(rows.map(r => r.lesson.kind), ["video", "video", "video", "video", "live"]);
   video = rows[0].lesson; live = rows[4].lesson;
-  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.length, 0);
+  assert.equal((await studentCourse(db, "buyer", course, now)).lessons.length, 0);
   await assert.rejects(() => createLessons(db, "owner", course.id, "template"));
   assert.equal((await ownerLessons(db, course.id)).length, 5);
 });
@@ -44,7 +44,7 @@ test("publishing requires a ready signed video or a dated live session with a me
   await db.update(schema.lessons).set({ videoAssetId: asset.id }).where(eq(schema.lessons.id, video.id));
   await updateLesson(db, "owner", input(video));
   await updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", meetingId: "852-901-5944", passcode: "secret" }));
-  const result = await studentCourse(db, "buyer", course.id, now);
+  const result = await studentCourse(db, "buyer", course, now);
   assert.equal(result.lessons.length, 2);
   assert.equal(result.lessons[1].startsAt.toISOString(), now.toISOString(), "editor dates use Istanbul time");
   const serialized = JSON.stringify(result);
@@ -52,10 +52,10 @@ test("publishing requires a ready signed video or a dated live session with a me
 });
 
 test("unpaid and expired users cannot read lessons or write progress", async () => {
-  assert.equal(await studentCourse(db, "other", course.id, now), null);
+  assert.equal(await studentCourse(db, "other", course, now), null);
   assert.equal(await accessibleLesson(db, "other", video.id, now), null);
   await assert.rejects(() => saveProgress(db, "other", video.id, { completed: true }, now), /FORBIDDEN/);
-  assert.equal(await studentCourse(db, "buyer", course.id, new Date("2026-09-24")), null);
+  assert.equal(await studentCourse(db, "buyer", course, new Date("2026-09-24")), null);
   await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true }, new Date("2026-09-24")), /FORBIDDEN/);
 });
 
@@ -63,11 +63,11 @@ test("a video completes only once 90% is watched; completion persists and can be
   await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true, position: 107 }, now), /NOT_WATCHED/);
   await saveProgress(db, "buyer", video.id, { completed: true, position: 108 }, now);
   await saveProgress(db, "buyer", video.id, { position: 999 }, now);
-  let result = await studentCourse(db, "buyer", course.id, now);
+  let result = await studentCourse(db, "buyer", course, now);
   assert.equal(result.lessons[0].completedAt.toISOString(), now.toISOString());
   assert.equal(result.lessons[0].lastPositionSeconds, 120);
   await saveProgress(db, "buyer", video.id, { completed: false }, now);
-  result = await studentCourse(db, "buyer", course.id, now);
+  result = await studentCourse(db, "buyer", course, now);
   assert.equal(result.lessons[0].completedAt, null);
   assert.equal(result.lessons[0].lastPositionSeconds, 120);
   await assert.rejects(() => saveProgress(db, "buyer", video.id, { position: -1 }, now), /INVALID_POSITION/);
@@ -83,7 +83,7 @@ test("live joining requires active access and the scheduled time window", async 
 });
 
 test("a live lesson's recording can be attached, and attendance is marked without watching it", async () => {
-  const view = async () => { const lesson = (await studentCourse(db, "buyer", course.id, now)).lessons.find(lesson => lesson.id === live.id); return [lesson.liveView, lesson.daysLeft]; };
+  const view = async () => { const lesson = (await studentCourse(db, "buyer", course, now)).lessons.find(lesson => lesson.id === live.id); return [lesson.liveView, lesson.daysLeft]; };
   await updateLesson(db, "owner", input(live, { startsAt: "2026-09-25T00:30", meetingId: "8529015944" }));
   assert.deepEqual(await view(), ["upcoming", 2]);
   await attachAsset(db, "owner", live, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed", durationSeconds: 3600 }, "Kayıt");
@@ -95,11 +95,11 @@ test("a live lesson's recording can be attached, and attendance is marked withou
 
 test("lesson notes are rich text: old plain notes become paragraphs and unsafe markup is dropped", async () => {
   assert.equal(plainToHtml("Bir\nİki\n\nÜç <b>"), "<p>Bir<br>İki</p><p>Üç &lt;b&gt;</p>");
-  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons[0].description, "<p>Lesson notes</p>");
+  assert.equal((await studentCourse(db, "buyer", course, now)).lessons[0].description, "<p>Lesson notes</p>");
   await updateLesson(db, "owner", input(video, { description: '<h2 class="x">Hazırlık</h2><p onclick="x()">Su <strong>getirin</strong><script>alert(1)</script><img src="https://a/b.png"></p>' }));
-  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons[0].description, "<h2>Hazırlık</h2><p>Su <strong>getirin</strong></p>");
+  assert.equal((await studentCourse(db, "buyer", course, now)).lessons[0].description, "<h2>Hazırlık</h2><p>Su <strong>getirin</strong></p>");
   await updateLesson(db, "owner", input(video, { description: "<p><br></p>" }));
-  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons[0].description, "", "an empty editor saves no notes");
+  assert.equal((await studentCourse(db, "buyer", course, now)).lessons[0].description, "", "an empty editor saves no notes");
 });
 
 test("course pages find a course by slug, and by id for old links", async () => {
@@ -125,7 +125,7 @@ test("unpublishing a lesson or its module blocks existing direct links and mutat
   await assert.rejects(() => saveProgress(db, "buyer", video.id, { completed: true }, now), /FORBIDDEN/);
   await db.update(schema.modules).set({ status: "draft" }).where(eq(schema.modules.id, live.moduleId));
   assert.equal(await accessibleLesson(db, "buyer", live.id, now), null);
-  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.length, 0);
+  assert.equal((await studentCourse(db, "buyer", course, now)).lessons.length, 0);
   assert.ok((await db.select().from(schema.adminAuditLog)).length >= 5);
 });
 
@@ -161,7 +161,7 @@ test("deleting a draft or published lesson removes it with its live session and 
   for (const lesson of [draft, published]) await deleteLesson(db, "owner", course.id, lesson.id);
   const remaining = (await ownerLessons(db, course.id)).map(row => row.lesson.id);
   assert.deepEqual(remaining, rows.map(row => row.lesson.id).filter(id => id !== draft.id && id !== published.id));
-  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.some(row => row.id === published.id), false);
+  assert.equal((await studentCourse(db, "buyer", course, now)).lessons.some(row => row.id === published.id), false);
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "lesson.delete"))).length, 2);
 });
 
@@ -176,7 +176,7 @@ test("an audio lesson publishes only with a ready recording, which students fini
   await attachAsset(db, "owner", audio, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed-1", durationSeconds: 600, peaks }, "Yüklenen ses kaydı derse bağlandı");
   await updateLesson(db, "owner", input(audio));
 
-  const lesson = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === audio.id);
+  const lesson = (await studentCourse(db, "buyer", course, now)).lessons.find(row => row.id === audio.id);
   assert.deepEqual([lesson.kind, lesson.durationSeconds, lesson.mediaReady, lesson.peaks], ["audio", 600, true, peaks]);
   assert.ok(!JSON.stringify(lesson).includes("recording-"), "Mux identifiers never reach the course page");
   await assert.rejects(() => saveProgress(db, "buyer", audio.id, { completed: true, position: 500 }, now), /NOT_WATCHED/);
@@ -187,7 +187,7 @@ test("an audio lesson publishes only with a ready recording, which students fini
   assert.deepEqual((await ownerLessons(db, course.id)).find(row => row.lesson.id === audio.id).asset.peaks, peaks);
   await attachAsset(db, "owner", audio, { muxAssetId: "recording-2", signedPlaybackId: "recording-signed-2", durationSeconds: 300 }, "Mux kütüphanesinden ses kaydı bağlandı");
   assert.equal((await db.select().from(schema.adminAuditLog).where(eq(schema.adminAuditLog.action, "audio.attach"))).length, 3);
-  const replaced = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === audio.id);
+  const replaced = (await studentCourse(db, "buyer", course, now)).lessons.find(row => row.id === audio.id);
   assert.deepEqual([replaced.durationSeconds, replaced.peaks], [300, null]);
 });
 
@@ -205,7 +205,7 @@ test("homework PDFs attach to any lesson and open only for students with access 
   await removeLessonFile(db, "owner", (await db.select().from(schema.lessonFiles).where(eq(schema.lessonFiles.pathname, homework(lesson.id, 3).pathname)))[0].id);
   await assert.rejects(() => addLessonFile(db, "owner", homework(crypto.randomUUID(), 1)), /bulunamadı/);
 
-  const shown = (await studentCourse(db, "buyer", course.id, now)).lessons.find(row => row.id === lesson.id);
+  const shown = (await studentCourse(db, "buyer", course, now)).lessons.find(row => row.id === lesson.id);
   assert.deepEqual(shown.documents, [{ id: one.file.id, name: "Ödev 1.pdf", sizeBytes: 120_000 }, { id: two.file.id, name: "Ödev 2.pdf", sizeBytes: 120_000 }]);
   assert.ok(!JSON.stringify(shown).includes("lessons/"), "storage paths never reach the course page");
   assert.equal((await accessibleFile(db, "buyer", one.file.id, now)).pathname, one.file.pathname);

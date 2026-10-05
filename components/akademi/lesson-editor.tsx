@@ -1,5 +1,6 @@
 "use client";
 import { useActionState, useState } from "react";
+import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LazyMotion, Reorder, domMax, useDragControls } from "motion/react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
@@ -19,7 +20,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
-import { ArticleRichEditor } from "./article-rich-editor";
 import { DateTimeField } from "./date-time-field";
 import { PublishSwitch } from "./publish-switch";
 import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
@@ -105,6 +105,7 @@ function SortableLesson({ row, index, services, onDrop, onMove }: { row: Row; in
   </Reorder.Item>;
 }
 
+const ArticleRichEditor = dynamic(() => import("./article-rich-editor").then(module => module.ArticleRichEditor), { ssr: false, loading: () => <div className="h-56 animate-pulse rounded-xl bg-mist" /> });
 const visibility = { draft: "Taslak", published: "Yayında" };
 const visibilityHint = { draft: "Öğrenciler bu dersi görmez.", published: "Erişimi olan öğrenciler bu dersi görür." };
 const liveStatuses = { scheduled: "Planlandı", rescheduled: "Yeniden planlandı", cancelled: "İptal edildi", completed: "Tamamlandı" };

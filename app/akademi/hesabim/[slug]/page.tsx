@@ -27,7 +27,7 @@ async function Content({ params }: { params: Promise<{ slug: string }> }) {
   if (!course) notFound();
   if (course.slug !== slug) permanentRedirect(`/akademi/hesabim/${course.slug}`);
   const courseId = course.id;
-  const [data, cards, refund] = await Promise.all([studentCourse(getDatabase(), viewer.user.id, courseId), courseCards(), akademi().access.refundRequest(viewer.user.id, courseId)]);
+  const [data, cards, refund] = await Promise.all([studentCourse(getDatabase(), viewer.user.id, course), courseCards(), akademi().access.refundRequest(viewer.user.id, courseId)]);
   const back = <Link href="/akademi/hesabim" className="mb-9 inline-flex items-center gap-2 text-sm text-stone hover:text-forest"><ArrowLeft size={16} />Eğitimlerime dön</Link>;
   if (refund?.status === "pending" || refund?.status === "approved") return <>{back}<h1 className={accountTitle}>İade talebiniz</h1><RefundNotice status={refund.status} note={refund.ownerNote} /></>;
   if (!data) notFound();

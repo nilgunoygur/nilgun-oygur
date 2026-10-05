@@ -37,7 +37,7 @@ async function fixture() {
 
 test("all published lessons are listed but recordings and PDFs require preceding recordings; live lessons are exempt", async () => {
   const f = await fixture(), [first, live, second, third] = f.steps;
-  const shown = await studentCourse(db, f.id, f.course.id, now);
+  const shown = await studentCourse(db, f.id, f.course, now);
   assert.equal(shown.lessons.length, 4);
   assert.equal(lessonPrerequisites(shown.lessons, new Set()).get(second.id).id, first.id);
   assert.ok(await accessibleLesson(db, f.id, first.id, now));
@@ -62,7 +62,7 @@ test("a refund request suspends all content; rejection restores access; approval
   const [request] = await db.select().from(schema.refundRequests).where(eq(schema.refundRequests.userId, f.id));
   assert.equal(await activeGrant(db, f.id, f.course.id, now), null);
   assert.equal((await activeCourseAccess(db, f.id, now))[0].refundPending, true, "the account retains a suspended card with request status");
-  assert.equal(await studentCourse(db, f.id, f.course.id, now), null);
+  assert.equal(await studentCourse(db, f.id, f.course, now), null);
   assert.equal(await accessibleLesson(db, f.id, first.id, now), null);
   assert.equal(await liveDestination(db, f.id, live.id, now), null, "Zoom is also blocked by a refund");
   assert.equal(await accessibleFile(db, f.id, f.file.id, now), null);

@@ -11,11 +11,9 @@ import { lessonPrerequisites } from "./lesson-sequence.ts";
 const lessonOrder = () => [asc(modules.position), asc(modules.createdAt), asc(modules.id), asc(lessons.position), asc(lessons.createdAt), asc(lessons.id)];
 
 /** Private learning reads never depend on whether the product is still for sale. Homework PDFs are exposed by id only. */
-export async function studentCourse(db: Database, userId: string, courseId: string, now = new Date()) {
-  const grant = await activeGrant(db, userId, courseId, now);
+export async function studentCourse(db: Database, userId: string, course: typeof courses.$inferSelect, now = new Date()) {
+  const grant = await activeGrant(db, userId, course.id, now);
   if (!grant) return null;
-  const [course] = await db.select().from(courses).where(eq(courses.id, courseId));
-  if (!course) return null;
   const rows = await db.select({
     id: lessons.id, title: lessons.title, description: lessons.description, kind: lessons.kind,
     moduleTitle: modules.title, durationSeconds: videoAssets.durationSeconds,
@@ -26,7 +24,7 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .leftJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id))
     .leftJoin(liveSessions, eq(lessons.id, liveSessions.lessonId))
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
-    .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
+    .where(and(eq(lessons.courseId, course.id), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(...lessonOrder());
   const documents = await lessonDocuments(db, rows.map(row => row.id));
   return { course, grant, lessons: rows.map(row => {
