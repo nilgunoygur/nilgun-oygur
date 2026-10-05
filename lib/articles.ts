@@ -2,7 +2,6 @@ import "server-only";
 import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { io } from "next/cache";
-import sanitizeHtml from "sanitize-html";
 import { config } from "@/lib/config";
 import { articles as importedArticles } from "@/lib/content";
 import { getDatabase } from "@/lib/db";
@@ -15,22 +14,9 @@ export const uploadedImagePrefix = "/api/article-images/";
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
 export const articleBodyText = (article: Article) => article.richBody ?? article.body.map(block => block.tag.startsWith("h") ? `<h2>${escapeHtml(block.text)}</h2>` : `<p>${escapeHtml(block.text)}</p>`).join("");
 
-export const articlePlainText = (html: string) => sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim();
+import { cleanRichHtml as cleanArticleHtml, richPlainText as articlePlainText } from "./rich-text";
 
-export function cleanArticleHtml(value: string) {
-  return sanitizeHtml(value, {
-    allowedTags: ["p", "h2", "h3", "h4", "strong", "b", "em", "i", "u", "s", "code", "ul", "ol", "li", "blockquote", "a", "br", "hr", "img"],
-    allowedAttributes: { a: ["href", "target", "rel"], img: ["src", "alt"], p: ["style"], h2: ["style"], h3: ["style"], h4: ["style"] },
-    // Alignment is the only inline style the editor produces.
-    allowedStyles: { "*": { "text-align": [/^(left|center|right|justify)$/] } },
-    allowedSchemes: ["http", "https", "mailto"],
-    // Images: site paths or https only.
-    allowedSchemesByTag: { img: ["https"] },
-    allowProtocolRelative: false,
-    exclusiveFilter: frame => frame.tag === "img" && !frame.attribs.src,
-    transformTags: { a: (_tag, attributes) => ({ tagName: "a", attribs: { href: attributes.href ?? "#", rel: "noopener noreferrer", target: "_blank" } }) },
-  });
-}
+export { cleanArticleHtml, articlePlainText };
 
 export async function getArticleImageLibrary() {
   await io();

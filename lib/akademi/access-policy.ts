@@ -20,7 +20,7 @@ export function hasActiveAccess(
 }
 
 /** Mux tokens cannot be recalled once issued, so keep them short. */
-export const playbackLifetimeMs = { video: 120_000, audio: 120_000 };
+export const playbackLifetimeMs = { video: 120_000, audio: 120_000, live: 120_000 };
 
 /** Whole-second JWT expiry, rounded down so it never extends past the grant. */
 export function playbackExpiresAt(

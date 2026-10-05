@@ -2,7 +2,9 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { courses, lessonFiles, lessons, modules, lessonProgress, liveSessions, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
+import { cleanRichHtml } from "../rich-text.ts";
 import { lessonDocuments } from "./lesson-files.ts";
+import { notesHtml } from "./lesson-notes.ts";
 import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
 import { lessonPrerequisites } from "./lesson-sequence.ts";
 
@@ -27,7 +29,7 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
     .orderBy(...lessonOrder());
   const documents = await lessonDocuments(db, rows.map(row => row.id));
-  return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents(row.id) })) };
+  return { course, grant, lessons: rows.map(row => ({ ...row, description: cleanRichHtml(notesHtml(row.description), { images: false }), documents: documents(row.id) })) };
 }
 
 /** Rechecked by every progress, playback, and live-join request. */
@@ -56,7 +58,7 @@ export async function saveProgress(db: Database, userId: string, lessonId: strin
   const accessible = await accessibleLesson(db, userId, lessonId, now);
   if (!accessible) throw new Error("FORBIDDEN");
   const duration = accessible.asset?.durationSeconds;
-  if (input.completed && duration) {
+  if (input.completed && duration && accessible.lesson.kind !== "live") {
     const [previous] = await db.select({ position: lessonProgress.lastPositionSeconds }).from(lessonProgress)
       .where(and(eq(lessonProgress.userId, userId), eq(lessonProgress.lessonId, lessonId)));
     if (!hasWatched(Math.max(previous?.position ?? 0, input.position ?? 0), duration)) throw new Error("NOT_WATCHED");

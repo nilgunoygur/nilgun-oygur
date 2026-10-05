@@ -6,6 +6,8 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { zoomLinks, zoomMeetingId } from "../lib/akademi/zoom.ts";
+import { notesHtml } from "../lib/akademi/lesson-notes.ts";
+import { courseForRoute } from "../lib/akademi/course-route.ts";
 import { studentCourse, accessibleLesson, accessibleFile, saveProgress, liveDestination } from "../lib/akademi/learning.ts";
 import { attachAsset, createLessons, deleteLesson, reorderLessons, updateLesson, ownerLessons } from "../lib/akademi/lesson-editor.ts";
 import { addLessonFile, removeLessonFile } from "../lib/akademi/lesson-files.ts";
@@ -78,6 +80,28 @@ test("live joining requires active access and the scheduled time window", async 
   assert.equal(await liveDestination(db, "buyer", live.id, new Date("2026-09-23T10:30:00Z")), null);
   await updateLesson(db, "owner", input(live, { startsAt: "2026-09-23T12:00", meetingId: "852-901-5944", liveStatus: "cancelled" }));
   assert.equal(await liveDestination(db, "buyer", live.id, now), null);
+});
+
+test("a live lesson's recording can be attached, and attendance is marked without watching it", async () => {
+  await attachAsset(db, "owner", live, { muxAssetId: "recording-1", signedPlaybackId: "recording-signed", durationSeconds: 3600 }, "Kayıt");
+  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons.find(lesson => lesson.id === live.id).mediaReady, true);
+  await saveProgress(db, "buyer", live.id, { completed: true }, now);
+  await db.delete(schema.lessonProgress).where(eq(schema.lessonProgress.lessonId, live.id));
+});
+
+test("lesson notes are rich text: old plain notes become paragraphs and unsafe markup is dropped", async () => {
+  assert.equal(notesHtml("Bir\nİki\n\nÜç <b>"), "<p>Bir<br>İki</p><p>Üç &lt;b&gt;</p>");
+  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons[0].description, "<p>Lesson notes</p>");
+  await updateLesson(db, "owner", input(video, { description: '<h2 class="x">Hazırlık</h2><p onclick="x()">Su <strong>getirin</strong><script>alert(1)</script><img src="https://a/b.png"></p>' }));
+  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons[0].description, "<h2>Hazırlık</h2><p>Su <strong>getirin</strong></p>");
+  await updateLesson(db, "owner", input(video, { description: "<p><br></p>" }));
+  assert.equal((await studentCourse(db, "buyer", course.id, now)).lessons[0].description, "", "an empty editor saves no notes");
+});
+
+test("course pages find a course by slug, and by id for old links", async () => {
+  assert.equal((await courseForRoute(db, "test-course")).id, course.id);
+  assert.equal((await courseForRoute(db, course.id)).slug, "test-course");
+  assert.equal(await courseForRoute(db, "yok"), null);
 });
 
 test("Zoom links carry the meeting, its passcode and the student's own name", () => {

@@ -5,7 +5,7 @@ import { LazyMotion, Reorder, domMax, useDragControls } from "motion/react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { createUpload } from "@mux/upchunk";
 import { put } from "@vercel/blob/client";
 import { CalendarDays, Check, CirclePlay, ExternalLink, Eye, FileText, GripVertical, Headphones, Library, Plus, Replace, Search, Trash2, Upload, type LucideIcon } from "lucide-react";
@@ -15,12 +15,14 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
+import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
+import { ArticleRichEditor } from "./article-rich-editor";
 import { DateTimeField } from "./date-time-field";
-import { FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
+import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import type { AttachedVideo } from "@/lib/video/mux";
@@ -30,6 +32,7 @@ import { formatFileSize, lessonFileProblem, lessonFileRules, lessonFileType, max
 import { measureAudio } from "@/lib/audio-peaks";
 import { LessonAudio } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
+import { notesHtml } from "@/lib/akademi/lesson-notes";
 import { pillAction } from "@/lib/styles";
 
 type Row = Awaited<ReturnType<typeof ownerLessons>>[number] & { video?: AttachedVideo };
@@ -103,6 +106,7 @@ function SortableLesson({ row, index, services, onDrop, onMove }: { row: Row; in
 }
 
 const visibility = { draft: "Taslak", published: "Yayında" };
+const visibilityHint = { draft: "Öğrenciler bu dersi görmez.", published: "Erişimi olan öğrenciler bu dersi görür." };
 const liveStatuses = { scheduled: "Planlandı", rescheduled: "Yeniden planlandı", cancelled: "İptal edildi", completed: "Tamamlandı" };
 
 function EditorCard({ row, index, handle, services }: { row: Row; index: number; handle?: React.ReactNode; services: Services }) {
@@ -115,6 +119,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
       startsAt: localDate(live?.startsAt), durationMinutes: String(live?.durationMinutes ?? 60), meetingId: live?.zoomMeetingId ?? "", passcode: live?.zoomPasscode ?? "", liveStatus: live?.status ?? "scheduled",
     },
   });
+  const status = useWatch({ control: form.control, name: "status" });
   const submit = form.handleSubmit(async (values) => {
     const result = await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.");
     if (result) toast.success(result.message);
@@ -125,12 +130,16 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
       <AccordionTrigger className="items-center gap-4 p-6 hover:no-underline"><div className="min-w-0 flex-1"><span className="mb-2 block text-[10px] font-semibold tracking-[1.5px] text-stone">{kindLabel[lesson.kind]} · SIRA {index + 1}</span><span className="block text-2xl">{lesson.title}</span></div><Badge variant={lesson.status === "published" ? "secondary" : "outline"}>{visibility[lesson.status]}</Badge></AccordionTrigger>
     </div>
     <AccordionPrimitive.Panel className="h-(--accordion-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0"><div className="border-t border-border p-6">
-      {!isLive && <MediaUpload row={row} muxConfigured={services.muxConfigured} />}
+      <MediaUpload row={row} muxConfigured={services.muxConfigured} />
       <Homework row={row} filesConfigured={services.filesConfigured} />
       <FormShell form={form} onSubmit={submit}>
         <TextField control={form.control} name="title" label="Ders başlığı" maxLength={160} />
-        <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
-        <div className="sm:w-1/2"><SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" /></div>
+        <ControlledField control={form.control} name="description" label="Açıklama / ders notları" description={isLive ? "Öğrenciler bunu buluşmadan önce okur: yanlarında ne olmalı, nasıl hazırlanmalılar?" : undefined}>
+          {field => <ArticleRichEditor initialHtml={notesHtml(lesson.description)} onChange={field.onChange} />}
+        </ControlledField>
+        <ControlledField control={form.control} name="status" label="Görünürlük" description={visibilityHint[status]}>
+          {(field, id) => <div className="flex items-center gap-2.5 text-sm font-medium"><Switch id={id} ref={field.ref} checked={field.value === "published"} onCheckedChange={checked => field.onChange(checked ? "published" : "draft")} />{visibility[field.value]}</div>}
+        </ControlledField>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
           <DateTimeField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" className="bg-white" />
           <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
@@ -201,11 +210,16 @@ const media = {
     search: "Kayıt adına göre ara…", empty: "Mux hesabınızda henüz ses kaydı yok. Buradan veya Mux panelinden yükledikten sonra görünür.", progress: "Ses kaydı yükleme ilerlemesi",
   },
 };
+// A live lesson's recording is a video shown to students in place of the join box.
+const recording = {
+  ...media.video, heading: "BULUŞMANIN KAYDI", none: "Buluşma bittikten sonra kaydını buraya ekleyin; öğrenciler katılım kutusu yerine kaydı görür.",
+  ready: "Kayıt hazır; öğrenciler artık buluşmanın kaydını izleyebilir.", uploadHint: "Zoom kaydı buradan doğrudan Mux’a yüklenir.",
+};
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Row; muxConfigured: boolean }) {
   const client = useQueryClient();
-  const audio = lesson.kind === "audio", kind: MediaKind = audio ? "audio" : "video", text = media[kind];
+  const audio = lesson.kind === "audio", kind: MediaKind = audio ? "audio" : "video", text = lesson.kind === "live" ? recording : media[kind];
   const [percent, setPercent] = useState<number | null>(null);
   const [changing, setChanging] = useState(false);
   const [previewing, setPreviewing] = useState(false);

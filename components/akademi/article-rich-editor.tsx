@@ -29,7 +29,7 @@ import { ArticleImageNode } from "./article-image-node";
 import { ArticleToolbar, ImageDialog, LinkForm, ToolButton, blocks, insertDivider, insertImage, marks, normalizeUrl, setBlock, useFormatState, type FormatState } from "./article-editor-toolbar";
 import type { ImageChoice, UploadImage } from "./image-library";
 
-// Emits HTML; the server keeps only what cleanArticleHtml allows.
+// Emits HTML; the server keeps only what cleanRichHtml allows.
 
 const theme = {
   paragraph: "mb-4 leading-7",
@@ -51,7 +51,8 @@ const DIVIDER: ElementTransformer = {
 };
 const transformers: Transformer[] = [HEADING, QUOTE, UNORDERED_LIST, ORDERED_LIST, DIVIDER, BOLD_ITALIC_STAR, BOLD_STAR, ITALIC_STAR, STRIKETHROUGH, INLINE_CODE, LINK];
 
-export function ArticleRichEditor({ initialHtml, onChange, images, upload }: { initialHtml: string; onChange: (html: string) => void; images: ImageChoice[]; upload: UploadImage }) {
+/** Without `images` the editor has no image tools and is short, for notes. */
+export function ArticleRichEditor({ initialHtml, onChange, images }: { initialHtml: string; onChange: (html: string) => void; images?: { choices: ImageChoice[]; upload: UploadImage } }) {
   const config = {
     namespace: "academy-article-editor",
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, HorizontalRuleNode, ArticleImageNode],
@@ -67,20 +68,21 @@ export function ArticleRichEditor({ initialHtml, onChange, images, upload }: { i
     },
   };
 
-  return <LexicalComposer initialConfig={config}><EditorShell onChange={onChange} images={images} upload={upload} /></LexicalComposer>;
+  return <LexicalComposer initialConfig={config}><EditorShell onChange={onChange} images={images} /></LexicalComposer>;
 }
 
-function EditorShell({ onChange, images, upload }: { onChange: (html: string) => void; images: ImageChoice[]; upload: UploadImage }) {
+function EditorShell({ onChange, images }: { onChange: (html: string) => void; images?: { choices: ImageChoice[]; upload: UploadImage } }) {
   const [editor] = useLexicalComposerContext();
   const format = useFormatState();
   const [imageOpen, setImageOpen] = useState(false);
+  const openImages = images && (() => setImageOpen(true));
   const [words, setWords] = useState(0);
 
   return <>
     <div className="rounded-xl border border-input bg-white focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-      <ArticleToolbar state={format} onImage={() => setImageOpen(true)} />
+      <ArticleToolbar state={format} onImage={openImages} />
       <div className="relative px-6 py-6 sm:px-10">
-        <RichTextPlugin contentEditable={<ContentEditable aria-label="Yazı içeriği" className="mx-auto min-h-96 max-w-[72ch] text-[16px] text-foreground outline-none" />}
+        <RichTextPlugin contentEditable={<ContentEditable aria-label="Yazı içeriği" className={cn("mx-auto max-w-[72ch] text-[16px] text-foreground outline-none", images ? "min-h-96" : "min-h-32")} />}
           placeholder={<p className="pointer-events-none absolute top-6 left-6 text-sm text-muted-foreground sm:left-10">Yazmaya başlayın veya blok eklemek için “/” yazın…</p>} ErrorBoundary={LexicalErrorBoundary} />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2 text-xs text-muted-foreground">
@@ -94,9 +96,9 @@ function EditorShell({ onChange, images, upload }: { onChange: (html: string) =>
     <HorizontalRulePlugin />
     <TabIndentationPlugin maxIndent={3} />
     <MarkdownShortcutPlugin transformers={transformers} />
-    <SlashMenu onImage={() => setImageOpen(true)} />
+    <SlashMenu onImage={openImages} />
     <SelectionBar state={format} />
-    <ImageDialog open={imageOpen} onOpenChange={setImageOpen} images={images} upload={upload} onInsert={(src, alt) => insertImage(editor, src, alt)} />
+    {images && <ImageDialog open={imageOpen} onOpenChange={setImageOpen} images={images.choices} upload={images.upload} onInsert={(src, alt) => insertImage(editor, src, alt)} />}
     <OnChangePlugin ignoreSelectionChange onChange={(state, current) => state.read(() => {
       onChange($generateHtmlFromNodes(current));
       const text = $getRoot().getTextContent().trim();
@@ -109,14 +111,14 @@ class SlashOption extends MenuOption {
   constructor(readonly label: string, readonly Icon: LucideIcon, readonly keywords: string, readonly run: (editor: LexicalEditor) => void) { super(label); }
 }
 
-function SlashMenu({ onImage }: { onImage: () => void }) {
+function SlashMenu({ onImage }: { onImage?: () => void }) {
   const [editor] = useLexicalComposerContext();
   const [query, setQuery] = useState<string | null>(null);
   const triggerFn = useBasicTypeaheadTriggerMatch("/", { minLength: 0 });
   const search = (query ?? "").toLocaleLowerCase("tr-TR");
   const options = [
     ...blocks.map(block => new SlashOption(block.label, block.icon, block.keywords, current => setBlock(current, block.value))),
-    new SlashOption("Görsel", ImagePlus, "görsel gorsel resim fotoğraf image", onImage),
+    ...(onImage ? [new SlashOption("Görsel", ImagePlus, "görsel gorsel resim fotoğraf image", onImage)] : []),
     new SlashOption("Ayraç", Minus, "ayraç ayrac çizgi divider", insertDivider),
   ].filter(option => `${option.label} ${option.keywords}`.toLocaleLowerCase("tr-TR").includes(search));
 

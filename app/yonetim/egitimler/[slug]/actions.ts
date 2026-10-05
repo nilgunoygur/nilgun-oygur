@@ -19,9 +19,9 @@ import type { FormState } from "@/components/akademi/form-status";
 
 const errorMessage = (error: unknown) => error instanceof z.ZodError ? "Lütfen ders alanlarını kontrol edin: " + error.issues[0]?.message : error instanceof Error && !["UNAUTHORIZED", "FORBIDDEN"].includes(error.message) && !error.message.includes("query") ? error.message : "İşlem tamamlanamadı. Yönetim oturumunuzu kontrol edin.";
 const report = (error: unknown): FormState => ({ status: "error", message: errorMessage(error) });
-function changed(courseId: string) {
-  revalidatePath(`/yonetim/egitimler/${courseId}`);
-  revalidatePath(`/akademi/hesabim/${courseId}`);
+function changed() {
+  revalidatePath("/yonetim/egitimler/[slug]", "page");
+  revalidatePath("/akademi/hesabim/[slug]", "page");
   revalidatePath("/akademi/hesabim");
 }
 export async function addLessons(_: FormState, form: FormData): Promise<FormState> {
@@ -29,7 +29,7 @@ export async function addLessons(_: FormState, form: FormData): Promise<FormStat
     const viewer = await requireOwner();
     const courseId = z.uuid().parse(form.get("courseId"));
     await createLessons(getDatabase(), viewer.user.id, courseId, z.enum(["video", "live", "audio", "template"]).parse(form.get("kind")));
-    changed(courseId);
+    changed();
     return { status: "success", message: "Taslak dersler eklendi. İçerikleri hazırlayıp yayınlayabilirsiniz." };
   } catch (error) { return report(error); }
 }
@@ -37,7 +37,7 @@ export async function saveLesson(values: z.input<typeof lessonInput>): Promise<F
   try {
     const viewer = await requireOwner();
     const input = await updateLesson(getDatabase(), viewer.user.id, values);
-    changed(input.courseId);
+    changed();
     return { status: "success", message: input.status === "published" ? "Ders öğrencilerinize açıldı." : "Taslak kaydedildi." };
   } catch (error) { return report(error); }
 }
@@ -46,7 +46,7 @@ export async function saveLessonOrder(courseId: string, lessonIds: string[]): Pr
     const viewer = await requireOwner();
     const id = z.uuid().parse(courseId);
     await reorderLessons(getDatabase(), viewer.user.id, id, z.array(z.uuid()).max(1000).parse(lessonIds));
-    changed(id);
+    changed();
     return { status: "success", message: "Ders sırası kaydedildi." };
   } catch (error) { return report(error); }
 }
@@ -55,13 +55,13 @@ export async function removeLesson(courseId: string, lessonId: string): Promise<
     const viewer = await requireOwner();
     const id = z.uuid().parse(courseId);
     await deleteStoredFiles(await deleteLesson(getDatabase(), viewer.user.id, id, z.uuid().parse(lessonId)));
-    changed(id);
+    changed();
     return { status: "success", message: "Ders silindi." };
   } catch (error) { return report(error); }
 }
 async function mediaLesson(lessonId: string) {
   const [lesson] = await getDatabase().select().from(lessons).where(eq(lessons.id, z.uuid().parse(lessonId)));
-  if (!lesson || lesson.kind === "live") throw new Error("Ders bulunamadı.");
+  if (!lesson) throw new Error("Ders bulunamadı.");
   return lesson;
 }
 /** null when the asset suits the lesson. */
@@ -98,7 +98,7 @@ export async function checkUpload(lessonId: string, uploadId: string, peaks?: nu
   if (problem) return { status: "failed", message: `${problem} Yüklenen dosya Mux kütüphanenizde duruyor.` };
   await attachAsset(getDatabase(), viewer.user.id, lesson, { muxAssetId: asset.id, signedPlaybackId: asset.signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio, peaks: lesson.kind === "audio" ? waveform.safeParse(peaks).data : undefined },
     lesson.kind === "audio" ? "Yüklenen ses kaydı derse bağlandı" : "Yüklenen video derse bağlandı");
-  changed(lesson.courseId);
+  changed();
   return { status: "ready" };
 }
 
@@ -137,7 +137,7 @@ export async function attachMuxAsset(lessonId: string, rawAssetId: string): Prom
     if (captioning) await muxRequest(`assets/${id}/tracks/${asset.audioTrackId}/generate-subtitles`, { generated_subtitles: [captionLanguage] }).catch(() => undefined);
     if (!asset.title) await muxRequest(`assets/${id}`, { passthrough: lesson.id, meta: { title: lesson.title, external_id: lesson.id } }, "PATCH").catch(() => undefined);
     await attachAsset(getDatabase(), viewer.user.id, lesson, { muxAssetId: id, signedPlaybackId, durationSeconds: asset.durationSeconds, aspectRatio: asset.aspectRatio }, `Mux kütüphanesinden ${audio ? "ses kaydı" : "video"} bağlandı`);
-    changed(lesson.courseId);
+    changed();
     return { status: "success", message: audio ? "Ses kaydı derse bağlandı." : captioning ? "Video derse bağlandı. Türkçe altyazı birkaç dakika içinde hazırlanır." : "Video derse bağlandı." };
   } catch (error) { return report(error); }
 }
@@ -174,9 +174,9 @@ export async function saveLessonFile(input: { lessonId: string; pathname: string
     if (!isLessonFilePath(lessonId, input.pathname)) throw new Error("Geçersiz dosya.");
     const stored = await storedFile(input.pathname);
     if (!stored) throw new Error("Yüklenen dosya bulunamadı. Lütfen yeniden yükleyin.");
-    const saved = await addLessonFile(getDatabase(), viewer.user.id, { lessonId, pathname: input.pathname, name: input.name, mime: stored.contentType, sizeBytes: stored.size })
+    await addLessonFile(getDatabase(), viewer.user.id, { lessonId, pathname: input.pathname, name: input.name, mime: stored.contentType, sizeBytes: stored.size })
       .catch(async error => { await deleteStoredFiles([input.pathname]); throw error; });
-    changed(saved.courseId);
+    changed();
     return { status: "success", message: "PDF derse eklendi." };
   } catch (error) { return report(error); }
 }
@@ -186,7 +186,7 @@ export async function deleteLessonFile(fileId: string): Promise<FormState> {
     const viewer = await requireOwner();
     const removed = await removeLessonFile(getDatabase(), viewer.user.id, z.uuid().parse(fileId));
     await deleteStoredFiles([removed.pathname]);
-    changed(removed.courseId);
+    changed();
     return { status: "success", message: "PDF silindi." };
   } catch (error) { return report(error); }
 }
