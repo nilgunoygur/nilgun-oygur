@@ -22,7 +22,8 @@ export function DateTimeField<T extends FieldValues, U = T>({ className, ...fram
     {(field, id, invalid) => {
       const [day, time]: string[] = field.value ? field.value.split("T") : [];
       const selected = field.value ? parseISO(field.value) : undefined;
-      return <Popover open={open} onOpenChange={next => { setOpen(next); if (!next) field.onBlur(); }}>
+      const toggle = (next: boolean) => { setOpen(next); if (!next) field.onBlur(); };
+      return <Popover open={open} onOpenChange={toggle}>
         <PopoverTrigger render={<Button type="button" variant="outline" id={id} ref={field.ref} className={cn("h-(--control-h) w-full justify-start font-normal", !field.value && "text-muted-foreground", className)} aria-invalid={invalid} />}>
           <CalendarClock data-icon="inline-start" />{selected ? format(selected, "d MMM yyyy · HH:mm", { locale: tr }) : placeholder}
         </PopoverTrigger>
@@ -37,7 +38,7 @@ export function DateTimeField<T extends FieldValues, U = T>({ className, ...fram
           </div>
           <div className="flex justify-between border-t p-2">
             <Button type="button" variant="ghost" size="sm" disabled={!field.value} onClick={() => field.onChange("")}>Temizle</Button>
-            <Button type="button" size="sm" onClick={() => setOpen(false)}>Tamam</Button>
+            <Button type="button" size="sm" onClick={() => toggle(false)}>Tamam</Button>
           </div>
         </PopoverContent>
       </Popover>;
