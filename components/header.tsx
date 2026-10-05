@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/sheet";
 import { nav as links } from "@/lib/content";
 import { AccountLink } from "@/components/account-link";
-import { QueryProvider } from "@/components/query-provider";
 import { AcademyNavLink } from "@/components/academy-nav-link";
 import { brand, brandLogo } from "@/lib/styles";
 function NavLinks({ pathname }: { pathname: string }) {
@@ -39,7 +38,6 @@ export function Header() {
   const reduced = useReducedMotion();
   const [open, setOpen] = useState(false);
   return (
-    <QueryProvider>
     <m.header
       className="fixed top-[calc(16px+var(--announcement-offset,0px))] left-1/2 z-40 flex h-[70px] w-[min(860px,calc(100%-40px))] [transform:translateX(-50%)] items-center justify-between rounded-[32px] bg-white/96 px-[26px] shadow-[0_5px_12px_#00000007,0_1px_2px_#00000004] backdrop-blur-[16px] max-tablet:top-[calc(12px+var(--announcement-offset,0px))] max-tablet:h-16 max-tablet:px-[18px] motion-reduce:opacity-100! motion-reduce:[transform:translateX(-50%)]!"
       initial={{ opacity: 0, transform: "translateX(-50%) translateY(-100px)" }}
@@ -101,6 +99,5 @@ export function Header() {
         </Sheet>
       </div>
     </m.header>
-    </QueryProvider>
   );
 }

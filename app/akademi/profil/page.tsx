@@ -1,4 +1,3 @@
-import { PageLoader } from "@/components/ui/spinner";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -9,6 +8,7 @@ import { akademi } from "@/lib/akademi/server";
 import { ProfileSettings } from "@/components/akademi/profile-settings";
 import { pageWidth, accountPage, kicker } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Profil ayarları", robots: { index: false, follow: false } };
 

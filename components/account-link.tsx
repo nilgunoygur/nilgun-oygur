@@ -7,6 +7,7 @@ import { BookOpen, ChevronDown, LifeBuoy, LogOut, Settings, ShoppingBag, LayoutD
 import { authClient } from "@/lib/auth/client";
 import { avatarSource } from "@/lib/auth/profile";
 import { accountOptions } from "@/app/akademi/hesabim/profile-actions";
+import { accountQueryKey } from "@/lib/akademi/account-query";
 import { refundNoticeCookie, refundNoticeDays } from "@/lib/akademi/claim-schema";
 import { closeNotice } from "@/components/akademi/dismissible";
 import { refundNoticeCopy } from "@/components/akademi/refund-notice";
@@ -23,18 +24,21 @@ export function AccountLink({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const userId = data?.user.emailVerified ? data.user.id : null;
   const client = useQueryClient();
-  const queryKey = ["account", userId];
-  // One request for both header menus (desktop and compact); refreshed when the window regains focus.
-  const { data: account } = useQuery({ queryKey, queryFn: userId ? () => accountOptions().catch((): Account => ({ isOwner: false, notices: [] })) : skipToken });
-  // Opening before the options arrive waits for them, so the owner link never pops in late.
+  const queryKey = accountQueryKey(userId);
+  // Shared by the desktop and compact menus.
+  const { data: account, isPending } = useQuery({ queryKey, queryFn: userId ? accountOptions : skipToken, staleTime: 300_000 });
+  // Opening waits for the options, so the owner link never pops in late.
   const [wanted, setWanted] = useState(false);
-  const menuOpen = wanted && !!account, waiting = wanted && !account;
+  const menuOpen = wanted && !isPending, waiting = wanted && isPending;
   const [error, setError] = useState("");
   if (!data?.user.emailVerified) return null;
   const user = data.user;
   const firstName = user.name.trim().split(/\s+/)[0] || "Hesabım";
   const notices = account?.notices ?? [];
-  const dismiss = (id: string) => { closeNotice(refundNoticeCookie(id), refundNoticeDays); client.setQueryData<Account>(queryKey, current => current && { ...current, notices: current.notices.filter(notice => notice.id !== id) }); };
+  const dismiss = (id: string) => {
+    closeNotice(refundNoticeCookie(id), refundNoticeDays);
+    client.setQueryData<Account>(queryKey, current => current && { ...current, notices: current.notices.filter(notice => notice.id !== id) });
+  };
   return <>
     <DropdownMenu open={menuOpen} onOpenChange={setWanted}>
       <DropdownMenuTrigger render={<Button variant="ghost" className="h-auto min-h-11 gap-2 rounded-full px-1.5 py-1.5 hover:bg-mist hover:text-forest aria-expanded:bg-mist aria-expanded:text-forest" />} aria-label={`Hesap menüsü — ${user.name}${notices.length ? `, ${notices.length} bildirim` : ""}`}>
@@ -51,16 +55,18 @@ export function AccountLink({ compact = false }: { compact?: boolean }) {
             </span>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
-        {notices.length > 0 && <section aria-label="Bildirimler" className="mb-2 grid gap-2">
-          <p className="px-3 pt-1 text-[10px] font-semibold tracking-[1.6px] text-stone">BİLDİRİMLER</p>
+        {notices.length > 0 && <DropdownMenuGroup className="mb-2 grid gap-2">
+          <DropdownMenuLabel className="px-3 pt-1 pb-0 text-[10px] font-semibold tracking-[1.6px] text-stone">BİLDİRİMLER</DropdownMenuLabel>
           {notices.map(notice => <div key={notice.id} className="relative rounded-2xl border border-forest/10 p-3 pr-9 text-stone [&_p]:text-[12px] [&_p]:leading-[1.45]">
-            <p className="!text-[13px] font-semibold text-forest">{refundNoticeCopy[notice.status].title}</p>
-            <p className="mt-1 font-medium text-foreground/85">{notice.course} · Sipariş #{notice.orderId}</p>
-            <p className="mt-1">{refundNoticeCopy[notice.status].message}</p>
-            {notice.note && <p className="mt-1 whitespace-pre-wrap break-words">Yanıt: {notice.note}</p>}
-            {notice.status !== "pending" && <Button type="button" variant="ghost" size="icon-sm" className="absolute top-1 right-1" aria-label="Bu bildirimi kapat" onClick={() => dismiss(notice.id)}><X /></Button>}
+            <div id={`notice-${notice.id}`}>
+              <p className="!text-[13px] font-semibold text-forest">{refundNoticeCopy[notice.status].title}</p>
+              <p className="mt-1 font-medium text-foreground/85">{notice.course} · Sipariş #{notice.orderId}</p>
+              <p className="mt-1">{refundNoticeCopy[notice.status].message}</p>
+              {notice.note && <p className="mt-1 whitespace-pre-wrap break-words">Yanıt: {notice.note}</p>}
+            </div>
+            {notice.dismissible && <DropdownMenuItem closeOnClick={false} aria-label="Bildirimi kapat" aria-describedby={`notice-${notice.id}`} className="absolute top-1 right-1 size-7 justify-center rounded-lg p-0 focus:bg-mist [&_svg]:size-4" onClick={() => dismiss(notice.id)}><X /></DropdownMenuItem>}
           </div>)}
-        </section>}
+        </DropdownMenuGroup>}
         <DropdownMenuGroup>
           <DropdownMenuItem className={menuItemClass} render={<Link href="/akademi/hesabim" />}><BookOpen />Eğitimlerim</DropdownMenuItem>
           <DropdownMenuItem className={menuItemClass} render={<Link href="/akademi/profil" />}><Settings />Profil ayarları</DropdownMenuItem>

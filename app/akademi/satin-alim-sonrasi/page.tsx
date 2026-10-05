@@ -1,4 +1,3 @@
-import { Spinner } from "@/components/ui/spinner";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -7,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { accountCard, accountPage, kicker, pageWidth, textLink } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { getViewer } from "@/lib/auth/viewer";
+import { Spinner } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Satın aldığınız eğitime ulaşın", robots: { index: false, follow: false } };
 

@@ -47,7 +47,7 @@ export async function courseCards(): Promise<Record<string, { title: string; ima
   try { return await akademi().catalog.cards(); } catch { return {}; }
 }
 
-/** The owner's refund list, titled from the cached catalog instead of a Shopier call per request. */
+/** Titled from the cached catalog, not a Shopier call per request. */
 export async function ownerRefundList(params: Partial<RefundListParams>) {
   const [{ items, ...list }, cards] = await Promise.all([akademi().owner.refundRequests(params), courseCards()]);
   return { ...list, items: items.map(({ productId, ...item }) => ({ ...item, course: cards[productId]?.title ?? item.course.replaceAll("-", " ") })) };

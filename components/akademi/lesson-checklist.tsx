@@ -33,11 +33,15 @@ export function LessonChecklist({ lessons }: { lessons: Lesson[] }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
-  // Rechecked while a lesson is open, and paused in a hidden tab: a refund or changed prerequisite closes the lessons.
+  // A refund or changed prerequisite closes the lessons mid-session; once lost, the check stops.
   const access = useQuery({
-    queryKey: ["lesson-access", selected],
+    queryKey: lessonQueryKeys.access(selected),
     queryFn: selected ? async () => { const result = await checkLessonAccess(selected); if (result.allowed === false) router.refresh(); return result; } : skipToken,
-    refetchInterval: query => query.state.data?.allowed === false ? false : accessCheckMs, staleTime: 0, gcTime: 0,
+    refetchInterval: query => stillAllowed(query) && accessCheckMs,
+    refetchOnWindowFocus: stillAllowed,
+    refetchOnReconnect: stillAllowed,
+    staleTime: 0,
+    gcTime: 0,
   });
   const accessLost = access.data?.allowed === false;
   const prerequisites = lessonPrerequisites(lessons, completed);
@@ -135,14 +139,21 @@ type PlayerProps = { lessonId: string; title: string; startTime: number; onTime:
 type Playback = Awaited<ReturnType<typeof getPlayback>>;
 const playable = (playback: Playback) => playback.playbackId && playback.tokens ? { playbackId: playback.playbackId, tokens: playback.tokens } : null;
 
-// Tokens are short-lived: never reuse a cached one, and a refetch on focus would restart the player.
+const lessonQueryKeys = {
+  access: (lessonId: string | null) => ["lesson-access", lessonId] as const,
+  playback: (kind: "audio" | "video", lessonId: string) => ["lesson-playback", kind, lessonId] as const,
+};
+// Never reuse a cached token; a focus refetch would restart the player.
 const playbackQuery = { staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false, refetchOnReconnect: false } as const;
 const accessCheckMs = 30_000;
+/** The video renews its token this far into the token's life. */
+const renewAt = 0.75;
+const stillAllowed = (query: { state: { data?: { allowed: boolean | null } } }) => query.state.data?.allowed !== false;
 
 // The audio player asks for another token only when playback fails.
 function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { duration: number; peaks: number[] | null }) {
   const { savePosition, progressError } = useSavedPosition(lessonId, startTime, onTime);
-  const { data: playback, isError } = useQuery({ queryKey: ["lesson-playback", lessonId], queryFn: () => getPlayback(lessonId), ...playbackQuery });
+  const { data: playback, isError } = useQuery({ queryKey: lessonQueryKeys.playback("audio", lessonId), queryFn: () => getPlayback(lessonId), ...playbackQuery });
   if (isError) return <p role="alert" className="rounded-2xl bg-mist p-6">Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın.</p>;
   const source = playback && playable(playback);
   if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><Spinner size={32} aria-label="Ses kaydı yükleniyor" /></div>;
@@ -170,11 +181,11 @@ function Homework({ documents }: { documents: Document[] }) {
 function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerProps) {
   const { position, savePosition, progressError, setProgressError } = useSavedPosition(lessonId, startTime, onTime);
   const playing = useRef(false);
-  // A new token remounts the player, so each fetch records where to resume. It keeps renewing in a hidden tab, where the lesson may still be playing.
+  // Each renewal remounts the player, so it records where to resume; a failed one leaves the current player running.
   const { data: playback, isError } = useQuery({
-    queryKey: ["lesson-playback", lessonId],
+    queryKey: lessonQueryKeys.playback("video", lessonId),
     queryFn: async () => ({ ...await getPlayback(lessonId), resume: { time: position.current, playing: playing.current } }),
-    ...playbackQuery, refetchInterval: playbackLifetimeMs.video * 0.75, refetchIntervalInBackground: true,
+    ...playbackQuery, refetchInterval: playbackLifetimeMs.video * renewAt, refetchIntervalInBackground: true,
   });
   if (isError && !playback) return <p role="alert" className="rounded-2xl bg-mist p-6">Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın.</p>;
   if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><Spinner size={32} className="text-forest" aria-label="Video yükleniyor" /></div>;

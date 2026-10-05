@@ -1,12 +1,11 @@
-import { PageLoader } from "@/components/ui/spinner";
 import { Suspense } from "react";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { ownerRefundList } from "@/lib/akademi/server";
 import { OwnerRefundManagement } from "@/components/akademi/owner-refund-management";
-import { pageWidth, backLink, ownerSection, accountTitle, kicker } from "@/lib/styles";
+import { pageWidth, ownerSection, accountTitle, kicker } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
+import { OwnerBackLink } from "@/components/akademi/owner-back-link";
 
 export const metadata = { title: "İade talepleri" };
 export default function Refunds() {
@@ -15,5 +14,5 @@ export default function Refunds() {
 async function Content() {
   await ownerPage();
   const initialData = await ownerRefundList({ status: "pending" });
-  return <><Link href="/yonetim" className={backLink}><ArrowLeft className="size-4" /> Genel bakış</Link><header className="mb-8"><p className={kicker}>AKADEMİ YÖNETİMİ</p><h1 className={accountTitle}>İade talepleri</h1><p className="mt-3 max-w-2xl text-muted-foreground">Talepleri inceleyin, onaylayın veya reddedin. Kararlar ve Shopier’e gönderilen iadeler burada kayıtlı kalır.</p></header><OwnerRefundManagement initialData={initialData} /></>;
+  return <><OwnerBackLink /><header className="mb-8"><p className={kicker}>AKADEMİ YÖNETİMİ</p><h1 className={accountTitle}>İade talepleri</h1><p className="mt-3 max-w-2xl text-muted-foreground">Talepleri inceleyin, onaylayın veya reddedin. Kararlar ve Shopier’e gönderilen iadeler burada kayıtlı kalır.</p></header><OwnerRefundManagement initialData={initialData} /></>;
 }

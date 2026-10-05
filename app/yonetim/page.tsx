@@ -16,11 +16,11 @@ type Search = Promise<{ period?: string; from?: string; to?: string }>;
 const shortMonth = new Intl.DateTimeFormat("tr-TR", { month: "short", year: "2-digit", timeZone: "UTC" });
 const fullDay = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Istanbul" });
 const fullMonth = new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric", timeZone: "UTC" });
-const pointLabel = (unit: string, key: string) =>
-  unit === "day" ? fullDay.format(new Date(`${key}T12:00:00+03:00`)) : unit === "month" ? fullMonth.format(new Date(`${key}-01T12:00:00Z`)) : key;
+const labeller = (day: Intl.DateTimeFormat, month: Intl.DateTimeFormat) => (unit: string, key: string) =>
+  unit === "day" ? day.format(new Date(`${key}T12:00:00+03:00`)) : unit === "month" ? month.format(new Date(`${key}-01T12:00:00Z`)) : key;
+const axisLabel = labeller(shortDate, shortMonth), pointLabel = labeller(fullDay, fullMonth);
 const refundBar = "bg-[#d98a78]";
-const axisLabel = (unit: string, key: string) =>
-  unit === "day" ? shortDate.format(new Date(`${key}T12:00:00+03:00`)) : unit === "month" ? shortMonth.format(new Date(`${key}-01T12:00:00Z`)) : key;
+const chartHeight = 205, minAbove = 12, minBar = 4;
 
 export default function OwnerPage({ searchParams }: { searchParams: Search }) {
   return <section className={cn(pageWidth, ownerSection)}>
@@ -30,14 +30,12 @@ export default function OwnerPage({ searchParams }: { searchParams: Search }) {
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
   await ownerPage();
-  const { range, data, previous, chart } = await akademi().owner.overview.read(await searchParams);
+  const { range, data, chart } = await akademi().owner.overview.read(await searchParams);
+  const { previous } = data;
   const primaryRevenue = data.revenue.find(item => item.currency === "TRY");
   const otherRevenue = data.revenue.filter(item => item.currency !== "TRY");
-  const gross = primaryRevenue?.amount ?? 0, refunded = data.refunds.amount;
-  // Sales rise from the zero line and refunds hang below it, on one scale.
-  const peak = Math.max(...chart.points.map(item => item.amount)), trough = Math.max(...chart.points.map(item => item.refunded));
-  const scale = 205 / Math.max(1, peak + trough);
-  const above = Math.max(peak * scale, 12), below = trough * scale;
+  const gross = primaryRevenue?.amount ?? 0, refunded = data.refunds.amount, net = gross - refunded;
+  const versus = (now: number, before: number) => ({ now, before, days: previous.days });
   const periodName = { week: "Bu hafta", month: "Bu ay", year: "Bu yıl", custom: "Özel aralık" }[range.period];
   return <>
     <header className="mb-9 flex flex-wrap items-end justify-between gap-6">
@@ -46,10 +44,10 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
     </header>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric href="/yonetim/egitimler" trend={{ now: gross - refunded, before: previous.gross - previous.refunded, days: previous.days }} icon={<Wallet />} label="Net gelir" value={formatMoney(gross - refunded, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
-      <Metric href="/yonetim/egitimler" trend={{ now: data.orders, before: previous.orders, days: previous.days }} icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
-      <Metric href="/yonetim/iadeler" trend={{ now: refunded, before: previous.refunded, days: previous.days, lowerIsBetter: true }} icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
-      <Metric href="/yonetim/kullanicilar" trend={{ now: data.newUsers, before: previous.newUsers, days: previous.days, of: "yeni kayıt" }} icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
+      <Metric href="/yonetim/egitimler" trend={versus(net, previous.gross - previous.refunded)} icon={<Wallet />} label="Net gelir" value={formatMoney(net, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
+      <Metric href="/yonetim/egitimler" trend={versus(data.orders, previous.orders)} icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
+      <Metric href="/yonetim/iadeler" trend={{ ...versus(refunded, previous.refunded), lowerIsBetter: true }} icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
+      <Metric href="/yonetim/kullanicilar" trend={{ ...versus(data.newUsers, previous.newUsers), of: "yeni kayıt" }} icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
     </div>
 
     <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
@@ -59,23 +57,7 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
           <ul className="flex gap-4 text-[12px] text-stone"><li className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-mint" />Satış</li><li className="flex items-center gap-1.5"><span className={cn("size-2.5 rounded-full", refundBar)} />İade</li></ul>
         </CardHeader>
         <CardContent>
-        {data.activity.length || data.refundActivity.length ? <div className="relative mt-9 flex items-stretch gap-1.5" style={{ height: above + below }} role="list" aria-label="Türk lirası satış ve iade grafiği">
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 border-t border-forest/25" style={{ top: above }}><span className="absolute -top-2 right-full pr-1.5 text-[10px] leading-4 text-stone max-sm:hidden">0</span></div>
-          {chart.points.map((item, index) => {
-          const label = pointLabel(chart.unit, item.day);
-          // Hover or keyboard focus opens the figures; the edge columns anchor theirs inside the card.
-          return <div key={item.day} role="listitem" tabIndex={0} aria-label={`${label}: satış ${formatMoney(item.amount, "TRY")}, ${item.orders} sipariş, iade ${formatMoney(item.refunded, "TRY")}`} className="group relative flex min-w-0 flex-1 flex-col items-center rounded-lg outline-none hover:bg-mist/50 focus-visible:bg-mist/50">
-            <div className="flex w-full shrink-0 items-end justify-center" style={{ height: above }}><div className={cn("w-full max-w-12 rounded-t-lg transition-colors group-hover:bg-forest group-focus-visible:bg-forest", item.amount ? "bg-mint" : "bg-mist")} style={{ height: Math.max(4, item.amount * scale) }} /></div>
-            {item.refunded > 0 && <div className={cn("w-full max-w-12 rounded-b-lg", refundBar)} style={{ height: item.refunded * scale }} />}
-            <div role="tooltip" className={cn("pointer-events-none absolute bottom-[calc(100%+6px)] z-10 hidden w-max rounded-xl bg-forest px-3.5 py-2.5 text-[12px] leading-[1.6] text-white shadow-lg group-hover:block group-focus-visible:block", index < 2 ? "left-0" : index > chart.points.length - 3 ? "right-0" : "left-1/2 -translate-x-1/2")}>
-              <strong className="block text-[13px]">{label}</strong>
-              <span className="block">Satış: {formatMoney(item.amount, "TRY")} · {item.orders} sipariş</span>
-              <span className="block">İade: −{formatMoney(item.refunded, "TRY")}</span>
-              <span className="block font-semibold text-lime">Net: {formatMoney(item.amount - item.refunded, "TRY")}</span>
-            </div>
-            {index % Math.ceil(chart.points.length / 7) === 0 && <span className="absolute top-[calc(100%+8px)] text-[10px] text-stone max-sm:hidden">{axisLabel(chart.unit, item.day)}</span>}
-          </div>;
-        })}</div> : <div className="mt-8 flex h-[230px] items-center justify-center rounded-2xl bg-mist/60 text-[14px] text-stone">Bu dönemde henüz satış veya iade yok.</div>}
+        {data.activity.length || data.refundActivity.length ? <SalesChart chart={chart} /> : <div className="mt-8 flex h-[230px] items-center justify-center rounded-2xl bg-mist/60 text-[14px] text-stone">Bu dönemde henüz satış veya iade yok.</div>}
         <p className="mt-8 text-[12px] text-stone">Satışlar sıfır çizgisinin üstünde, Shopier’in tamamladığı iadeler altında gösterilir. Tutarları görmek için bir sütunun üzerine gelin.</p>
         </CardContent>
       </Card>
@@ -88,15 +70,44 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
   </>;
 }
 
+type Chart = Awaited<ReturnType<ReturnType<typeof akademi>["owner"]["overview"]["read"]>>["chart"];
+
+/** Sales above the zero line, refunds below, one scale. */
+function SalesChart({ chart }: { chart: Chart }) {
+  const peak = Math.max(...chart.points.map(item => item.amount)), trough = Math.max(...chart.points.map(item => item.refunded));
+  const scale = chartHeight / Math.max(1, peak + trough);
+  const above = Math.max(peak * scale, minAbove), below = trough * scale;
+  return <div className="relative mt-9 flex items-stretch gap-1.5" style={{ height: above + below }} role="list" aria-label="Türk lirası satış ve iade grafiği">
+    <div aria-hidden className="pointer-events-none absolute inset-x-0 border-t border-forest/25" style={{ top: above }}><span className="absolute -top-2 right-full pr-1.5 text-[10px] leading-4 text-stone max-sm:hidden">0</span></div>
+    {chart.points.map((item, index) => {
+      const label = pointLabel(chart.unit, item.day);
+      const align = index < 2 ? "left-0" : index >= chart.points.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2";
+      return <div key={item.day} role="listitem" tabIndex={0} aria-label={`${label}: satış ${formatMoney(item.amount, "TRY")}, ${item.orders} sipariş, iade ${formatMoney(item.refunded, "TRY")}`} className="group relative flex min-w-0 flex-1 flex-col items-center rounded-lg outline-none hover:bg-mist/50 focus-visible:bg-mist/50 focus-visible:ring-2 focus-visible:ring-forest/40">
+        <div className="flex w-full shrink-0 items-end justify-center" style={{ height: above }}><div className={cn("w-full max-w-12 rounded-t-lg transition-colors group-hover:bg-forest group-focus-visible:bg-forest", item.amount ? "bg-mint" : "bg-mist")} style={{ height: Math.max(minBar, item.amount * scale) }} /></div>
+        {item.refunded > 0 && <div className={cn("w-full max-w-12 rounded-b-lg", refundBar)} style={{ height: item.refunded * scale }} />}
+        <div aria-hidden className={cn("pointer-events-none absolute bottom-[calc(100%+6px)] z-10 hidden w-max rounded-xl bg-forest px-3.5 py-2.5 text-[12px] leading-[1.6] text-white shadow-lg group-hover:block group-focus-visible:block", align)}>
+          <strong className="block text-[13px]">{label}</strong>
+          <span className="block">Satış: {formatMoney(item.amount, "TRY")} · {item.orders} sipariş</span>
+          <span className="block">İade: −{formatMoney(item.refunded, "TRY")}</span>
+          <span className="block font-semibold text-lime">Net: {formatMoney(item.amount - item.refunded, "TRY")}</span>
+        </div>
+        {index % Math.ceil(chart.points.length / 7) === 0 && <span className="absolute top-[calc(100%+8px)] text-[10px] text-stone max-sm:hidden">{axisLabel(chart.unit, item.day)}</span>}
+      </div>;
+    })}
+  </div>;
+}
+
 type TrendInput = { now: number; before: number; days: number; lowerIsBetter?: boolean; of?: string };
 
-/** The change against the previous period of the same length; a percentage needs a non-zero base. */
+/** Change against the previous equal-length period; a percentage needs a non-zero base. */
 function Trend({ now, before, days, lowerIsBetter = false, of }: TrendInput) {
-  const difference = now - before;
-  const Icon = difference > 0 ? TrendingUp : difference < 0 ? TrendingDown : Minus;
-  const tone = difference === 0 ? "text-stone" : (difference > 0) !== lowerIsBetter ? "text-emerald-700" : "text-[#b04a36]";
-  const amount = difference === 0 ? "Değişim yok" : before === 0 ? "Önceki dönemde yoktu" : `%${Math.round(Math.abs(difference) / Math.abs(before) * 100).toLocaleString("tr-TR")} ${difference > 0 ? "artış" : "azalış"}`;
-  return <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[12px] text-stone"><span className={cn("inline-flex items-center gap-1 font-semibold", tone)}><Icon className="size-3.5" />{amount}</span>{of ? `${of}, ` : ""}önceki {days} güne göre</p>;
+  const difference = now - before, up = difference > 0;
+  const versus = `${of ? `${of}, ` : ""}önceki ${days} güne göre`;
+  const line = "mt-2 flex flex-wrap items-center gap-x-1.5 text-[12px] text-stone", figure = "inline-flex items-center gap-1 font-semibold";
+  if (difference === 0) return <p className={line}><span className={figure}><Minus className="size-3.5" />Değişim yok</span>{versus}</p>;
+  const Icon = up ? TrendingUp : TrendingDown;
+  const amount = before === 0 ? "Önceki dönemde yoktu" : `%${Math.round(Math.abs(difference) / Math.abs(before) * 100).toLocaleString("tr-TR")} ${up ? "artış" : "azalış"}`;
+  return <p className={line}><span className={cn(figure, up !== lowerIsBetter ? "text-emerald-700" : "text-[#b04a36]")}><Icon className="size-3.5" />{amount}</span>{versus}</p>;
 }
 
 function Metric({ href, icon, label, value, detail, trend }: { href: string; icon: React.ReactNode; label: string; value: string; detail: string; trend: TrendInput }) {

@@ -49,11 +49,16 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
         return requestRefund(db, userId, courseId, reason, refundNotification);
       },
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
-      /** The newest request per course; an approved one is dropped once the course is bought again. */
+      /** The newest request per course; an approved one is dropped once the course is bought again, and only a decided one can be dismissed. */
       async refundNotices(userId: string) {
-        const [requests, access] = await Promise.all([studentRefundRequests(db, userId, now()), activeCourseAccess(db, userId, now())]);
-        const active = new Set(access.map(item => item.courseId)), seen = new Set<string>();
-        return requests.filter(request => !seen.has(request.courseId) && seen.add(request.courseId) && (request.status !== "approved" || !active.has(request.courseId)));
+        const requests = await studentRefundRequests(db, userId, now());
+        const active = new Set(requests.some(request => request.status === "approved") ? (await activeCourseAccess(db, userId, now())).map(item => item.courseId) : []);
+        const seen = new Set<string>();
+        return requests.filter(request => {
+          if (seen.has(request.courseId)) return false;
+          seen.add(request.courseId);
+          return request.status !== "approved" || !active.has(request.courseId);
+        }).map(request => ({ ...request, dismissible: request.status !== "pending" }));
       },
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {

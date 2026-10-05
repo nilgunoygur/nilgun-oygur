@@ -1,4 +1,3 @@
-import { PageLoader } from "@/components/ui/spinner";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -8,6 +7,7 @@ import { ClaimOrderForm } from "@/components/akademi/claim-order-form";
 import { CourseAddExample } from "@/components/akademi/course-add-examples";
 import { pageWidth, accountPage, kicker, accountCard } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Shopier siparişi ekle", robots: { index: false, follow: false } };
 

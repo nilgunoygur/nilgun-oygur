@@ -45,7 +45,7 @@ export async function latestRefundRequest(db: Database, userId: string, courseId
 }
 
 /** Pending requests, and decided ones for `refundNoticeDays` after the decision. */
-export function studentRefundRequests(db: Database, userId: string, now = new Date()) {
+export function studentRefundRequests(db: Database, userId: string, now: Date) {
   return db.select({ id: refundRequests.id, courseId: courses.id, productId: courses.shopierProductId, orderId: shopierPurchases.shopierOrderId, status: refundRequests.status, ownerNote: refundRequests.ownerNote })
     .from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId))
     .where(and(eq(refundRequests.userId, userId), or(eq(refundRequests.status, "pending"), gt(refundRequests.decidedAt, new Date(now.getTime() - refundNoticeDays * 86_400_000)))))

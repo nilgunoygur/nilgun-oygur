@@ -2,6 +2,7 @@
 import { cookies, headers } from "next/headers";
 import { refresh } from "next/cache";
 import { requireStudent } from "@/lib/auth/viewer";
+import { authDestination, ownerHome } from "@/lib/auth/navigation";
 import { getAuth } from "@/lib/auth";
 import { akademi, courseCards } from "@/lib/akademi/server";
 import { refundNoticeCookie } from "@/lib/akademi/claim-schema";
@@ -10,13 +11,19 @@ import { profileInput } from "@/lib/auth/profile";
 import { contactInput, type ContactInput } from "@/lib/auth/contact";
 import type { FormState } from "@/components/akademi/form-status";
 
+/** The header menu's data: the owner link and the refund notices this student has not closed. */
 export async function accountOptions() {
   const viewer = await requireStudent();
-  const [requests, cards, closed] = await Promise.all([akademi().access.refundNotices(viewer.user.id), courseCards(), cookies()]);
-  // A pending request explains why a course is closed, so only a decided one can be dismissed.
-  const notices = requests.filter(request => request.status === "pending" || !closed.has(refundNoticeCookie(request.id)))
-    .map(request => ({ id: request.id, status: request.status, note: request.ownerNote, orderId: request.orderId, course: cards[request.productId]?.title ?? "Akademi eğitimi" }));
-  return { isOwner: viewer.owner, notices };
+  const [requests, closed] = await Promise.all([akademi().access.refundNotices(viewer.user.id), cookies()]);
+  const open = requests.filter(request => !request.dismissible || !closed.has(refundNoticeCookie(request.id)));
+  const cards = open.length ? await courseCards() : {};
+  return { isOwner: viewer.owner, notices: open.map(request => ({ id: request.id, status: request.status, dismissible: request.dismissible, note: request.ownerNote, orderId: request.orderId, course: cards[request.productId]?.title ?? "Akademi eğitimi" })) };
+}
+
+/** Where a sign-in leads: an owner with no destination of their own lands on the dashboard. */
+export async function postLoginDestination(next?: string) {
+  const viewer = await requireStudent().catch(() => null);
+  return next === undefined && viewer?.owner ? ownerHome : authDestination(next);
 }
 
 export async function saveProfile(input: z.input<typeof profileInput>): Promise<FormState> {

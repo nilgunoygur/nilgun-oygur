@@ -3,7 +3,7 @@ import { emailField } from "../auth/forms.ts";
 
 /** Here, not in the client component, so the server page can read it. */
 export const claimHintCookie = "akademi-claim-hint";
-/** A decided refund request is shown on the account page for this long, unless the student closes it. */
+/** Days a decided refund request stays in the account menu, unless the student closes it. */
 export const refundNoticeDays = 14;
 export const refundNoticeCookie = (requestId: string) => `akademi-refund-notice-${requestId}`;
 

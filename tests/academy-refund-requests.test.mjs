@@ -162,7 +162,7 @@ test("new refund requests atomically queue one owner email, addressed to the req
   assert.equal(await broken.request(), undefined, "a failed email enqueue rolls back the request so a retry can notify");
 });
 
-test("a decided request leaves the account page two weeks after the decision; a pending one stays", async () => {
+test("a decided request leaves the account menu two weeks after the decision; a pending one stays", async () => {
   const { studentRefundRequests } = await import("../lib/akademi/refund-requests.ts");
   const f = await fixture(), { akademi } = shop();
   await akademi.access.requestRefund(f.id, f.course.id, "Beklediğim gibi değildi.");

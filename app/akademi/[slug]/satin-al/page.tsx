@@ -11,14 +11,14 @@ import { CoursePrice } from "@/components/akademi/course-price";
 import { TrackedLink } from "@/components/analytics";
 import { courseEcommerce } from "@/lib/analytics";
 import { buttonVariants } from "@/components/ui/button";
-import { kicker, pageWidth } from "@/lib/styles";
+import { accountCard, inlineLink, kicker, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Satın al", robots: { index: false, follow: false } };
 
 export const generateStaticParams = catalogStaticParams;
 
-const panel = "mt-6 rounded-[24px] border border-forest/10 bg-white p-6 sm:p-8";
+const panel = cn(accountCard, "mt-6 shadow-none");
 const note = "text-[14px] leading-relaxed text-stone";
 
 // The course part is cached with the catalog; only the steps depend on the visitor.
@@ -36,7 +36,7 @@ export default async function Checkout({ params }: { params: Promise<{ slug: str
     <Suspense fallback={<div className={cn(panel, "min-h-[280px]")} />}>
       <CheckoutSteps course={course} />
     </Suspense>
-    <p className={cn(note, "mt-8 text-center")}>Ödemenizi yaptınız mı? <Link href="/akademi/satin-alim-sonrasi" className="font-medium text-forest underline underline-offset-4">Eğitiminize nasıl ulaşacağınızı görün</Link></p>
+    <p className={cn(note, "mt-8 text-center")}>Ödemenizi yaptınız mı? <Link href="/akademi/satin-alim-sonrasi" className={inlineLink}>Eğitiminize nasıl ulaşacağınızı görün</Link></p>
   </section>;
 }
 
@@ -57,10 +57,10 @@ async function CheckoutSteps({ course }: { course: CatalogCourse }) {
     <ol className="grid gap-6">
       <Step number={1} title="Shopier’de ödeyin">Ödeme sayfasında bu e-posta adresini yazın:<span className="mt-2 block w-fit max-w-full break-all rounded-xl bg-mist px-3.5 py-2 text-[15px] font-semibold text-forest">{email}</span></Step>
       <Step number={2} title="Eğitiminiz hesabınıza eklenir">Ödemeniz onaylanınca kendiliğinden eklenir; bir şey yapmanız gerekmez.</Step>
-      <Step number={3} title="Öğrenmeye başlayın">Bu siteye dönün ve <Link href="/akademi/hesabim" className="font-medium text-forest underline underline-offset-4">hesabınızdan</Link> eğitiminizi açın.</Step>
+      <Step number={3} title="Öğrenmeye başlayın">Bu siteye dönün ve <Link href="/akademi/hesabim" className={inlineLink}>hesabınızdan</Link> eğitiminizi açın.</Step>
     </ol>
     <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4"><PayButton course={course} signedIn />{secure}</div>
-    <p className={cn(note, "mt-6 border-t border-border pt-5")}>Shopier’de farklı bir e-posta kullanırsanız eğitimi <Link href="/akademi/siparis-ekle" className="font-medium text-forest underline underline-offset-4">sipariş numaranızla</Link> hesabınıza ekleyebilirsiniz.</p>
+    <p className={cn(note, "mt-6 border-t border-border pt-5")}>Shopier’de farklı bir e-posta kullanırsanız eğitimi <Link href="/akademi/siparis-ekle" className={inlineLink}>sipariş numaranızla</Link> hesabınıza ekleyebilirsiniz.</p>
   </div> : <div className={panel}>
     <h3 className="text-[20px] font-semibold text-forest">Önce hesabınıza girin</h3>
     <p className={cn(note, "mt-2")}>Eğitiminize ödemeden sonra hesabınızdan ulaşırsınız. Giriş yapın ya da ücretsiz hesap oluşturun; Shopier’de aynı e-posta adresini kullanın.</p>
