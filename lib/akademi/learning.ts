@@ -4,6 +4,9 @@ import type { Database } from "../db/types.ts";
 import { activeGrant } from "./course-access.ts";
 import { lessonDocuments } from "./lesson-files.ts";
 import { canJoinLiveSession, hasWatched } from "./access-policy.ts";
+import { lessonPrerequisites } from "./lesson-sequence.ts";
+
+const lessonOrder = () => [asc(modules.position), asc(modules.createdAt), asc(modules.id), asc(lessons.position), asc(lessons.createdAt), asc(lessons.id)];
 
 /** Private learning reads never depend on whether the product is still for sale. Homework PDFs are exposed by id only. */
 export async function studentCourse(db: Database, userId: string, courseId: string, now = new Date()) {
@@ -22,7 +25,7 @@ export async function studentCourse(db: Database, userId: string, courseId: stri
     .leftJoin(liveSessions, eq(lessons.id, liveSessions.lessonId))
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
     .where(and(eq(lessons.courseId, courseId), eq(lessons.status, "published"), eq(modules.status, "published")))
-    .orderBy(asc(modules.position), asc(lessons.position), asc(lessons.createdAt));
+    .orderBy(...lessonOrder());
   const documents = await lessonDocuments(db, rows.map(row => row.id));
   return { course, grant, lessons: rows.map(row => ({ ...row, documents: documents(row.id) })) };
 }
@@ -36,7 +39,16 @@ export async function accessibleLesson(db: Database, userId: string, lessonId: s
     .where(and(eq(lessons.id, lessonId), eq(lessons.status, "published"), eq(modules.status, "published")));
   if (!row) return null;
   const grant = await activeGrant(db, userId, row.lesson.courseId, now);
-  return grant ? { ...row, grant } : null;
+  if (!grant) return null;
+  if (row.lesson.kind !== "live") {
+    const sequence = await db.select({ id: lessons.id, title: lessons.title, kind: lessons.kind, completedAt: lessonProgress.completedAt }).from(lessons)
+      .innerJoin(modules, eq(modules.id, lessons.moduleId))
+      .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, userId)))
+      .where(and(eq(lessons.courseId, row.lesson.courseId), eq(lessons.status, "published"), eq(modules.status, "published"))).orderBy(...lessonOrder());
+    const prerequisites = lessonPrerequisites(sequence, new Set(sequence.filter(step => step.completedAt).map(step => step.id)));
+    if (prerequisites.get(lessonId)) return null;
+  }
+  return { ...row, grant };
 }
 
 export async function saveProgress(db: Database, userId: string, lessonId: string, input: { completed?: boolean; position?: number }, now = new Date()) {

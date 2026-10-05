@@ -10,7 +10,9 @@ import { CATALOG_TAG, type CatalogCourse } from "./catalog";
 
 let instance: Akademi | undefined;
 export function akademi() {
-  return instance ??= createAkademi({ db: getDatabase(), shopier: getShopier() });
+  if (instance) return instance;
+  const settings = config();
+  return instance = createAkademi({ db: getDatabase(), shopier: getShopier(), refundNotification: settings.enabled.email ? { encryptionKey: settings.auth.emailKey!, siteUrl: settings.auth.url ?? settings.siteUrl } : undefined });
 }
 
 const catalogLife = { stale: 300, revalidate: 600, expire: 86_400 };

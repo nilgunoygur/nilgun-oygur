@@ -7,6 +7,14 @@ import { playbackExpiresAt, playbackLifetimeMs } from "@/lib/akademi/access-poli
 import { playbackTokens } from "@/lib/video/mux";
 
 const progressInput = z.object({ lessonId: z.uuid(), completed: z.boolean().optional(), position: z.number().int().min(0).max(604800).optional() });
+
+/** Polled by open lessons so a refund or changed prerequisite closes them. */
+export async function checkLessonAccess(lessonId: string) {
+  try {
+    const viewer = await requireStudent();
+    return { allowed: Boolean(await accessibleLesson(getDatabase(), viewer.user.id, z.uuid().parse(lessonId))) };
+  } catch (error) { return { allowed: error instanceof Error && error.message === "UNAUTHORIZED" ? false : null }; }
+}
 export async function updateProgress(input: z.infer<typeof progressInput>) {
   try {
     const viewer = await requireStudent();

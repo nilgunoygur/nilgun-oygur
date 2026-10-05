@@ -1,6 +1,7 @@
 "use server";
 import { refresh } from "next/cache";
 import { requireStudent } from "@/lib/auth/viewer";
+import { deliverPendingEmailsAfterResponse } from "@/lib/email";
 import { akademi } from "@/lib/akademi/server";
 import { z } from "zod";
 import { claimSchema, refundRequestSchema, type ClaimInput } from "@/lib/akademi/claim-schema";
@@ -49,7 +50,7 @@ export async function requestRefund(courseId: string, values: z.input<typeof ref
   if (!z.uuid().safeParse(courseId).success || !input.success) return { status: "error", message: input.error?.issues[0].message ?? "Geçersiz istek." };
   try {
     const outcome = await akademi().access.requestRefund(viewer.user.id, courseId, input.data.reason);
-    if (outcome === "requested") refresh();
+    if (outcome === "requested") { deliverPendingEmailsAfterResponse(); refresh(); }
     return { status: outcome === "requested" ? "success" : "error", message: refundMessages[outcome] };
   } catch {
     return { status: "error", message: "İade talebi şu anda alınamıyor. Lütfen biraz sonra yeniden deneyin." };

@@ -18,11 +18,11 @@ test("access is buyer/course specific, starts inclusively, and expires exclusive
   ]) assert.equal(hasActiveAccess(candidate, user, course, time), false);
 });
 
-test("playback renewal rechecks revocation and never exceeds ten minutes or expiry", () => {
-  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now, playbackLifetimeMs.video), now.getTime() / 1000 + 600);
+test("playback renewal rechecks revocation and bounds both media kinds to two minutes or expiry", () => {
+  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now, playbackLifetimeMs.video), now.getTime() / 1000 + 120);
   const short = { ...grant, expiresAt: new Date(now.getTime() + 15_999) };
   assert.equal(playbackExpiresAt(short, "student-a", "course-a", now, playbackLifetimeMs.video), now.getTime() / 1000 + 15);
-  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now, playbackLifetimeMs.audio), now.getTime() / 1000 + 6 * 3600, "a recording's token lasts a sitting");
+  assert.equal(playbackExpiresAt(grant, "student-a", "course-a", now, playbackLifetimeMs.audio), now.getTime() / 1000 + 120, "recordings use the same bounded access window");
   assert.equal(playbackExpiresAt(short, "student-a", "course-a", now, playbackLifetimeMs.audio), now.getTime() / 1000 + 15, "but never past the grant");
   assert.equal(playbackExpiresAt({ ...grant, revokedAt: now }, "student-a", "course-a", now, playbackLifetimeMs.video), null);
   assert.equal(playbackExpiresAt(grant, "student-b", "course-a", now, playbackLifetimeMs.video), null);

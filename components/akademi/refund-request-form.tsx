@@ -12,7 +12,7 @@ export function RefundRequestForm({ courseId }: { courseId: string }) {
 
   return <FormShell form={form} onSubmit={submit}>
     <TextareaField control={form.control} name="reason" label="İade nedeniniz" rows={4} maxLength={1000}
-      description="Talebiniz incelenir. Onaylanırsa ödemeniz Shopier üzerinden iade edilir ve eğitim erişiminiz kapanır." />
+      description="Talebi gönderdiğinizde tüm derslere erişiminiz durdurulur. Talep reddedilirse erişiminiz yeniden açılır; onaylanırsa eğitim hesabınızdan kaldırılır ve ödemeniz Shopier üzerinden iade edilir." />
     <FormMessage />
     <div><SubmitButton variant="outline" pendingLabel="Gönderiliyor…">İade talebi gönder</SubmitButton></div>
   </FormShell>;

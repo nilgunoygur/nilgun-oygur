@@ -38,6 +38,12 @@ export const refundDecisionSchema = z.discriminatedUnion("decision", [
 ]);
 export type RefundDecisionInput = z.input<typeof refundDecisionSchema>;
 
+export const refundStatuses = ["pending", "approved", "declined"] as const;
+export type RefundStatus = typeof refundStatuses[number];
+export const refundPageSize = 20;
+export const refundListSchema = z.object({ status: z.enum([...refundStatuses, "all"]).default("pending"), search: z.string().trim().max(100).default(""), page: z.coerce.number().int().min(1).max(10000).default(1) });
+export type RefundListParams = z.output<typeof refundListSchema>;
+
 export const coverRules = { types: ["image/jpeg", "image/png"], maxBytes: 4 * 1024 * 1024, hint: "JPG veya PNG; en fazla 4 MB." };
 
 export const linkSchema = z.object({ url: z.string().trim().min(1, "Bir bağlantı yazın.").max(2048) });

@@ -10,17 +10,19 @@ import { handleShopierWebhook } from "./shopier-webhook.ts";
 import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
 import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
-import { latestRefundRequest, pendingRefundRequests, requestRefund } from "./refund-requests.ts";
+import type { RefundListParams } from "./owner-forms.ts";
+import { latestRefundRequest, pendingRefundRequests, requestRefund, listRefundRequests, studentRefundRequests, type RefundNotification } from "./refund-requests.ts";
 
 type Dependencies = {
   db: Database;
+  refundNotification?: RefundNotification;
   shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "listSucceededRefunds" | "createRefund" | "createProduct" | "updateProduct">;
   now?: () => Date;
 };
 
 // Composition root: wires the Akademi modules to one database and one Shopier adapter.
 // Production builds it from env in server.ts; tests build it with PGlite and a fake Shopier.
-export function createAkademi({ db, shopier, now = () => new Date() }: Dependencies) {
+export function createAkademi({ db, shopier, refundNotification, now = () => new Date() }: Dependencies) {
   const syncCatalog = () => syncCatalogFromShopier(db, shopier);
   const products = async () => (await shopier.listProducts()).products;
   const ownerOverview = createOwnerOverview({ db, shopier, now });
@@ -44,9 +46,10 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
       },
       async requestRefund(userId: string, courseId: string, reason: string) {
         if (!await consumeAttempt(db, `refund-request:${userId}`, { max: 3, windowMs: 86_400_000, now: now().getTime() })) return "rate_limited" as const;
-        return requestRefund(db, userId, courseId, reason);
+        return requestRefund(db, userId, courseId, reason, refundNotification);
       },
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
+      refundRequests: (userId: string) => studentRefundRequests(db, userId),
       /** Reconciliation: replays recent orders and resyncs the catalog; idempotent. */
       async replayRecentOrders(days = 7) {
         const [refunds, orders] = await Promise.all([shopier.listSucceededRefunds(), shopier.listOrdersSince(new Date(now().getTime() - days * 86_400_000))]);
@@ -65,6 +68,11 @@ export function createAkademi({ db, shopier, now = () => new Date() }: Dependenc
     },
     owner: {
       overview: ownerOverview,
+      async refundRequests(input: Partial<RefundListParams>) {
+        const [result, catalog] = await Promise.all([listRefundRequests(db, input), products().catch(() => [])]);
+        const titles = new Map(catalog.map(product => [product.id, product.title]));
+        return { ...result, items: result.items.map(({ productId, ...item }) => ({ ...item, course: titles.get(productId) ?? item.course.replaceAll("-", " ") })) };
+      },
       /** JSON-safe; shared by the page and GET /api/yonetim/courses. */
       async catalogSnapshot() {
         const [{ courses, recentSales }, attention, refundReviews, refundRequests] = await Promise.all([ownerCatalog(db, await products()), failedEvents(db), partialRefundReviews(db), pendingRefundRequests(db)]);

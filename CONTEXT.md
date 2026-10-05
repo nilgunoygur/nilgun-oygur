@@ -6,15 +6,15 @@
 
 **Purchase**: one paid Shopier order line for a course, keyed by order and course, matched to a student by the buyer email.
 
-**Refund request**: a student's request to refund the purchase behind their current access to a course. The owner approves it (the site asks Shopier to refund an amount) or declines it with a note. The request never changes access itself; a completed full refund from Shopier does.
+**Refund request**: a student's request to refund the purchase behind their current access to a course. The owner approves it (the site asks Shopier to refund an amount) or declines it with a note. A pending request suspends all course content. Rejection restores access; approval removes the course from the student, including partial payment refunds.
 
 **Grant** (course access): a student's right to one course from `startsAt` until `expiresAt`, from a purchase or an audited owner grant. At most one unrevoked grant per student and course; a repeat purchase extends it.
 
-**Active access**: an unrevoked grant with `startsAt <= now < expiresAt`. Decided only by the Course Access module.
+**Active access**: an unrevoked grant with `startsAt <= now < expiresAt`. Pending or approved refund requests prevent use of the purchased course.
 
 **Claim**: attaching a purchase to a student: automatically by verified email, or by order number plus the Shopier email ("Siparişimi ekle").
 
-**Lesson**: one step of a course: a video, an audio recording (both Mux assets, played with signed tokens), or a live session. Published lessons are what students see.
+**Lesson**: one step of a course: a video, an audio recording (both Mux assets, played with signed tokens), or a live session. Students see all published lessons; recorded lessons require completion of earlier recorded lessons. Live sessions are exempt from this sequence.
 
 **Homework PDF** (lesson file): a private PDF attached to a lesson of any kind, several per lesson. Readable only through a short-lived signed link issued after an access check.
 

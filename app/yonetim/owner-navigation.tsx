@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, FileText, LayoutDashboard, Megaphone, Users } from "lucide-react";
+import { BookOpen, FileText, LayoutDashboard, Megaphone, Users, Undo2 } from "lucide-react";
 import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/yonetim", label: "Genel bakış", icon: LayoutDashboard, exact: true },
   { href: "/yonetim/egitimler", label: "Eğitimler ve satışlar", icon: BookOpen },
+  { href: "/yonetim/iadeler", label: "İade talepleri", icon: Undo2 },
   { href: "/yonetim/kullanicilar", label: "Kullanıcılar", icon: Users },
   { href: "/yonetim/yazilar", label: "Yazılar", icon: FileText },
   { href: "/yonetim/banner", label: "Banner", icon: Megaphone },
