@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -11,7 +12,7 @@ export const metadata = { title: "Banner yönetimi" };
 
 export default function BannerManagement() {
   return <section className={cn(pageWidth, ownerSection)}>
-    <Suspense fallback={<p className="text-stone">Banner ayarları yükleniyor…</p>}><Content /></Suspense>
+    <Suspense fallback={<PageLoader label="Banner ayarları yükleniyor" />}><Content /></Suspense>
   </section>;
 }
 

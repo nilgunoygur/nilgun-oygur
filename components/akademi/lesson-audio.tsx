@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { LoaderCircle, Pause, Play, RotateCcw, RotateCw } from "lucide-react";
+import { Pause, Play, RotateCcw, RotateCw } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 // Plays the signed HLS stream in every browser and reports to Mux Data.
@@ -77,7 +78,7 @@ export function LessonAudio({ playbackId, tokens, title, duration: knownDuration
       onEnded={() => { setPlaying(false); onEnded?.(); }} onError={() => void recover()} /></div>
     <div className="flex items-center gap-4 sm:gap-6">
       <button type="button" onClick={toggle} aria-label={playing ? `${title}: duraklat` : `${title}: oynat`} className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white text-forest transition-transform duration-200 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white active:scale-95 motion-reduce:transition-none sm:size-16">
-        {waiting && playing ? <LoaderCircle className="size-6 animate-spin motion-reduce:animate-none" /> : playing ? <Pause className="size-6 fill-current" /> : <Play className="ml-1 size-6 fill-current" />}
+        {waiting && playing ? <Spinner size={24} /> : playing ? <Pause className="size-6 fill-current" /> : <Play className="ml-1 size-6 fill-current" />}
       </button>
       <div className="min-w-0 flex-1">
         <Waveform peaks={peaks?.length ? peaks : neutralPeaks} duration={duration} time={time} onSeek={seek} />

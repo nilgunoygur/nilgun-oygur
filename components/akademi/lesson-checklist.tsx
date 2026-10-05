@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LoaderCircle, LockKeyhole, Paperclip, Video } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LockKeyhole, Paperclip, Video } from "lucide-react";
 import { checkLessonAccess, getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[courseId]/actions";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,6 +12,7 @@ import { formatDuration } from "@/lib/akademi/format";
 import { formatFileSize } from "@/lib/akademi/lesson-file-rules";
 import { hasWatched, playbackLifetimeMs } from "@/lib/akademi/access-policy";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { LessonAudio } from "./lesson-audio";
 import { LessonVideo } from "./lesson-video";
@@ -144,7 +145,7 @@ function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEn
   const { data: playback, isError } = useQuery({ queryKey: ["lesson-playback", lessonId], queryFn: () => getPlayback(lessonId), ...playbackQuery });
   if (isError) return <p role="alert" className="rounded-2xl bg-mist p-6">Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın.</p>;
   const source = playback && playable(playback);
-  if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><LoaderCircle className="animate-spin motion-reduce:animate-none" aria-label="Ses kaydı yükleniyor" /></div>;
+  if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><Spinner size={32} aria-label="Ses kaydı yükleniyor" /></div>;
   if (!source) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
   return <div><LessonAudio {...source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => playable(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }
@@ -176,7 +177,7 @@ function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerPro
     ...playbackQuery, refetchInterval: playbackLifetimeMs.video * 0.75, refetchIntervalInBackground: true,
   });
   if (isError && !playback) return <p role="alert" className="rounded-2xl bg-mist p-6">Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın.</p>;
-  if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><LoaderCircle className="animate-spin" aria-label="Video yükleniyor" /></div>;
+  if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><Spinner size={32} className="text-forest" aria-label="Video yükleniyor" /></div>;
   if (playback.error || !playback.playbackId) return <p role="alert" className="rounded-2xl bg-mist p-6">{playback.error}</p>;
   return <div><LessonVideo key={playback.expiresAt} playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} startTime={playback.resume.time} autoPlay={playback.resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => setProgressError("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} />{progressError && <p role="alert" className="mt-3 text-sm text-destructive">{progressError}</p>}</div>;
 }

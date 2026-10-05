@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -11,7 +12,7 @@ import { cn } from "@/lib/utils";
 export const metadata = { title: "Eğitim yönetimi" };
 
 export default function OwnerCourses() {
-  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Eğitimler yükleniyor…</div>}><Courses /></Suspense></section>;
+  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<PageLoader label="Eğitimler yükleniyor" />}><Courses /></Suspense></section>;
 }
 
 async function Courses() {

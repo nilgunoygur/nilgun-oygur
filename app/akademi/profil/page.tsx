@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Profil ayarları", robots: { index: false, follow: false } };
 
 export default function ProfilePage() {
-  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><p className="text-stone">Profil yükleniyor…</p></main>}><ProfileContent /></Suspense>;
+  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><PageLoader label="Profil yükleniyor" /></main>}><ProfileContent /></Suspense>;
 }
 
 async function ProfileContent() {

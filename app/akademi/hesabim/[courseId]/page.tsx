@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -18,7 +19,7 @@ export const metadata = { title: "Eğitimim", robots: { index: false, follow: fa
 const expiry = new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: "Europe/Istanbul" });
 
 export default function CourseLearning({ params }: { params: Promise<{ courseId: string }> }) {
-  return <section className={cn(pageWidth, accountPage, "max-w-[1100px]")}><Suspense fallback={<p role="status">Eğitiminiz yükleniyor…</p>}><Content params={params} /></Suspense></section>;
+  return <section className={cn(pageWidth, accountPage, "max-w-[1100px]")}><Suspense fallback={<PageLoader label="Eğitiminiz yükleniyor" />}><Content params={params} /></Suspense></section>;
 }
 async function Content({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;

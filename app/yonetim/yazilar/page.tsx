@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, FilePlus2 } from "lucide-react";
@@ -11,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = { title: "Yazı yönetimi" };
 export default function OwnerArticles() {
-  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<p className="text-stone">Yazılar yükleniyor…</p>}><Content /></Suspense></section>;
+  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<PageLoader label="Yazılar yükleniyor" />}><Content /></Suspense></section>;
 }
 async function Content() {
   await ownerPage();

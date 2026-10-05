@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -11,7 +12,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Shopier siparişi ekle", robots: { index: false, follow: false } };
 
 export default function ClaimPage() {
-  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><p className="text-stone">Sipariş sayfası yükleniyor…</p></main>}><ClaimContent /></Suspense>;
+  return <Suspense fallback={<main className={cn(pageWidth, accountPage)}><PageLoader label="Sipariş sayfası yükleniyor" /></main>}><ClaimContent /></Suspense>;
 }
 
 async function ClaimContent() {

@@ -5,7 +5,7 @@ import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { DashboardDatePicker } from "@/components/dashboard-date-picker";
 import { OwnerRecentTransactions } from "@/components/owner-recent-transactions";
-import { Spinner } from "@/components/ui/spinner";
+import { PageLoader } from "@/components/ui/spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { pageWidth, ownerKicker, ownerPanel, ownerSection, ownerTitle } from "@/lib/styles";
 import { formatMoney, shortDate } from "@/lib/akademi/format";
@@ -24,7 +24,7 @@ const axisLabel = (unit: string, key: string) =>
 
 export default function OwnerPage({ searchParams }: { searchParams: Search }) {
   return <section className={cn(pageWidth, ownerSection)}>
-    <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Spinner className="size-6 text-forest" aria-label="Yönetim paneli yükleniyor" /></div>}><Dashboard searchParams={searchParams} /></Suspense>
+    <Suspense fallback={<PageLoader label="Yönetim paneli yükleniyor" />}><Dashboard searchParams={searchParams} /></Suspense>
   </section>;
 }
 

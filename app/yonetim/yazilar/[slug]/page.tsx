@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/spinner";
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,7 +14,7 @@ import { ArticleForm } from "@/components/akademi/article-form";
 type Props = { params: Promise<{ slug: string }> };
 export const metadata = { title: "Yazı düzenle" };
 export default function ArticleEditor({ params }: Props) {
-  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<p className="text-stone">Düzenleyici yükleniyor…</p>}><Editor params={params} /></Suspense></section>;
+  return <section className={cn(pageWidth, ownerSection)}><Suspense fallback={<PageLoader label="Düzenleyici yükleniyor" />}><Editor params={params} /></Suspense></section>;
 }
 async function Editor({ params }: Props) {
   await ownerPage();
