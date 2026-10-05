@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[courseId]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
+import { DateTimeField } from "./date-time-field";
 import { FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField, TextareaField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
@@ -131,7 +132,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
         <TextareaField control={form.control} name="description" label="Açıklama / ders notları" rows={4} maxLength={10000} />
         <div className="sm:w-1/2"><SelectField control={form.control} name="status" label="Görünürlük" options={visibility} className="bg-white" /></div>
         {isLive && <div className="grid gap-5 rounded-2xl bg-[#fbf6ed] p-5 sm:grid-cols-2">
-          <TextField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" type="datetime-local" className="bg-white" />
+          <DateTimeField control={form.control} name="startsAt" label="Başlangıç · İstanbul saati" className="bg-white" />
           <TextField control={form.control} name="durationMinutes" label="Süre (dakika)" type="number" inputMode="numeric" min={1} max={1440} className="bg-white" />
           <div className="sm:col-span-2"><TextField control={form.control} name="joinUrl" label="Toplantı bağlantısı" type="url" placeholder="https://…" maxLength={2048} className="bg-white" /></div>
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />

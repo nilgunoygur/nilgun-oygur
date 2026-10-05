@@ -47,7 +47,7 @@ export function FormMessage({ status }: { status?: FormState }) {
   return status ? <FormStatus state={status} /> : null;
 }
 
-type Controlled<T extends FieldValues, U, N extends FieldPath<T> = FieldPath<T>> = { control: Control<T, unknown, U>; name: N; label: ReactNode; description?: ReactNode };
+export type Controlled<T extends FieldValues, U, N extends FieldPath<T> = FieldPath<T>> = { control: Control<T, unknown, U>; name: N; label: ReactNode; description?: ReactNode };
 type Managed = "name" | "value" | "defaultValue" | "onChange" | "onBlur";
 
 export function ControlledField<T extends FieldValues, N extends FieldPath<T>, U = T>({ control, name, label, description, className, children }: Controlled<T, U, N> & {
