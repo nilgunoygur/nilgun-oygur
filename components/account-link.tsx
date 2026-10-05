@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { BookOpen, ChevronDown, LifeBuoy, LogOut, Settings, ShoppingBag, LayoutDashboard, X } from "lucide-react";
 import { authClient } from "@/lib/auth/client";
@@ -14,45 +15,28 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
-type Account = Awaited<ReturnType<typeof accountOptions>> & { userId: string };
+type Account = Awaited<ReturnType<typeof accountOptions>>;
 const menuItemClass = "min-h-11 gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-foreground/85 transition-colors focus:bg-mist focus:text-forest [&_svg]:text-forest/65";
 
 export function AccountLink({ compact = false }: { compact?: boolean }) {
   const { data } = authClient.useSession();
   const router = useRouter();
   const userId = data?.user.emailVerified ? data.user.id : null;
-  const [loaded, setLoaded] = useState<Account | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [waiting, setWaiting] = useState(false);
-  const pendingOpen = useRef(false);
+  const client = useQueryClient();
+  const queryKey = ["account", userId];
+  // One request for both header menus (desktop and compact); refreshed when the window regains focus.
+  const { data: account } = useQuery({ queryKey, queryFn: userId ? () => accountOptions().catch((): Account => ({ isOwner: false, notices: [] })) : skipToken });
+  // Opening before the options arrive waits for them, so the owner link never pops in late.
+  const [wanted, setWanted] = useState(false);
+  const menuOpen = wanted && !!account, waiting = wanted && !account;
   const [error, setError] = useState("");
-  useEffect(() => {
-    if (!userId) return;
-    let active = true;
-    void accountOptions().catch(() => ({ isOwner: false, notices: [] })).then(options => {
-      if (!active) return;
-      setLoaded({ ...options, userId });
-      if (pendingOpen.current) {
-        pendingOpen.current = false;
-        setWaiting(false);
-        setMenuOpen(true);
-      }
-    });
-    return () => { active = false; };
-  }, [userId]);
   if (!data?.user.emailVerified) return null;
   const user = data.user;
   const firstName = user.name.trim().split(/\s+/)[0] || "Hesabım";
-  const account = loaded?.userId === userId ? loaded : null;
   const notices = account?.notices ?? [];
-  const dismiss = (id: string) => { closeNotice(refundNoticeCookie(id), refundNoticeDays); setLoaded(current => current && { ...current, notices: current.notices.filter(notice => notice.id !== id) }); };
+  const dismiss = (id: string) => { closeNotice(refundNoticeCookie(id), refundNoticeDays); client.setQueryData<Account>(queryKey, current => current && { ...current, notices: current.notices.filter(notice => notice.id !== id) }); };
   return <>
-    <DropdownMenu open={menuOpen} onOpenChange={(open) => {
-      if (!open) { pendingOpen.current = false; setWaiting(false); setMenuOpen(false); return; }
-      if (account) { setMenuOpen(true); return; }
-      pendingOpen.current = true;
-      setWaiting(true);
-    }}>
+    <DropdownMenu open={menuOpen} onOpenChange={setWanted}>
       <DropdownMenuTrigger render={<Button variant="ghost" className="h-auto min-h-11 gap-2 rounded-full px-1.5 py-1.5 hover:bg-mist hover:text-forest aria-expanded:bg-mist aria-expanded:text-forest" />} aria-label={`Hesap menüsü — ${user.name}${notices.length ? `, ${notices.length} bildirim` : ""}`}>
         <span className="relative"><Avatar><AvatarImage src={avatarSource(user.image)} alt="" /><AvatarFallback>{firstName.charAt(0).toLocaleUpperCase("tr-TR")}</AvatarFallback></Avatar>{notices.length > 0 && <span aria-hidden className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-[#c2553f] ring-2 ring-white" />}</span>
         {!compact && <><span>{firstName}</span>{waiting ? <Spinner /> : <ChevronDown className="size-3" />}</>}
