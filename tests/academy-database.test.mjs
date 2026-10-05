@@ -56,7 +56,7 @@ test("a lesson cannot borrow another course's module or duplicate a course slug"
 
 test("live sessions cannot attach to recorded-video lessons", async () => {
   const [video] = await db.insert(schema.lessons).values({ moduleId: moduleA.id, courseId: courseA.id, title: "Video", slug: "video-only", kind: "video" }).returning();
-  await rejectsConstraint(() => db.insert(schema.liveSessions).values({ lessonId: video.id, startsAt: paidAt, durationMinutes: 60, zoomJoinUrl: "https://zoom.us/j/example", zoomPasscode: "test" }), "23503");
+  await rejectsConstraint(() => db.insert(schema.liveSessions).values({ lessonId: video.id, startsAt: paidAt, durationMinutes: 60, zoomMeetingId: "8529015944", zoomPasscode: "test" }), "23503");
 });
 
 test("purchase grants must match both the purchase's student and course", async () => {
