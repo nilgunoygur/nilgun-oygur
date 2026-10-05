@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, FileText, Megaphone, ShoppingBag, Undo2, Users, Wallet } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Megaphone, Minus, ShoppingBag, TrendingDown, TrendingUp, Undo2, Users, Wallet } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { DashboardDatePicker } from "@/components/dashboard-date-picker";
@@ -30,7 +30,7 @@ export default function OwnerPage({ searchParams }: { searchParams: Search }) {
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
   await ownerPage();
-  const { range, data, chart } = await akademi().owner.overview.read(await searchParams);
+  const { range, data, previous, chart } = await akademi().owner.overview.read(await searchParams);
   const primaryRevenue = data.revenue.find(item => item.currency === "TRY");
   const otherRevenue = data.revenue.filter(item => item.currency !== "TRY");
   const gross = primaryRevenue?.amount ?? 0, refunded = data.refunds.amount;
@@ -46,10 +46,10 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
     </header>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric href="/yonetim/egitimler" icon={<Wallet />} label="Net gelir" value={formatMoney(gross - refunded, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
-      <Metric href="/yonetim/egitimler" icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
-      <Metric href="/yonetim/iadeler" icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
-      <Metric href="/yonetim/kullanicilar" icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
+      <Metric href="/yonetim/egitimler" trend={{ now: gross - refunded, before: previous.gross - previous.refunded, days: previous.days }} icon={<Wallet />} label="Net gelir" value={formatMoney(gross - refunded, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
+      <Metric href="/yonetim/egitimler" trend={{ now: data.orders, before: previous.orders, days: previous.days }} icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
+      <Metric href="/yonetim/iadeler" trend={{ now: refunded, before: previous.refunded, days: previous.days, lowerIsBetter: true }} icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
+      <Metric href="/yonetim/kullanicilar" trend={{ now: data.newUsers, before: previous.newUsers, days: previous.days, of: "yeni kayıt" }} icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
     </div>
 
     <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
@@ -88,11 +88,22 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
   </>;
 }
 
-function Metric({ href, icon, label, value, detail }: { href: string; icon: React.ReactNode; label: string; value: string; detail: string }) {
+type TrendInput = { now: number; before: number; days: number; lowerIsBetter?: boolean; of?: string };
+
+/** The change against the previous period of the same length; a percentage needs a non-zero base. */
+function Trend({ now, before, days, lowerIsBetter = false, of }: TrendInput) {
+  const difference = now - before;
+  const Icon = difference > 0 ? TrendingUp : difference < 0 ? TrendingDown : Minus;
+  const tone = difference === 0 ? "text-stone" : (difference > 0) !== lowerIsBetter ? "text-emerald-700" : "text-[#b04a36]";
+  const amount = difference === 0 ? "Değişim yok" : before === 0 ? "Önceki dönemde yoktu" : `%${Math.round(Math.abs(difference) / Math.abs(before) * 100).toLocaleString("tr-TR")} ${difference > 0 ? "artış" : "azalış"}`;
+  return <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[12px] text-stone"><span className={cn("inline-flex items-center gap-1 font-semibold", tone)}><Icon className="size-3.5" />{amount}</span>{of ? `${of}, ` : ""}önceki {days} güne göre</p>;
+}
+
+function Metric({ href, icon, label, value, detail, trend }: { href: string; icon: React.ReactNode; label: string; value: string; detail: string; trend: TrendInput }) {
   return <Link href={href} className="group rounded-[24px] outline-none focus-visible:ring-2 focus-visible:ring-forest/40">
     <Card className="h-full rounded-[24px] border-forest/10 bg-white py-6 shadow-[0_12px_40px_-30px_rgba(34,76,64,0.4)] transition-colors group-hover:border-forest/30 group-hover:bg-mist/40"><CardContent>
       <div className="flex items-center justify-between"><span className="flex size-10 items-center justify-center rounded-2xl bg-mist text-forest [&_svg]:size-5">{icon}</span><ArrowRight className="size-4 text-forest/40 transition-transform group-hover:translate-x-1 group-hover:text-forest" /></div>
-      <p className="mt-6 text-[13px] font-medium text-stone">{label}</p><strong className="mt-2 block text-[clamp(25px,2.5vw,36px)] font-semibold leading-tight tracking-tight text-forest">{value}</strong><p className="mt-3 text-[12px] text-stone">{detail}</p>
+      <p className="mt-6 text-[13px] font-medium text-stone">{label}</p><strong className="mt-2 block text-[clamp(25px,2.5vw,36px)] font-semibold leading-tight tracking-tight text-forest">{value}</strong><p className="mt-3 text-[12px] text-stone">{detail}</p><Trend {...trend} />
     </CardContent></Card>
   </Link>;
 }

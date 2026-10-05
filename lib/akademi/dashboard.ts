@@ -46,6 +46,19 @@ export async function ownerDashboard(db: Database, range: DashboardRange) {
   return { totalUsers: allUsers[0].value, newUsers: newUsers[0].value, orders: sales[0].orders, items: sales[0].items, revenue, activity, refunds: refunds[0], refundActivity, pendingRefunds };
 }
 
+/** The headline figures for the window of equal length just before the range, to compare against. */
+export async function previousPeriod(db: Database, range: DashboardRange) {
+  const length = range.end.getTime() - range.start.getTime();
+  const start = new Date(range.start.getTime() - length);
+  const [[sales], [refunds], [users]] = await Promise.all([
+    db.select({ orders: countDistinct(shopierPurchases.shopierOrderId), gross: sql<number>`coalesce(sum(${shopierPurchases.amountKurus}) filter (where ${shopierPurchases.currency} = 'TRY'), 0)::float8` })
+      .from(shopierPurchases).where(and(gte(shopierPurchases.purchasedAt, start), lt(shopierPurchases.purchasedAt, range.start))),
+    db.select({ amount: refundTotal }).from(shopierRefunds).where(and(gte(shopierRefunds.refundedAt, start), lt(shopierRefunds.refundedAt, range.start), eq(shopierRefunds.currency, "TRY"))),
+    db.select({ value: count() }).from(user).where(and(gte(user.createdAt, start), lt(user.createdAt, range.start))),
+  ]);
+  return { days: Math.round(length / 86_400_000), gross: sales.gross, orders: sales.orders, refunded: refunds.amount, newUsers: users.value };
+}
+
 export async function recentShopierTransactions(shopier: Pick<ShopierClient, "listRecentTransactions">, range: DashboardRange) {
   try {
     const { orders, refunds, unavailable: refundsUnavailable } = await shopier.listRecentTransactions(range.start, range.end);
@@ -103,8 +116,8 @@ export function createOwnerOverview({ db, shopier, now = () => new Date() }: {
   return {
     async read(params: DashboardParams) {
       const range = dashboardRange(params, now());
-      const data = await ownerDashboard(db, range);
-      return { range, data, chart: chartSeries(range, data.activity, data.refundActivity) };
+      const [data, previous] = await Promise.all([ownerDashboard(db, range), previousPeriod(db, range)]);
+      return { range, data, previous, chart: chartSeries(range, data.activity, data.refundActivity) };
     },
     transactions(params: DashboardParams) {
       const range = dashboardRange(params, now());

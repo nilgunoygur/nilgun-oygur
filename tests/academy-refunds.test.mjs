@@ -192,7 +192,7 @@ test("reconciliation handles recent refunds of old orders; claims fail closed wh
 });
 
 test("the dashboard reports completed refunds in total and on the day Shopier completed them", async () => {
-  const { ownerDashboard, dashboardRange, chartSeries } = await import("../lib/akademi/dashboard.ts");
+  const { ownerDashboard, dashboardRange, chartSeries, previousPeriod } = await import("../lib/akademi/dashboard.ts");
   const f = await fixture(), order = f.order();
   await recordShopierOrder(db, order);
   await recordShopierRefund(db, refund(order, { dateRefunded: "2031-03-10T10:00:00+0300" }));
@@ -201,6 +201,8 @@ test("the dashboard reports completed refunds in total and on the day Shopier co
   assert.deepEqual(data.refunds, { amount: 10000, count: 1 });
   assert.deepEqual(chartSeries(range, data.activity, data.refundActivity).points.map(point => [point.day, point.amount, point.refunded]),
     [["2031-03-09", 0, 0], ["2031-03-10", 0, 10000], ["2031-03-11", 0, 0]]);
+  const next = dashboardRange({ period: "custom", from: "2031-03-12", to: "2031-03-14" }, new Date("2031-04-01T12:00:00+0300"));
+  assert.deepEqual(await previousPeriod(db, next), { days: 3, gross: 0, orders: 0, refunded: 10000, newUsers: 0 }, "the three days before the range");
 });
 
 test("refund API paginates, ignores unsuccessful refunds and rejects truncation", async () => {
