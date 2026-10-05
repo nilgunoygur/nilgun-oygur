@@ -1,5 +1,5 @@
 import { and, count, countDistinct, eq, gte, lt, sql } from "drizzle-orm";
-import { shopierPurchases, user } from "../db/schema.ts";
+import { refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { buyerEmail, parsePriceKurus, refundedAt, type ShopierClient } from "../shopier/api.ts";
 import { istanbulDay } from "./format.ts";
@@ -10,6 +10,8 @@ const dayAfter = (value: string) => new Date(Date.parse(`${value}T00:00:00Z`) + 
 const toInstant = (value: string) => new Date(`${value}T00:00:00+03:00`);
 const purchaseDay = sql<string>`to_char(${shopierPurchases.purchasedAt} AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD')`;
 const purchaseTotal = sql<number>`coalesce(sum(${shopierPurchases.amountKurus}), 0)::float8`;
+const refundDay = sql<string>`to_char(${shopierRefunds.refundedAt} AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD')`;
+const refundTotal = sql<number>`coalesce(sum(${shopierRefunds.amountKurus}), 0)::float8`;
 export type DashboardRange = ReturnType<typeof dashboardRange>;
 
 export type DashboardParams = { period?: string; from?: string; to?: string };
@@ -29,14 +31,19 @@ export function dashboardRange(params: DashboardParams, now = new Date()) {
 
 export async function ownerDashboard(db: Database, range: DashboardRange) {
   const purchasePeriod = and(gte(shopierPurchases.purchasedAt, range.start), lt(shopierPurchases.purchasedAt, range.end));
-  const [allUsers, newUsers, sales, revenue, activity] = await Promise.all([
+  // Refunds count on the day Shopier completed them, in TRY like the chart.
+  const refundPeriod = and(gte(shopierRefunds.refundedAt, range.start), lt(shopierRefunds.refundedAt, range.end), eq(shopierRefunds.currency, "TRY"));
+  const [allUsers, newUsers, sales, revenue, activity, refunds, refundActivity, pendingRefunds] = await Promise.all([
     db.select({ value: count() }).from(user),
     db.select({ value: count() }).from(user).where(and(gte(user.createdAt, range.start), lt(user.createdAt, range.end))),
     db.select({ orders: countDistinct(shopierPurchases.shopierOrderId), items: count() }).from(shopierPurchases).where(purchasePeriod),
     db.select({ currency: shopierPurchases.currency, amount: purchaseTotal }).from(shopierPurchases).where(purchasePeriod).groupBy(shopierPurchases.currency),
     db.select({ day: purchaseDay, amount: purchaseTotal, orders: countDistinct(shopierPurchases.shopierOrderId) }).from(shopierPurchases).where(and(purchasePeriod, eq(shopierPurchases.currency, "TRY"))).groupBy(purchaseDay).orderBy(purchaseDay),
+    db.select({ amount: refundTotal, count: count() }).from(shopierRefunds).where(refundPeriod),
+    db.select({ day: refundDay, amount: refundTotal }).from(shopierRefunds).where(refundPeriod).groupBy(refundDay).orderBy(refundDay),
+    db.$count(refundRequests, eq(refundRequests.status, "pending")),
   ]);
-  return { totalUsers: allUsers[0].value, newUsers: newUsers[0].value, orders: sales[0].orders, items: sales[0].items, revenue, activity };
+  return { totalUsers: allUsers[0].value, newUsers: newUsers[0].value, orders: sales[0].orders, items: sales[0].items, revenue, activity, refunds: refunds[0], refundActivity, pendingRefunds };
 }
 
 export async function recentShopierTransactions(shopier: Pick<ShopierClient, "listRecentTransactions">, range: DashboardRange) {
@@ -60,16 +67,18 @@ export async function recentShopierTransactions(shopier: Pick<ShopierClient, "li
   }
 }
 
-export function chartSeries(range: DashboardRange, activity: Awaited<ReturnType<typeof ownerDashboard>>["activity"]) {
+export function chartSeries(range: DashboardRange, activity: { day: string; amount: number; orders: number }[], refundActivity: { day: string; amount: number }[] = []) {
   const days = (Date.parse(`${range.to}T00:00:00Z`) - Date.parse(`${range.from}T00:00:00Z`)) / 86_400_000 + 1;
   const unit = days > 1095 ? "year" : days > 45 ? "month" : "day";
   const size = unit === "year" ? 4 : unit === "month" ? 7 : 10;
-  const totals = new Map<string, { amount: number; orders: number }>();
-  for (const item of activity) {
-    const key = item.day.slice(0, size);
-    const previous = totals.get(key) ?? { amount: 0, orders: 0 };
-    totals.set(key, { amount: previous.amount + item.amount, orders: previous.orders + item.orders });
-  }
+  const empty = { amount: 0, orders: 0, refunded: 0 };
+  const totals = new Map<string, typeof empty>();
+  const add = (day: string, part: Partial<typeof empty>) => {
+    const key = day.slice(0, size), previous = totals.get(key) ?? empty;
+    totals.set(key, { amount: previous.amount + (part.amount ?? 0), orders: previous.orders + (part.orders ?? 0), refunded: previous.refunded + (part.refunded ?? 0) });
+  };
+  for (const item of activity) add(item.day, item);
+  for (const item of refundActivity) add(item.day, { refunded: item.amount });
   const points = [];
   const cursor = new Date(`${range.from}T00:00:00Z`);
   const last = new Date(`${range.to}T00:00:00Z`);
@@ -77,7 +86,7 @@ export function chartSeries(range: DashboardRange, activity: Awaited<ReturnType<
   if (unit === "month") cursor.setUTCDate(1);
   while (cursor <= last) {
     const key = cursor.toISOString().slice(0, size);
-    points.push({ day: key, ...totals.get(key) ?? { amount: 0, orders: 0 } });
+    points.push({ day: key, ...totals.get(key) ?? empty });
     if (unit === "year") cursor.setUTCFullYear(cursor.getUTCFullYear() + 1);
     else if (unit === "month") cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     else cursor.setUTCDate(cursor.getUTCDate() + 1);
@@ -95,7 +104,7 @@ export function createOwnerOverview({ db, shopier, now = () => new Date() }: {
     async read(params: DashboardParams) {
       const range = dashboardRange(params, now());
       const data = await ownerDashboard(db, range);
-      return { range, data, chart: chartSeries(range, data.activity) };
+      return { range, data, chart: chartSeries(range, data.activity, data.refundActivity) };
     },
     transactions(params: DashboardParams) {
       const range = dashboardRange(params, now());

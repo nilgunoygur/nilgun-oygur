@@ -7,7 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth/client";
-import { authDestination, nextParam, verificationCallback } from "@/lib/auth/navigation";
+import { authDestination, nextParam, studentHome, verificationCallback } from "@/lib/auth/navigation";
+import { accountOptions } from "@/app/akademi/hesabim/profile-actions";
 import { backupCodeSchema, emailLinkSchema, loginSchema, resetSchema, totpSchema } from "@/lib/auth/forms";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -50,14 +51,21 @@ function LoginForm({ disabled, destination, onSubmitStart }: { disabled: boolean
   const router = useRouter();
   const [mfa, setMfa] = useState<"totp" | "backup" | null>(null);
   const form = useForm({ resolver: zodResolver(loginSchema), mode: "onTouched", defaultValues: { email: "", password: "", remember: true } });
-  const enter = () => { track("login", { method: "email" }); router.replace(authDestination(destination)); router.refresh(); };
+  // With nowhere specific to go, an owner lands on the dashboard instead of the student account.
+  const enter = async () => {
+    track("login", { method: "email" });
+    const target = authDestination(destination);
+    const owner = target === studentHome && await accountOptions().then(options => options.isOwner, () => false);
+    router.replace(owner ? "/yonetim" : target);
+    router.refresh();
+  };
   if (mfa) return <CodeForm key={mfa} backup={mfa === "backup"} onToggle={() => setMfa(mfa === "backup" ? "totp" : "backup")} onVerified={enter} />;
 
   const submit = form.handleSubmit(async ({ email, password, remember }) => {
     onSubmitStart();
     const result = await authAttempt(form, () => authClient.signIn.email({ email, password, rememberMe: remember }));
     if (!result) return;
-    if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) setMfa("totp"); else enter();
+    if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) setMfa("totp"); else await enter();
   });
   return <FormShell form={form} onSubmit={submit} size="lg" disabled={disabled}>
     <FormMessage />

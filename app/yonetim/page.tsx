@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, FileText, Megaphone, ShoppingBag, Users } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Megaphone, ShoppingBag, Undo2, Users, Wallet } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { akademi } from "@/lib/akademi/server";
 import { DashboardDatePicker } from "@/components/dashboard-date-picker";
@@ -14,6 +14,11 @@ import { cn } from "@/lib/utils";
 export const metadata = { title: "Yönetim paneli" };
 type Search = Promise<{ period?: string; from?: string; to?: string }>;
 const shortMonth = new Intl.DateTimeFormat("tr-TR", { month: "short", year: "2-digit", timeZone: "UTC" });
+const fullDay = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Istanbul" });
+const fullMonth = new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric", timeZone: "UTC" });
+const pointLabel = (unit: string, key: string) =>
+  unit === "day" ? fullDay.format(new Date(`${key}T12:00:00+03:00`)) : unit === "month" ? fullMonth.format(new Date(`${key}-01T12:00:00Z`)) : key;
+const refundBar = "bg-[#d98a78]";
 const axisLabel = (unit: string, key: string) =>
   unit === "day" ? shortDate.format(new Date(`${key}T12:00:00+03:00`)) : unit === "month" ? shortMonth.format(new Date(`${key}-01T12:00:00Z`)) : key;
 
@@ -28,7 +33,9 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
   const { range, data, chart } = await akademi().owner.overview.read(await searchParams);
   const primaryRevenue = data.revenue.find(item => item.currency === "TRY");
   const otherRevenue = data.revenue.filter(item => item.currency !== "TRY");
-  const max = Math.max(1, ...chart.points.map(item => item.amount));
+  const gross = primaryRevenue?.amount ?? 0, refunded = data.refunds.amount;
+  const max = Math.max(1, ...chart.points.flatMap(item => [item.amount, item.refunded]));
+  const barHeight = (amount: number) => `${Math.max(5, amount / max * 195)}px`;
   const periodName = { week: "Bu hafta", month: "Bu ay", year: "Bu yıl", custom: "Özel aralık" }[range.period];
   return <>
     <header className="mb-9 flex flex-wrap items-end justify-between gap-6">
@@ -37,21 +44,38 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
     </header>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric icon={<Users />} label="Toplam kullanıcı" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
-      <Metric icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı`} />
-      <Metric icon={<ShoppingBag />} label="Brüt satış" value={formatMoney(primaryRevenue?.amount ?? 0, "TRY")} detail={otherRevenue.length ? `Diğer para birimleri: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : periodName} />
-      <Metric icon={<Users />} label="Yeni kullanıcı" value={data.newUsers.toLocaleString("tr-TR")} detail={`${periodName.toLocaleLowerCase("tr-TR")} kayıt olanlar`} />
+      <Metric icon={<Wallet />} label="Net gelir" value={formatMoney(gross - refunded, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
+      <Metric icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
+      <Metric icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
+      <Metric icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
     </div>
 
     <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
       <Card className={ownerPanel}>
-        <CardHeader><p className="text-[12px] font-semibold tracking-[0.14em] text-primary">SATIŞ AKIŞI</p><CardTitle className="mt-2 text-[26px]">{{ day: "Günlük", month: "Aylık", year: "Yıllık" }[chart.unit]} gelir</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-end justify-between gap-3">
+          <div><p className="text-[12px] font-semibold tracking-[0.14em] text-primary">SATIŞ AKIŞI</p><CardTitle className="mt-2 text-[26px]">{{ day: "Günlük", month: "Aylık", year: "Yıllık" }[chart.unit]} gelir ve iadeler</CardTitle></div>
+          <ul className="flex gap-4 text-[12px] text-stone"><li className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-mint" />Satış</li><li className="flex items-center gap-1.5"><span className={cn("size-2.5 rounded-full", refundBar)} />İade</li></ul>
+        </CardHeader>
         <CardContent>
-        {data.activity.length ? <div className="mt-9 flex h-[230px] items-end gap-1.5 border-b border-forest/15 pb-0.5" aria-label="Türk lirası satış geliri grafiği">{chart.points.map((item, index) => <div key={item.day} className="group relative flex min-w-0 flex-1 flex-col items-center justify-end" title={`${item.day}: ${formatMoney(item.amount, "TRY")} · ${item.orders} sipariş`}><div className={cn("w-full max-w-12 rounded-t-lg transition-colors group-hover:bg-forest", item.amount ? "bg-mint" : "bg-mist")} style={{ height: `${Math.max(5, item.amount / max * 195)}px` }} />{index % Math.ceil(chart.points.length / 7) === 0 && <span className="absolute top-[calc(100%+8px)] text-[10px] text-stone max-sm:hidden">{axisLabel(chart.unit, item.day)}</span>}</div>)}</div> : <div className="mt-8 flex h-[230px] items-center justify-center rounded-2xl bg-mist/60 text-[14px] text-stone">Bu dönemde henüz satış yok.</div>}
-        <p className="mt-8 text-[12px] text-stone">Grafik, kaydedilmiş TRY Shopier eğitim satın alımlarını gösterir.</p>
+        {data.activity.length || data.refundActivity.length ? <div className="mt-9 flex h-[230px] items-end gap-1.5 border-b border-forest/15 pb-0.5" role="list" aria-label="Türk lirası satış ve iade grafiği">{chart.points.map((item, index) => {
+          const label = pointLabel(chart.unit, item.day);
+          // Hover or keyboard focus opens the figures; the edge columns anchor theirs inside the card.
+          return <div key={item.day} role="listitem" tabIndex={0} aria-label={`${label}: satış ${formatMoney(item.amount, "TRY")}, ${item.orders} sipariş, iade ${formatMoney(item.refunded, "TRY")}`} className="group relative flex h-full min-w-0 flex-1 items-end justify-center gap-0.5 rounded-t-lg outline-none hover:bg-mist/50 focus-visible:bg-mist/50">
+            <div className={cn("w-full max-w-10 rounded-t-lg transition-colors group-hover:bg-forest group-focus-visible:bg-forest", item.amount ? "bg-mint" : "bg-mist")} style={{ height: barHeight(item.amount) }} />
+            {item.refunded > 0 && <div className={cn("w-full max-w-10 rounded-t-lg", refundBar)} style={{ height: barHeight(item.refunded) }} />}
+            <div role="tooltip" className={cn("pointer-events-none absolute bottom-[calc(100%+6px)] z-10 hidden w-max rounded-xl bg-forest px-3.5 py-2.5 text-[12px] leading-[1.6] text-white shadow-lg group-hover:block group-focus-visible:block", index < 2 ? "left-0" : index > chart.points.length - 3 ? "right-0" : "left-1/2 -translate-x-1/2")}>
+              <strong className="block text-[13px]">{label}</strong>
+              <span className="block">Satış: {formatMoney(item.amount, "TRY")} · {item.orders} sipariş</span>
+              <span className="block">İade: {formatMoney(item.refunded, "TRY")}</span>
+              <span className="block font-semibold text-lime">Net: {formatMoney(item.amount - item.refunded, "TRY")}</span>
+            </div>
+            {index % Math.ceil(chart.points.length / 7) === 0 && <span className="absolute top-[calc(100%+8px)] text-[10px] text-stone max-sm:hidden">{axisLabel(chart.unit, item.day)}</span>}
+          </div>;
+        })}</div> : <div className="mt-8 flex h-[230px] items-center justify-center rounded-2xl bg-mist/60 text-[14px] text-stone">Bu dönemde henüz satış veya iade yok.</div>}
+        <p className="mt-8 text-[12px] text-stone">Kaydedilmiş TRY eğitim satışları ve Shopier’in tamamladığı iadeler. Tutarları görmek için bir sütunun üzerine gelin.</p>
         </CardContent>
       </Card>
-      <Card className="rounded-[26px] bg-forest py-6 text-white sm:py-8"><CardHeader><p className="text-[12px] font-semibold tracking-[0.14em] text-lime">YÖNETİM</p><CardTitle className="mt-2 text-[26px] text-white">Hızlı erişim</CardTitle></CardHeader><CardContent className="mt-5 grid gap-3"><QuickLink href="/yonetim/egitimler" icon={<BookOpen />} title="Eğitimler ve satışlar" subtitle="Kursları ve siparişleri yönetin" /><QuickLink href="/yonetim/kullanicilar" icon={<Users />} title="Kullanıcılar" subtitle="Yöneticileri ve öğrencileri görün" /><QuickLink href="/yonetim/yazilar" icon={<FileText />} title="Yazılarım" subtitle="Yazıları düzenleyin ve yayınlayın" /><QuickLink href="/yonetim/banner" icon={<Megaphone />} title="Banner yönetimi" subtitle="Duyuruları düzenleyin ve yayınlayın" /></CardContent></Card>
+      <Card className="rounded-[26px] bg-forest py-6 text-white sm:py-8"><CardHeader><p className="text-[12px] font-semibold tracking-[0.14em] text-lime">YÖNETİM</p><CardTitle className="mt-2 text-[26px] text-white">Hızlı erişim</CardTitle></CardHeader><CardContent className="mt-5 grid gap-3"><QuickLink href="/yonetim/egitimler" icon={<BookOpen />} title="Eğitimler ve satışlar" subtitle="Kursları ve siparişleri yönetin" /><QuickLink href="/yonetim/iadeler" icon={<Undo2 />} title="İade talepleri" subtitle={data.pendingRefunds ? `${data.pendingRefunds.toLocaleString("tr-TR")} talep kararınızı bekliyor` : "Bekleyen talep yok"} /><QuickLink href="/yonetim/kullanicilar" icon={<Users />} title="Kullanıcılar" subtitle="Yöneticileri ve öğrencileri görün" /><QuickLink href="/yonetim/yazilar" icon={<FileText />} title="Yazılarım" subtitle="Yazıları düzenleyin ve yayınlayın" /><QuickLink href="/yonetim/banner" icon={<Megaphone />} title="Banner yönetimi" subtitle="Duyuruları düzenleyin ve yayınlayın" /></CardContent></Card>
     </div>
 
     <Card className={cn(ownerPanel, "mt-5")}><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3"><div><p className="text-[12px] font-semibold tracking-[0.14em] text-primary">SON İŞLEMLER</p><CardTitle className="mt-2 text-[26px]">Son satışlar ve iadeler</CardTitle></div><Link href="/yonetim/egitimler" className="inline-flex items-center gap-2 text-[13px] font-semibold text-forest hover:underline">Eğitimleri yönet <ArrowRight className="size-4" /></Link></CardHeader>
