@@ -297,7 +297,7 @@ export function Footer({ consentSettings = false }: { consentSettings?: boolean 
         </div>
       </div>
       <Separator />
-      <p className="pt-[26px] text-center text-[13px]">Nilgün Oygur © 2024.{consentSettings && <> · <ConsentSettingsLink className="underline-offset-4 hover:text-primary hover:underline" /></>}</p>
+      <p className="pt-[26px] text-center text-[13px]">Nilgün Oygur © 2026.{consentSettings && <> · <ConsentSettingsLink className="underline-offset-4 hover:text-primary hover:underline" /></>}</p>
     </footer>
   );
 }
