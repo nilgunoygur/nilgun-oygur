@@ -44,10 +44,10 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
     </header>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric icon={<Wallet />} label="Net gelir" value={formatMoney(gross - refunded, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
-      <Metric icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
-      <Metric icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
-      <Metric icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
+      <Metric href="/yonetim/egitimler" icon={<Wallet />} label="Net gelir" value={formatMoney(gross - refunded, "TRY")} detail={`Brüt ${formatMoney(gross, "TRY")} · İade ${formatMoney(refunded, "TRY")}${otherRevenue.length ? ` · Diğer: ${otherRevenue.map(item => formatMoney(item.amount, item.currency)).join(" · ")}` : ""}`} />
+      <Metric href="/yonetim/egitimler" icon={<ShoppingBag />} label="Sipariş" value={data.orders.toLocaleString("tr-TR")} detail={`${data.items.toLocaleString("tr-TR")} eğitim satışı · ${periodName.toLocaleLowerCase("tr-TR")}`} />
+      <Metric href="/yonetim/iadeler" icon={<Undo2 />} label="İadeler" value={formatMoney(refunded, "TRY")} detail={`${data.refunds.count.toLocaleString("tr-TR")} iade tamamlandı · ${data.pendingRefunds.toLocaleString("tr-TR")} talep karar bekliyor`} />
+      <Metric href="/yonetim/kullanicilar" icon={<Users />} label="Kullanıcılar" value={data.totalUsers.toLocaleString("tr-TR")} detail={`Seçilen dönemde ${data.newUsers.toLocaleString("tr-TR")} yeni kayıt`} />
     </div>
 
     <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
@@ -84,8 +84,13 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
   </>;
 }
 
-function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return <Card className="rounded-[24px] border-forest/10 bg-white py-6 shadow-[0_12px_40px_-30px_rgba(34,76,64,0.4)]"><CardContent><div className="flex size-10 items-center justify-center rounded-2xl bg-mist text-forest [&_svg]:size-5">{icon}</div><p className="mt-6 text-[13px] font-medium text-stone">{label}</p><strong className="mt-2 block text-[clamp(25px,2.5vw,36px)] font-semibold leading-tight tracking-tight text-forest">{value}</strong><p className="mt-3 text-[12px] text-stone">{detail}</p></CardContent></Card>;
+function Metric({ href, icon, label, value, detail }: { href: string; icon: React.ReactNode; label: string; value: string; detail: string }) {
+  return <Link href={href} className="group rounded-[24px] outline-none focus-visible:ring-2 focus-visible:ring-forest/40">
+    <Card className="h-full rounded-[24px] border-forest/10 bg-white py-6 shadow-[0_12px_40px_-30px_rgba(34,76,64,0.4)] transition-colors group-hover:border-forest/30 group-hover:bg-mist/40"><CardContent>
+      <div className="flex items-center justify-between"><span className="flex size-10 items-center justify-center rounded-2xl bg-mist text-forest [&_svg]:size-5">{icon}</span><ArrowRight className="size-4 text-forest/40 transition-transform group-hover:translate-x-1 group-hover:text-forest" /></div>
+      <p className="mt-6 text-[13px] font-medium text-stone">{label}</p><strong className="mt-2 block text-[clamp(25px,2.5vw,36px)] font-semibold leading-tight tracking-tight text-forest">{value}</strong><p className="mt-3 text-[12px] text-stone">{detail}</p>
+    </CardContent></Card>
+  </Link>;
 }
 function QuickLink({ href, icon, title, subtitle }: { href: string; icon: React.ReactNode; title: string; subtitle: string }) {
   return <Link href={href} className="group flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 p-4 transition-colors hover:bg-white/20"><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15 [&_svg]:size-5">{icon}</span><span className="min-w-0 flex-1"><strong className="block text-[14px]">{title}</strong><small className="mt-1 block text-[11px] text-white/70">{subtitle}</small></span><ArrowRight className="size-4 transition-transform group-hover:translate-x-1" /></Link>;
