@@ -20,7 +20,7 @@ type Subscriber = { id: string; email: string; createdAt: Date };
 // Sorting, search and paging live in the URL; the server page queries.
 const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
   {
-    id: "email", accessorKey: "email", enableColumnFilter: true,
+    id: "email", accessorKey: "email", size: 640, enableColumnFilter: true,
     meta: { placeholder: "E-posta ara…", variant: "text" },
     header: ({ column }) => <DataTableColumnHeader column={column} label="E-posta" />,
     cell: ({ row }) => <div className="flex min-w-0 items-center gap-3">
@@ -29,11 +29,11 @@ const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
     </div>,
   },
   {
-    id: "createdAt", accessorKey: "createdAt", size: 200,
+    id: "createdAt", accessorKey: "createdAt", size: 220,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Kayıt" />,
     cell: ({ row }) => <span className="whitespace-nowrap text-stone">{dateTimeLabel.format(row.original.createdAt)}</span>,
   },
-  { id: "remove", size: 64, header: () => <span className="sr-only">İşlemler</span>, cell: ({ row }) => <RemoveSubscriber subscriber={row.original} /> },
+  { id: "remove", size: 64, header: () => <span className="sr-only">İşlemler</span>, cell: ({ row }) => <div className="flex justify-end pr-2"><RemoveSubscriber subscriber={row.original} /></div> },
 ];
 
 function RemoveSubscriber({ subscriber }: { subscriber: Subscriber }) {

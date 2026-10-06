@@ -1,0 +1,1 @@
+DROP INDEX "newsletter_subscribers_created_idx";
