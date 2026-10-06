@@ -32,7 +32,7 @@ export const contactFormSchema = z.object({ contact: contactInput });
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2, "Adınızı ve soyadınızı yazın.").max(100, "Ad en fazla 100 karakter olabilir."),
-  email: emailField(), password: newPassword, confirmPassword: z.string(), contact: contactInput,
+  email: emailField(), password: newPassword, confirmPassword: z.string(), contact: contactInput, newsletter: z.boolean(),
 }).refine(matchingPasswords, mismatch);
 
 export const hasCompleteContact = (contact: Contact) => !!(contact.phone && contact.city && contact.district && contact.address);
