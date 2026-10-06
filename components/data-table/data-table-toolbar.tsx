@@ -34,7 +34,6 @@ export function DataTableToolbar<TData extends RowData>({
 
   function onReset() {
     table.resetColumnFilters(true);
-    table.resetJoinOperator(true);
   }
 
   return (

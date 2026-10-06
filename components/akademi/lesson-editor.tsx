@@ -20,7 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
-import { ConfirmDelete, done } from "./confirm-delete";
+import { ConfirmDelete, DeleteIconButton, done } from "./confirm-delete";
 import { DateTimeField } from "./date-time-field";
 import { PublishSwitch } from "./publish-switch";
 import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
@@ -348,7 +348,7 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
       <FileText className="size-5 shrink-0 text-[#c2553f]" />
       <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-stone">PDF · {formatFileSize(file.sizeBytes)}</p></div>
       <Button variant="ghost" size="icon" aria-label={`${file.name}: aç`} nativeButton={false} render={<a href={`/api/lesson-files/${file.id}`} target="_blank" rel="noopener noreferrer" />}><ExternalLink /></Button>
-      <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${file.name}: sil`} onClick={() => { remove.reset(); setRemoving(file); }}><Trash2 /></Button>
+      <DeleteIconButton name={file.name} onClick={() => { remove.reset(); setRemoving(file); }} />
     </li>)}</ul>}
     {upload.isPending && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />Yükleniyor… %{percent}</p><progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" /></div>}
     {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}

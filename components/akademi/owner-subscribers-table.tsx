@@ -2,14 +2,14 @@
 import { useState, useTransition } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Download, Trash2 } from "lucide-react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { removeSubscriber } from "@/app/yonetim/aboneler/actions";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ConfirmDelete, done } from "./confirm-delete";
+import { buttonVariants } from "@/components/ui/button";
+import { ConfirmDelete, DeleteIconButton, done } from "./confirm-delete";
 import { useDataTable } from "@/hooks/use-data-table";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { dateTimeLabel } from "@/lib/akademi/format";
@@ -43,7 +43,7 @@ function RemoveSubscriber({ subscriber }: { subscriber: Subscriber }) {
     onSuccess: message => { toast.success(message); setOpen(false); },
   });
   return <>
-    <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${subscriber.email}: sil`} onClick={() => { remove.reset(); setOpen(true); }}><Trash2 /></Button>
+    <DeleteIconButton name={subscriber.email} onClick={() => { remove.reset(); setOpen(true); }} />
     <ConfirmDelete title={subscriber.email} description="Adres bülten listesinden kalıcı olarak silinir. Aynı kişi formdan yeniden abone olabilir." open={open} onClose={() => setOpen(false)} remove={remove} />
   </>;
 }

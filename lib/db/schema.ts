@@ -316,7 +316,6 @@ export const adminAuditLog = pgTable("admin_audit_log", {
   createdAt: time("created_at").notNull().defaultNow(),
 }, (t) => [check("audit_reason_required", sql`length(trim(${t.reason})) > 0`), index("audit_resource_idx").on(t.resourceType, t.resourceId)]);
 
-// Footer newsletter sign-ups; no account needed.
 export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   id: id(),
   email: text("email").notNull().unique(),

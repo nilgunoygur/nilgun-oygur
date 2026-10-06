@@ -25,3 +25,7 @@ export function ConfirmDelete({ title, description, open, onClose, remove, child
     </DialogContent>
   </Dialog>;
 }
+
+export function DeleteIconButton({ name, onClick }: { name: string; onClick: () => void }) {
+  return <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${name}: sil`} onClick={onClick}><Trash2 /></Button>;
+}

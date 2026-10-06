@@ -3,7 +3,6 @@ import type { ColumnFilter, ColumnSort } from "@tanstack/react-table";
 import type {
   FILTER_OPERATORS,
   FILTER_VARIANTS,
-  JOIN_OPERATORS,
 } from "@/lib/data-table-utils";
 
 export interface DataTableColumnMeta {
@@ -16,13 +15,6 @@ export interface DataTableColumnMeta {
   icon?: React.ComponentType<React.ComponentProps<"svg">>;
 }
 
-export interface DataTableQueryKeys {
-  page: string;
-  perPage: string;
-  sort: string;
-  joinOperator: string;
-}
-
 export interface FilterOption {
   label: string;
   value: string;
@@ -32,7 +24,6 @@ export interface FilterOption {
 
 export type FilterOperator = keyof typeof FILTER_OPERATORS;
 export type FilterVariant = (typeof FILTER_VARIANTS)[number];
-export type JoinOperator = (typeof JOIN_OPERATORS)[number];
 
 export interface FilterOperatorOption {
   label: string;

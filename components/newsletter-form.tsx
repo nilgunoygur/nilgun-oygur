@@ -26,10 +26,8 @@ export function NewsletterForm() {
     try {
       const response = await fetch("/api/newsletter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input.data) });
       const result: FormState = await response.json();
-      setState(result.message ? result : failed);
-      if (result.status !== "success") return;
-      track("generate_lead", { method: "newsletter" });
-      form.reset();
+      setState(result.status === "success" || result.status === "error" ? result : failed);
+      if (result.status === "success") { track("generate_lead", { method: "newsletter" }); form.reset(); }
     } catch { setState(failed); } finally { setPending(false); }
   }
 
@@ -38,7 +36,7 @@ export function NewsletterForm() {
       <label htmlFor={id} className="sr-only">E-posta adresiniz</label>
       <div className={cn("flex items-center gap-2 rounded-full bg-white p-1.5 pl-5 transition-shadow focus-within:ring-4 focus-within:ring-lime/50 max-[460px]:flex-col max-[460px]:items-stretch max-[460px]:rounded-[24px] max-[460px]:p-2", error && "ring-4 ring-[#ffb4a8]/70")}>
         <Mail aria-hidden className="size-5 shrink-0 text-muted-foreground max-[460px]:hidden" />
-        <input id={id} name="email" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" disabled={pending} aria-invalid={error} aria-describedby={`${id}-note`} className="h-11 min-w-0 flex-1 bg-transparent text-[16px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60 max-[460px]:flex-none max-[460px]:px-3" />
+        <input id={id} name="email" type="email" autoComplete="email" maxLength={254} placeholder="ornek@eposta.com" readOnly={pending} aria-invalid={error} aria-describedby={`${id}-note`} className="h-11 min-w-0 flex-1 bg-transparent text-[16px] text-foreground outline-none placeholder:text-muted-foreground read-only:opacity-60 max-[460px]:flex-none max-[460px]:px-3" />
         <Button type="submit" size="pill" disabled={pending} className="min-h-11 shrink-0 bg-forest px-6 text-[15px] hover:bg-forest-hover">
           {pending ? <><Spinner />Kaydediliyor…</> : <>Abone ol<ArrowRight data-icon="inline-end" /></>}
         </Button>

@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       return failed("Çok fazla deneme yaptınız. Lütfen bir saat sonra tekrar deneyin.", 429);
     }
     await subscribe(db, input.data.email);
-    // The same answer for a new and an already subscribed address.
+    // Same answer for a repeat address, so the form reveals nothing.
     return reply({ status: "success", message: "Teşekkürler! Bültene kaydınız alındı." });
   } catch {
     return failed("Kaydınız alınamadı. Lütfen biraz sonra tekrar deneyin.", 500);

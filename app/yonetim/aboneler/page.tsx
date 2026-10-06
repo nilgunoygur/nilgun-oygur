@@ -28,14 +28,13 @@ async function Subscribers({ searchParams }: { searchParams: SearchParams }) {
   await ownerPage();
   // The table writes these keys to the URL; its own parsers read them back.
   const params = await searchParams;
-  const email = [params.email].flat()[0] ?? "";
-  const search = parseColumnFilter("email", "text", email);
+  const search = parseColumnFilter("email", "text", [params.email].flat()[0] ?? "");
   const { page, pages, total, recent, latest, subscribers } = await listSubscribers(getDatabase(), {
-    q: search.operator === "iLike" && typeof search.value === "string" ? search.value : "",
+    q: search.operator === "iLike" ? String(search.value) : "",
     page: Number(params.page), perPage: Number(params.perPage), sort: sortParser.parseServerSide(params.sort) ?? [],
   });
   // Keeps the table's page number true after the last row of the last page is deleted.
-  if (Number(params.page) > page) redirect(`/yonetim/aboneler?${new URLSearchParams(Object.entries({ ...params, email, page: String(page) }).filter(([, value]) => value) as [string, string][])}`);
+  if (Number(params.page) > page) redirect(`/yonetim/aboneler?${new URLSearchParams({ ...params, page: String(page) } as Record<string, string>)}`);
 
   return <>
     <OwnerBackLink />

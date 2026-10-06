@@ -42,8 +42,6 @@ export const FILTER_OPERATORS = {
   isRelativeToToday: "rel",
 } as const;
 
-export const JOIN_OPERATORS = ["and", "or"] as const;
-
 const TEXT_OPERATORS = [
   { label: "Contains", value: "iLike" },
   { label: "Does not contain", value: "notILike" },
@@ -118,33 +116,18 @@ const FILTER_OPERATORS_BY_VARIANT: Record<
   multiSelect: MULTI_SELECT_OPERATORS,
 };
 
-function getColumnVar(columnId: string, property: "size" | "offset") {
+function getColumnVar(columnId: string) {
   const name = columnId.replace(
     /[^a-zA-Z0-9-]/g,
     (char) => `_${char.codePointAt(0)?.toString(16)}_`,
   );
-  return `--column-${name}-${property}`;
+  return `--column-${name}-size`;
 }
 
-export function getColumnPinningStyle<TData extends RowData>(
+export function getColumnSizeStyle<TData extends RowData>(
   column: Column<DataTableFeatures, TData>,
 ): React.CSSProperties {
-  const isPinned = column.getIsPinned();
-
-  return {
-    insetInlineStart:
-      isPinned === "start"
-        ? `var(${getColumnVar(column.id, "offset")})`
-        : undefined,
-    insetInlineEnd:
-      isPinned === "end"
-        ? `var(${getColumnVar(column.id, "offset")})`
-        : undefined,
-    opacity: isPinned ? 0.97 : 1,
-    position: isPinned ? "sticky" : "relative",
-    width: `var(${getColumnVar(column.id, "size")})`,
-    zIndex: isPinned ? 1 : undefined,
-  };
+  return { width: `var(${getColumnVar(column.id)})` };
 }
 
 export function getColumnSizingStyle<TData extends RowData>(
@@ -155,16 +138,7 @@ export function getColumnSizingStyle<TData extends RowData>(
   };
 
   for (const header of table.getFlatHeaders()) {
-    style[getColumnVar(header.column.id, "size")] = `${header.getSize()}px`;
-  }
-
-  for (const { column } of table.getLeafHeaders()) {
-    const isPinned = column.getIsPinned();
-    if (!isPinned) continue;
-
-    const offset =
-      isPinned === "start" ? column.getStart("start") : column.getAfter("end");
-    style[getColumnVar(column.id, "offset")] = `${offset}px`;
+    style[getColumnVar(header.column.id)] = `${header.getSize()}px`;
   }
 
   return style;

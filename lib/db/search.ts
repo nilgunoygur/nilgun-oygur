@@ -1,2 +1,2 @@
-/** An ILIKE pattern that finds `text` anywhere, with % and _ taken literally. */
+/** % and _ in the text match literally. */
 export const containsPattern = (text: string) => `%${text.replace(/[\\%_]/g, "\\$&")}%`;
