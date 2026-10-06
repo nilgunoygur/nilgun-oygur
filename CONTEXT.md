@@ -24,7 +24,7 @@
 
 **Owner**: the explicitly designated, verified account authorized to manage the academy’s courses, lessons, and sales. Authenticator enrollment is optional.
 
-**Newsletter subscriber**: an email address left in the footer form to receive announcements. Independent of accounts, stored once in lowercase, and listed for the owner under "Bülten aboneleri". No email is sent to subscribers yet.
+**Newsletter subscriber**: an email address left in the footer form to receive announcements. Independent of accounts, stored once in lowercase, and listed for the owner under "Bülten aboneleri", who can export the list or delete an address. No email is sent to subscribers yet.
 
 **Owner command**: an owner change applied together with its audit entry.
 

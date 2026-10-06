@@ -63,8 +63,7 @@ export function DataTableToolbar<TData extends RowData>({
                 className="border-dashed"
                 onClick={onReset}
               >
-                <X
-                />
+                <X />
                 Temizle
               </Button>
             )

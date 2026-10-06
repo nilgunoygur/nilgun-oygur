@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { adminAuditLog, courses, newsletterSubscribers, refundRequests, shopierPurchases } from "../db/schema.ts";
+import { adminAuditLog, courses, refundRequests, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
 import { linkCourse } from "./catalog.ts";
@@ -15,7 +15,7 @@ export class OwnerInputError extends Error {}
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type AuditEntry = { action: string; resourceType: string; resourceId: string; reason: string };
 
-async function audited(db: Database, actorId: string, entry: AuditEntry, change: (tx: Transaction) => Promise<boolean>) {
+export async function audited(db: Database, actorId: string, entry: AuditEntry, change: (tx: Transaction) => Promise<boolean>) {
   if (!entry.reason.trim()) throw new Error("Owner changes require a reason.");
   return db.transaction(async (tx) => {
     if (!await change(tx)) return false;
@@ -138,10 +138,4 @@ export function syncCatalogAsOwner(db: Database, actorId: string, sync: () => Pr
     await audited(db, actorId, { action: "catalog.sync", resourceType: "catalog", resourceId: "shopier", reason: `Shopier ile eşitlendi (+${result.added}, arşiv ${result.archived})` }, async () => true);
     return result;
   });
-}
-
-/** The audit entry keeps only the id, so the address itself is gone. */
-export function removeSubscriber(db: Database, actorId: string, subscriberId: string) {
-  return audited(db, actorId, { action: "newsletter.subscriber_removed", resourceType: "newsletter_subscriber", resourceId: subscriberId, reason: "Bülten abonesi listeden silindi" },
-    async tx => (await tx.delete(newsletterSubscribers).where(eq(newsletterSubscribers.id, subscriberId)).returning({ id: newsletterSubscribers.id })).length > 0);
 }

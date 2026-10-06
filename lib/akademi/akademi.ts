@@ -2,7 +2,7 @@ import type { Database } from "../db/types.ts";
 import type { ProductChanges, ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
 import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalogFromShopier } from "./catalog.ts";
-import { createCourse, decideRefundRequest, removeSubscriber, setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse, type RefundDecision } from "./owner-commands.ts";
+import { createCourse, decideRefundRequest, setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse, type RefundDecision } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
 import { createOwnerOverview } from "./dashboard.ts";
 import { ownerUsers, type UserListParams } from "./owner-users.ts";
@@ -100,7 +100,6 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
         const refund = await decideRefundRequest(db, actorId, requestId, decision, shopier);
         if (refund) await recordShopierRefund(db, refund);
       },
-      removeSubscriber: (actorId: string, subscriberId: string) => removeSubscriber(db, actorId, subscriberId),
       syncCatalog: (actorId: string) => syncCatalogAsOwner(db, actorId, syncCatalog),
     },
     webhooks: {

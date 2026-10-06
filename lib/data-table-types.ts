@@ -1,11 +1,5 @@
-import type {
-  ColumnFilter,
-  ColumnSort,
-  Row,
-  RowData,
-} from "@tanstack/react-table";
+import type { ColumnFilter, ColumnSort } from "@tanstack/react-table";
 
-import type { DataTableFeatures } from "@/lib/data-table-features";
 import type {
   FILTER_OPERATORS,
   FILTER_VARIANTS,
@@ -65,51 +59,4 @@ declare module "@tanstack/react-table" {
   interface ColumnFilter extends Partial<
     Pick<ColumnFilterItem, "operator" | "variant" | "filterId">
   > {}
-}
-
-export interface DataTableColumnConfig {
-  variant?: FilterVariant;
-  isSortable?: boolean;
-}
-
-export type DataTableColumnConfigs = Record<string, DataTableColumnConfig>;
-
-export type FilterableColumnId<TColumnConfigs extends DataTableColumnConfigs> =
-  {
-    [K in keyof TColumnConfigs]: TColumnConfigs[K] extends {
-      variant: FilterVariant;
-    }
-      ? K
-      : never;
-  }[keyof TColumnConfigs] &
-    string;
-
-export type SortableColumnId<TColumnConfigs extends DataTableColumnConfigs> = {
-  [K in keyof TColumnConfigs]: TColumnConfigs[K] extends { isSortable: false }
-    ? never
-    : K;
-}[keyof TColumnConfigs] &
-  string;
-
-export interface DataTableQuery<
-  TFilterColumnId extends string = string,
-  TSortColumnId extends string = TFilterColumnId,
-> {
-  page: number;
-  perPage: number;
-  sorting: ColumnSortItem<TSortColumnId>[];
-  filters: ColumnFilterItem<TFilterColumnId>[];
-  joinOperator: JoinOperator;
-}
-
-export type DataTableColumnConfigsQuery<
-  TColumnConfigs extends DataTableColumnConfigs,
-> = DataTableQuery<
-  FilterableColumnId<TColumnConfigs>,
-  SortableColumnId<TColumnConfigs>
->;
-
-export interface DataTableRowAction<TData extends RowData> {
-  row: Row<DataTableFeatures, TData>;
-  variant: "update" | "delete";
 }

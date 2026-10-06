@@ -20,7 +20,7 @@ export function ConfirmDelete({ title, description, open, onClose, remove, child
       {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
       <DialogFooter>
         <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={onClose}>Vazgeç</Button>
-        <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={remove.mutate}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
+        <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

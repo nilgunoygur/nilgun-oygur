@@ -1,9 +1,10 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { CalendarPlus, Clock, Mail } from "lucide-react";
 import { ownerPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
-import { listSubscribers, subscriberPageSizes } from "@/lib/newsletter";
-import { parseColumnFilter } from "@/lib/data-table-parsers";
+import { defaultSubscriberPageSize, listSubscribers, subscriberPageSizes, subscriberSortColumns } from "@/lib/newsletter";
+import { getSortingStateParser, parseColumnFilter } from "@/lib/data-table-parsers";
 import { dayLabel } from "@/lib/akademi/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -14,8 +15,8 @@ import { OwnerBackLink } from "@/components/akademi/owner-back-link";
 import { OwnerSubscribersTable } from "@/components/akademi/owner-subscribers-table";
 
 export const metadata = { title: "Bülten aboneleri" };
-// The query keys the table writes to the URL.
 type SearchParams = Promise<{ page?: string; perPage?: string; sort?: string; email?: string | string[] }>;
+const sortParser = getSortingStateParser(subscriberSortColumns);
 
 export default function OwnerSubscribers({ searchParams }: { searchParams: SearchParams }) {
   return <section className={cn(pageWidth, ownerSection)}>
@@ -25,10 +26,16 @@ export default function OwnerSubscribers({ searchParams }: { searchParams: Searc
 
 async function Subscribers({ searchParams }: { searchParams: SearchParams }) {
   await ownerPage();
-  const { email, ...params } = await searchParams;
-  const search = parseColumnFilter("email", "text", [email].flat()[0] ?? "");
-  const q = search.operator === "iLike" && typeof search.value === "string" ? search.value : "";
-  const { filter, total, recent, latest, pages, subscribers } = await listSubscribers(getDatabase(), { ...params, q });
+  // The table writes these keys to the URL; its own parsers read them back.
+  const params = await searchParams;
+  const email = [params.email].flat()[0] ?? "";
+  const search = parseColumnFilter("email", "text", email);
+  const { page, pages, total, recent, latest, subscribers } = await listSubscribers(getDatabase(), {
+    q: search.operator === "iLike" && typeof search.value === "string" ? search.value : "",
+    page: Number(params.page), perPage: Number(params.perPage), sort: sortParser.parseServerSide(params.sort) ?? [],
+  });
+  // Keeps the table's page number true after the last row of the last page is deleted.
+  if (Number(params.page) > page) redirect(`/yonetim/aboneler?${new URLSearchParams(Object.entries({ ...params, email, page: String(page) }).filter(([, value]) => value) as [string, string][])}`);
 
   return <>
     <OwnerBackLink />
@@ -45,7 +52,7 @@ async function Subscribers({ searchParams }: { searchParams: SearchParams }) {
         <EmptyMedia variant="icon"><Mail /></EmptyMedia>
         <EmptyTitle>Henüz bülten abonesi yok</EmptyTitle>
         <EmptyDescription>Ziyaretçiler sitenin altındaki formdan kaydoldukça burada listelenir.</EmptyDescription>
-      </EmptyHeader></Empty> : <OwnerSubscribersTable subscribers={subscribers} pageCount={pages} pageSize={filter.perPage} pageSizes={subscriberPageSizes} />}
+      </EmptyHeader></Empty> : <OwnerSubscribersTable subscribers={subscribers} pageCount={pages} pageSize={defaultSubscriberPageSize} pageSizes={subscriberPageSizes} />}
     </CardContent></Card>
   </>;
 }

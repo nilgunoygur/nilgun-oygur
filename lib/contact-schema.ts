@@ -14,5 +14,5 @@ export const contactSchema = z.object({
     .min(10, "Mesajınız en az 10 karakter olmalıdır.")
     .max(5000, "Mesajınız en fazla 5000 karakter olabilir."),
 });
-export const subscribeSchema = z.object({ email: emailField().refine(value => value.length <= 254, "E-posta adresi en fazla 254 karakter olabilir.") });
+export const subscribeSchema = z.object({ email: emailField().pipe(z.string().max(254, "E-posta adresi en fazla 254 karakter olabilir.")) });
 export const supportSchema = contactSchema.extend({ orderNumber: optionalOrderNumberField });

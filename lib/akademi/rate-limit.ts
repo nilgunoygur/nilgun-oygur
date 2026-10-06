@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { rateLimit } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
@@ -15,3 +16,7 @@ export async function consumeAttempt(db: Database, key: string, { max, windowMs,
     }).returning({ count: rateLimit.count });
   return row.count <= max;
 }
+
+/** A keyed hash of the visitor's IP, so limits are kept without storing addresses. */
+export const visitorKey = (headers: Headers, secret: string) =>
+  createHmac("sha256", secret).update(headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || "local").digest("hex");

@@ -5,8 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "../lib/db/schema.ts";
 import { subscribeSchema } from "../lib/contact-schema.ts";
-import { listSubscribers, subscribe, subscribersCsv } from "../lib/newsletter.ts";
-import { removeSubscriber } from "../lib/akademi/owner-commands.ts";
+import { listSubscribers, removeSubscriber, subscribe, subscribersCsv } from "../lib/newsletter.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -32,19 +31,19 @@ test("the owner list is newest first, searchable and paged", async () => {
   await db.insert(schema.newsletterSubscribers).values(Array.from({ length: 26 }, (_, i) => ({ email: `reader_${i}@example.com`, createdAt: at(i) })));
   const first = await listSubscribers(db, {});
   assert.deepEqual([first.total, first.pages, first.subscribers.length, first.subscribers[0].email], [27, 2, 25, "ayse@example.com"]);
-  const beyond = await listSubscribers(db, { page: "99" });
-  assert.deepEqual([beyond.filter.page, beyond.subscribers.length], [2, 2], "a page past the end shows the last page");
+  const beyond = await listSubscribers(db, { page: 99 });
+  assert.deepEqual([beyond.page, beyond.subscribers.length], [2, 2], "a page past the end shows the last page");
   const found = await listSubscribers(db, { q: "READER_25" });
-  assert.deepEqual([found.matching, found.total, found.subscribers.map(item => item.email)], [1, 27, ["reader_25@example.com"]]);
-  assert.equal((await listSubscribers(db, { q: "%" })).matching, 0, "search treats % as plain text");
+  assert.deepEqual([found.total, found.subscribers.map(item => item.email)], [27, ["reader_25@example.com"]]);
+  assert.equal((await listSubscribers(db, { q: "%" })).subscribers.length, 0, "search treats % as plain text");
 });
 
-test("the owner chooses the page size and the order; unknown values fall back", async () => {
-  const sorted = await listSubscribers(db, { perPage: "10", sort: "email.desc" });
+test("the owner chooses the page size and the order; an unknown page size falls back", async () => {
+  const sorted = await listSubscribers(db, { perPage: 10, sort: [{ id: "email", desc: true }] });
   assert.deepEqual([sorted.pages, sorted.subscribers.length, sorted.subscribers[0].email], [3, 10, "reader_9@example.com"]);
-  assert.equal((await listSubscribers(db, { sort: "createdAt.asc" })).subscribers[0].email, "reader_0@example.com");
-  const fallback = await listSubscribers(db, { perPage: "7", sort: "id.asc,constructor.desc,email" });
-  assert.deepEqual([fallback.filter.perPage, fallback.subscribers[0].email], [25, "ayse@example.com"]);
+  assert.equal((await listSubscribers(db, { sort: [{ id: "createdAt", desc: false }] })).subscribers[0].email, "reader_0@example.com");
+  const fallback = await listSubscribers(db, { perPage: 7, page: NaN });
+  assert.deepEqual([fallback.subscribers.length, fallback.subscribers[0].email], [25, "ayse@example.com"]);
 });
 
 test("the summary counts sign-ups from the last 30 days", async () => {
@@ -66,7 +65,7 @@ test("the owner removes a subscriber; the audit entry does not keep the address"
   await db.insert(schema.user).values({ id: "owner", name: "Nilgün", email: "owner@example.com" });
   const [{ id }] = (await listSubscribers(db, { q: "ayse@" })).subscribers;
   assert.equal(await removeSubscriber(db, "owner", id), true);
-  assert.equal((await listSubscribers(db, { q: "ayse@" })).matching, 0);
+  assert.equal((await listSubscribers(db, { q: "ayse@" })).subscribers.length, 0);
   assert.equal(await removeSubscriber(db, "owner", id), false, "nothing left to remove");
   const audit = await db.select().from(schema.adminAuditLog);
   assert.deepEqual(audit.map(entry => [entry.action, entry.resourceId]), [["newsletter.subscriber_removed", id]]);

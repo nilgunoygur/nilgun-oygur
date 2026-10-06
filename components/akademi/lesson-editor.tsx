@@ -162,7 +162,7 @@ function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
   });
   return <>
     <Button type="button" variant="destructive" size="pill" className="ml-auto" onClick={() => { remove.reset(); setOpen(true); }}><Trash2 />Dersi sil</Button>
-    <ConfirmDelete title={lesson.title} description="Ders, ödev PDF’leriyle birlikte kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video veya ses kaydı etkilenmez." open={open} onClose={() => setOpen(false)} remove={{ ...remove, mutate: () => remove.mutate() }}>
+    <ConfirmDelete title={lesson.title} description="Ders, ödev PDF’leriyle birlikte kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video veya ses kaydı etkilenmez." open={open} onClose={() => setOpen(false)} remove={remove}>
       {lesson.status === "published" && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
     </ConfirmDelete>
   </>;
@@ -352,6 +352,6 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
     </li>)}</ul>}
     {upload.isPending && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />Yükleniyor… %{percent}</p><progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" /></div>}
     {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
-    <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={{ ...remove, mutate: () => remove.mutate() }} />
+    <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={remove} />
   </div>;
 }

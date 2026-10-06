@@ -19,7 +19,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, ChevronUp, ChevronsUpDown, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 
 interface DataTableColumnHeaderProps<
   TData extends RowData,
@@ -35,25 +35,21 @@ export function DataTableColumnHeader<TData extends RowData, TValue>({
   className,
   ...props
 }: DataTableColumnHeaderProps<TData, TValue>) {
-  if (!column.getCanSort() && !column.getCanHide()) {
+  if (!column.getCanSort()) {
     return <div className={cn(className)}>{label}</div>;
   }
 
   return (
     <Subscribe
       source={column.table.store}
-      selector={(state) => ({
-        isVisible: state.columnVisibility[column.id] !== false,
-        sortDirection: getSortDirection(state.sorting, column.id),
-      })}
+      selector={(state) => getSortDirection(state.sorting, column.id)}
     >
-      {(headerState) => (
+      {(sortDirection) => (
         <DataTableColumnHeaderMenu
           column={column}
           label={label}
           className={className}
-          isVisible={headerState.isVisible}
-          sortDirection={headerState.sortDirection}
+          sortDirection={sortDirection}
           {...props}
         />
       )}
@@ -65,7 +61,6 @@ interface DataTableColumnHeaderMenuProps<
   TData extends RowData,
   TValue,
 > extends DataTableColumnHeaderProps<TData, TValue> {
-  isVisible: boolean;
   sortDirection: SortDirection | "none";
 }
 
@@ -73,7 +68,6 @@ function DataTableColumnHeaderMenu<TData extends RowData, TValue>({
   column,
   label,
   className,
-  isVisible,
   sortDirection,
   ...props
 }: DataTableColumnHeaderMenuProps<TData, TValue>) {
@@ -100,14 +94,11 @@ function DataTableColumnHeaderMenu<TData extends RowData, TValue>({
         {label}
         {column.getCanSort() &&
           (sortDirection === "desc" ? (
-            <ChevronDown
-            />
+            <ChevronDown />
           ) : sortDirection === "asc" ? (
-            <ChevronUp
-            />
+            <ChevronUp />
           ) : (
-            <ChevronsUpDown
-            />
+            <ChevronsUpDown />
           ))}
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -122,8 +113,7 @@ function DataTableColumnHeaderMenu<TData extends RowData, TValue>({
               checked={sortDirection === "asc"}
               onClick={() => onSortDirectionChange("asc")}
             >
-              <ChevronUp
-              />
+              <ChevronUp />
               Artan
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
@@ -131,22 +121,10 @@ function DataTableColumnHeaderMenu<TData extends RowData, TValue>({
               checked={sortDirection === "desc"}
               onClick={() => onSortDirectionChange("desc")}
             >
-              <ChevronDown
-              />
+              <ChevronDown />
               Azalan
             </DropdownMenuCheckboxItem>
           </>
-        )}
-        {column.getCanHide() && (
-          <DropdownMenuCheckboxItem
-            className="[&_svg]:text-muted-foreground"
-            checked={!isVisible}
-            onClick={() => column.toggleVisibility(false)}
-          >
-            <EyeOff
-            />
-            Gizle
-          </DropdownMenuCheckboxItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

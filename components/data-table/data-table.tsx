@@ -33,13 +33,11 @@ interface DataTableProps<
   TData extends RowData,
 > extends React.ComponentProps<"div"> {
   table: TanstackTable<DataTableFeatures, TData>;
-  actionBar?: React.ReactNode;
   pageSizeOptions?: number[];
 }
 
 export function DataTable<TData extends RowData>({
   table,
-  actionBar,
   pageSizeOptions,
   children,
   className,
@@ -60,15 +58,7 @@ export function DataTable<TData extends RowData>({
           <DataTableBody table={table} />
         </DataTableLayout>
       </div>
-      <div className="flex flex-col gap-2.5">
-        <DataTablePagination
-          table={table}
-          pageSizeOptions={pageSizeOptions}
-        />
-        {actionBar ? (
-          <DataTableActionBar table={table} actionBar={actionBar} />
-        ) : null}
-      </div>
+      <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
     </div>
   );
 }
@@ -115,7 +105,6 @@ function DataTableHeader<TData extends RowData>({
         columnOrder: state.columnOrder,
         columnPinning: state.columnPinning,
         columnVisibility: state.columnVisibility,
-        rowSelection: state.rowSelection,
       })}
     >
       {() => (
@@ -201,28 +190,18 @@ function DataTableRow<TData extends RowData>({
         }));
 
         return (
-          <Subscribe
-            source={row.table.atoms.rowSelection}
-            selector={(selection) => selection[row.id] === true}
-          >
-            {(isSelected) => (
-              <TableRow
-                data-state={isSelected ? "selected" : undefined}
-                className="group/row"
+          <TableRow className="group/row">
+            {cells.map(({ cell, pinned, style }) => (
+              <DataTableCellSlot
+                key={cell.id}
+                render={<TableCell />}
+                pinned={pinned}
+                style={style}
               >
-                {cells.map(({ cell, pinned, style }) => (
-                  <DataTableCellSlot
-                    key={cell.id}
-                    render={<TableCell />}
-                    pinned={pinned}
-                    style={style}
-                  >
-                    <FlexRender cell={cell} />
-                  </DataTableCellSlot>
-                ))}
-              </TableRow>
-            )}
-          </Subscribe>
+                <FlexRender cell={cell} />
+              </DataTableCellSlot>
+            ))}
+          </TableRow>
         );
       }}
     </Subscribe>
@@ -230,25 +209,6 @@ function DataTableRow<TData extends RowData>({
 }
 
 const MemoizedDataTableRow = React.memo(DataTableRow) as typeof DataTableRow;
-
-interface DataTableActionBarProps<TData extends RowData> {
-  table: TanstackTable<DataTableFeatures, TData>;
-  actionBar: React.ReactNode;
-}
-
-function DataTableActionBar<TData extends RowData>({
-  table,
-  actionBar,
-}: DataTableActionBarProps<TData>) {
-  return (
-    <Subscribe
-      source={table.atoms.rowSelection}
-      selector={() => table.getSelectedRowIds().length > 0}
-    >
-      {(hasSelectedRows) => (hasSelectedRows ? actionBar : null)}
-    </Subscribe>
-  );
-}
 
 interface DataTableCellSlotProps extends useRender.ComponentProps<"td"> {
   pinned?: boolean;

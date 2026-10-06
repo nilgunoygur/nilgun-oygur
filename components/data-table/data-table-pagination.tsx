@@ -38,15 +38,13 @@ export function DataTablePagination<TData extends RowData>({
       selector={(state) => ({
         pageIndex: state.pagination.pageIndex,
         pageSize: state.pagination.pageSize,
-        selectedRowCount: table.getSelectedRowIds().length,
       })}
     >
-      {({ pageIndex, pageSize, selectedRowCount }) => (
+      {({ pageIndex, pageSize }) => (
         <DataTablePaginationContent
           table={table}
           pageIndex={pageIndex}
           pageSize={pageSize}
-          selectedRowCount={selectedRowCount}
           pageSizeOptions={pageSizeOptions}
           className={className}
           {...props}
@@ -62,7 +60,6 @@ interface DataTablePaginationContentProps<
   table: Table<DataTableFeatures, TData>;
   pageIndex: number;
   pageSize: number;
-  selectedRowCount: number;
   pageSizeOptions: number[];
 }
 
@@ -70,7 +67,6 @@ function DataTablePaginationContent<TData extends RowData>({
   table,
   pageIndex,
   pageSize,
-  selectedRowCount,
   pageSizeOptions,
   className,
   ...props
@@ -88,9 +84,7 @@ function DataTablePaginationContent<TData extends RowData>({
       )}
       {...props}
     >
-      <div className="flex-1 text-sm whitespace-nowrap text-muted-foreground">
-        {selectedRowCount > 0 && `${selectedRowCount} satır seçildi.`}
-      </div>
+      <div className="flex-1" />
       <div className="flex flex-col-reverse items-center gap-4 sm:flex-row sm:gap-6 lg:gap-8">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium whitespace-nowrap">Sayfa başına</p>

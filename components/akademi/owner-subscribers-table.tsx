@@ -15,9 +15,9 @@ import type { DataTableFeatures } from "@/lib/data-table-features";
 import { dateTimeLabel } from "@/lib/akademi/format";
 import { cn } from "@/lib/utils";
 
-export type Subscriber = { id: string; email: string; createdAt: Date };
+type Subscriber = { id: string; email: string; createdAt: Date };
 
-// Sorting, search and paging live in the URL; the page reads them and queries the database.
+// Sorting, search and paging live in the URL; the server page queries.
 const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
   {
     id: "email", accessorKey: "email", enableColumnFilter: true,
@@ -33,7 +33,7 @@ const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} label="Kayıt" />,
     cell: ({ row }) => <span className="whitespace-nowrap text-stone">{dateTimeLabel.format(row.original.createdAt)}</span>,
   },
-  { id: "remove", size: 64, cell: ({ row }) => <RemoveSubscriber subscriber={row.original} /> },
+  { id: "remove", size: 64, header: () => <span className="sr-only">İşlemler</span>, cell: ({ row }) => <RemoveSubscriber subscriber={row.original} /> },
 ];
 
 function RemoveSubscriber({ subscriber }: { subscriber: Subscriber }) {
@@ -44,7 +44,7 @@ function RemoveSubscriber({ subscriber }: { subscriber: Subscriber }) {
   });
   return <>
     <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${subscriber.email}: sil`} onClick={() => { remove.reset(); setOpen(true); }}><Trash2 /></Button>
-    <ConfirmDelete title={subscriber.email} description="Adres bülten listesinden kalıcı olarak silinir. Aynı kişi formdan yeniden abone olabilir." open={open} onClose={() => setOpen(false)} remove={{ ...remove, mutate: () => remove.mutate() }} />
+    <ConfirmDelete title={subscriber.email} description="Adres bülten listesinden kalıcı olarak silinir. Aynı kişi formdan yeniden abone olabilir." open={open} onClose={() => setOpen(false)} remove={remove} />
   </>;
 }
 

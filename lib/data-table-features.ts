@@ -2,14 +2,11 @@ import {
   assignPrototypeAPIs,
   assignTableAPIs,
   type ColumnFilter,
-  columnFacetingFeature,
   columnFilteringFeature,
   columnOrderingFeature,
   columnPinningFeature,
   columnSizingFeature,
   columnVisibilityFeature,
-  createFacetedMinMaxValues,
-  createFacetedUniqueValues,
   createPaginatedRowModel,
   createSortedRowModel,
   functionalUpdate,
@@ -34,11 +31,6 @@ import type {
   JoinOperator,
 } from "@/lib/data-table-types";
 
-import {
-  createDataTableFacetedRowModel,
-  createDataTableFilteredRowModel,
-  dataTableFilterFn,
-} from "@/lib/data-table-filters";
 import {
   getIsPlainFilter,
   normalizeColumnFilter,
@@ -107,7 +99,6 @@ const dataTableFilteringFeature: TableFeature = {
   }),
   getDefaultColumnDef: () => ({
     enableColumnFilter: false,
-    filterFn: dataTableFilterFn,
   }),
   getDefaultTableOptions: (table) => {
     const options: TableOptions_DataTableFiltering = {
@@ -267,7 +258,6 @@ function getShouldRemoveFilter(
 
 export const dataTableFeatures = tableFeatures({
   columnFilteringFeature,
-  columnFacetingFeature,
   columnOrderingFeature,
   columnPinningFeature,
   columnSizingFeature,
@@ -276,10 +266,6 @@ export const dataTableFeatures = tableFeatures({
   rowSelectionFeature,
   rowSortingFeature,
   dataTableFilteringFeature,
-  filteredRowModel: createDataTableFilteredRowModel(),
-  facetedRowModel: createDataTableFacetedRowModel(),
-  facetedUniqueValues: createFacetedUniqueValues(),
-  facetedMinMaxValues: createFacetedMinMaxValues(),
   paginatedRowModel: createPaginatedRowModel(),
   sortedRowModel: createSortedRowModel(),
   columnMeta: metaHelper<DataTableColumnMeta>(),
