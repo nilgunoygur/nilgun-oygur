@@ -18,7 +18,11 @@ import type { SubscriberKind } from "@/lib/newsletter";
 import { cn } from "@/lib/utils";
 
 type Subscriber = { id: string; email: string; createdAt: Date; kind: SubscriberKind };
-const kinds: Record<SubscriberKind, string> = { visitor: "Ziyaretçi", member: "Üye", buyer: "Öğrenci" };
+const kinds = {
+  visitor: { label: "Ziyaretçi", variant: "outline" },
+  member: { label: "Üye", variant: "secondary" },
+  buyer: { label: "Öğrenci", variant: "default" },
+} as const satisfies Record<SubscriberKind, unknown>;
 
 // Sorting, search and paging live in the URL; the server page queries.
 const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
@@ -33,8 +37,8 @@ const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
   },
   {
     id: "kind", accessorKey: "kind", size: 140, enableSorting: false,
-    header: () => "Tür",
-    cell: ({ row }) => <Badge variant={row.original.kind === "visitor" ? "outline" : row.original.kind === "member" ? "secondary" : "default"}>{kinds[row.original.kind]}</Badge>,
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Tür" />,
+    cell: ({ row }) => <Badge variant={kinds[row.original.kind].variant}>{kinds[row.original.kind].label}</Badge>,
   },
   {
     id: "createdAt", accessorKey: "createdAt", size: 220,

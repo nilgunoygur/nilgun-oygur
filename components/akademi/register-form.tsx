@@ -16,8 +16,8 @@ export default function RegisterForm({ disabled, destination, onSent }: { disabl
   });
   const submit = form.handleSubmit(async ({ name, email, password, contact, newsletter }) => {
     if (!await authAttempt(form, () => authClient.signUp.email({ name, email, password, callbackURL: verificationCallback(destination), ...contact }))) return;
-    // Best effort: the account matters more than the newsletter.
-    if (newsletter) void fetch("/api/newsletter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) }).catch(() => {});
+    // Best effort.
+    if (newsletter) void fetch("/api/newsletter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }), keepalive: true }).catch(() => {});
     track("sign_up", { method: "email" });
     onSent();
   });

@@ -15,7 +15,6 @@
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
     "newsletter:setup": "node --import tsx scripts/resend-contact-property.mjs",
-    "newsletter:push-accounts": "node --import tsx scripts/resend-push-accounts.mjs",
     "email:dev": "email dev --dir emails --port 3001",
     "shopier:verify": "node --import tsx scripts/shopier-verify-delivery.mjs"
   },

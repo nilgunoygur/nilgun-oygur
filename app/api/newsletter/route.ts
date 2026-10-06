@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
     await subscribe(db, input.data.email);
     // The daily sync retries anything this misses.
-    after(() => syncSubscribersToResend(5).catch(() => {}));
+    after(() => syncSubscribersToResend(input.data.email).catch(() => console.error("Newsletter sync could not run.")));
     // Same answer for a repeat address, so the form reveals nothing.
     return reply({ status: "success", message: "Teşekkürler! Bültene kaydınız alındı." });
   } catch {

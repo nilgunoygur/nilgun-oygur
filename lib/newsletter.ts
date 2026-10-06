@@ -1,7 +1,8 @@
 import { setTimeout } from "node:timers/promises";
 import { and, asc, count, desc, eq, gte, ilike, max, sql } from "drizzle-orm";
 import { audited } from "./db/audit.ts";
-import { newsletterSubscribers, user } from "./db/schema.ts";
+import type { Resend } from "resend";
+import { newsletterSubscribers } from "./db/schema.ts";
 import { containsPattern } from "./db/search.ts";
 import type { Database } from "./db/types.ts";
 
@@ -10,8 +11,8 @@ export const defaultSubscriberPageSize = 25;
 export const subscriberSortColumns = ["email", "createdAt"] as const;
 type SubscriberList = { q?: string; page?: number; perPage?: number; sort?: { id: (typeof subscriberSortColumns)[number]; desc: boolean }[] };
 
-export type SubscriberKind = "visitor" | "member" | "buyer";
-/** Resend contact properties: the kind, and whether the address asked for the newsletter ("yes") or only has an account ("no"). */
+export type SubscriberKind = NonNullable<typeof newsletterSubscribers.$inferSelect.syncedKind>;
+/** Resend contact property keys. */
 export const kindProperty = "member_type", optInProperty = "newsletter_opt_in";
 // Qualified by hand: the subqueries read the same column names as the outer table.
 const kind = sql<SubscriberKind>`case
@@ -24,8 +25,10 @@ export async function subscribe(db: Database, email: string) {
   await db.insert(newsletterSubscribers).values({ email: email.trim().toLowerCase() }).onConflictDoNothing({ target: newsletterSubscribers.email });
 }
 
-/** The audit entry keeps only the id, so the address itself is gone. */
-export function removeSubscriber(db: Database, actorId: string, subscriberId: string) {
+/** Resend first: an address still there would keep receiving the newsletter. The audit entry keeps only the id. */
+export async function removeSubscriber(db: Database, actorId: string, subscriberId: string, removeContact: (email: string) => Promise<boolean>) {
+  const [subscriber] = await db.select({ email: newsletterSubscribers.email }).from(newsletterSubscribers).where(eq(newsletterSubscribers.id, subscriberId));
+  if (subscriber && !await removeContact(subscriber.email)) throw new Error("Resend kept the contact.");
   return audited(db, actorId, { action: "newsletter.subscriber_removed", resourceType: "newsletter_subscriber", resourceId: subscriberId, reason: "Bülten abonesi listeden silindi" },
     async tx => (await tx.delete(newsletterSubscribers).where(eq(newsletterSubscribers.id, subscriberId)).returning({ id: newsletterSubscribers.id })).length > 0);
 }
@@ -58,34 +61,22 @@ export async function subscribersCsv(db: Database) {
   return `\uFEFF${[["E-posta", "Tür", "Kayıt tarihi"], ...rows.map(row => [row.email, row.kind, row.createdAt.toISOString()])].map(row => row.map(cell).join(",")).join("\r\n")}\r\n`;
 }
 
-type ContactResult = Promise<{ error: unknown }>;
-/** The part of Resend's contacts API the sync uses. */
-export type ResendContacts = {
-  create(contact: { email: string; properties: Record<string, string> }): ContactResult;
-  update(contact: { email: string; properties: Record<string, string> }): ContactResult;
-};
+type ResendContacts = Pick<Resend["contacts"], "create" | "update">;
 
-/** Sends subscribers whose kind is new or has changed to Resend; a failed one stays pending for the next run. */
-export async function syncContacts(db: Database, contacts: ResendContacts, { limit = 40, pauseMs = 600, wait = setTimeout as (ms: number) => Promise<unknown> } = {}) {
+/** A failed contact stays pending for the next run. With `email`, only that subscriber. */
+export async function syncContacts(db: Database, contacts: ResendContacts, { email, limit = 150, pauseMs = 600 }: { email?: string; limit?: number; pauseMs?: number } = {}) {
   const pending = await db.select({ id: newsletterSubscribers.id, email: newsletterSubscribers.email, syncedKind: newsletterSubscribers.syncedKind, kind })
-    .from(newsletterSubscribers).where(sql`${newsletterSubscribers.syncedKind} is distinct from ${kind}`).orderBy(newsletterSubscribers.createdAt).limit(limit);
+    .from(newsletterSubscribers).where(and(sql`${newsletterSubscribers.syncedKind} is distinct from ${kind}`, email ? eq(newsletterSubscribers.email, email.trim().toLowerCase()) : undefined))
+    .orderBy(newsletterSubscribers.createdAt).limit(limit);
   let synced = 0;
   for (const [index, row] of pending.entries()) {
     // Resend allows a few requests per second.
-    if (index) await wait(pauseMs);
+    if (index) await setTimeout(pauseMs);
     const contact = { email: row.email, properties: { [kindProperty]: row.kind, [optInProperty]: "yes" } };
-    // Creating also updates an address Resend already has; later changes only touch the property.
+    // Create also updates an address Resend already has.
     if ((await (row.syncedKind ? contacts.update(contact) : contacts.create(contact))).error) continue;
     await db.update(newsletterSubscribers).set({ syncedKind: row.kind }).where(eq(newsletterSubscribers.id, row.id));
     synced++;
   }
   return { pending: pending.length, synced };
-}
-
-/** Verified accounts that never used the sign-up form, for a one-time push to Resend marked as not opted in. */
-export function accountsOutsideNewsletter(db: Database) {
-  return db.select({
-    email: user.email,
-    kind: sql<SubscriberKind>`case when exists (select 1 from shopier_purchases p where p.user_id = "user".id or p.buyer_email = "user".email) then 'buyer' else 'member' end`,
-  }).from(user).where(and(eq(user.emailVerified, true), sql`not exists (select 1 from newsletter_subscribers s where s.email = "user".email)`)).orderBy(user.createdAt);
 }

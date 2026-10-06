@@ -1,5 +1,4 @@
-// Creates the Resend contact properties the newsletter sync fills. Safe to run again.
-// Needs a full-access RESEND_API_KEY. Usage: pnpm run newsletter:setup
+// Creates the Resend contact properties the sync fills; safe to rerun. Usage: pnpm run newsletter:setup
 import nextEnv from "@next/env";
 import { Resend } from "resend";
 import { kindProperty, optInProperty } from "../lib/newsletter.ts";
