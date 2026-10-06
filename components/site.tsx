@@ -263,10 +263,17 @@ export function Footer({ consentSettings = false, newsletter = false }: { consen
   return (
     <footer className={cn(pageWidth, "pt-[60px] pb-[25px] max-tablet:pt-[30px]")}>
       {newsletter && (
-        <section aria-labelledby="newsletter-title" className="mb-[60px] flex items-center justify-between gap-x-12 gap-y-6 rounded-[24px] bg-mist px-10 py-9 max-laptop:flex-col max-laptop:items-stretch max-tablet:mb-10 max-tablet:px-6 max-tablet:py-7">
+        <section aria-labelledby="newsletter-title" className="relative isolate mb-[70px] grid grid-cols-[1.1fr_1fr] items-center gap-x-16 gap-y-8 overflow-hidden rounded-[32px] bg-forest p-14 text-white max-laptop:grid-cols-1 max-tablet:mb-10 max-tablet:rounded-[24px] max-tablet:px-6 max-tablet:py-9">
+          <div aria-hidden className={cn(ribbon, "-top-14 -right-28 bg-primary/45")} />
+          <div aria-hidden className={cn(ribbon, "-bottom-16 right-[22%] bg-lime/15 max-laptop:hidden")} />
           <div>
-            <h2 id="newsletter-title" className="text-[28px] max-tablet:text-[23px]">Bültene abone olun</h2>
-            <p className="mt-2 text-[15px] text-muted-foreground">Yeni yazılar ve eğitim duyuruları e-posta kutunuza gelsin.</p>
+            <p className="mb-3 text-[12px] font-semibold tracking-[0.18em] text-lime">BÜLTEN</p>
+            <h2 id="newsletter-title" className="font-display text-[40px] leading-[1.15] font-normal tracking-[-0.5px] text-white max-tablet:text-[29px]">Yeni yazılar ve eğitimler önce size ulaşsın</h2>
+            <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-white/75">
+              {["Yeni yazılar", "Eğitim duyuruları"].map((item) => (
+                <li key={item} className="flex items-center gap-2"><Check className="size-4 text-lime" />{item}</li>
+              ))}
+            </ul>
           </div>
           <NewsletterForm />
         </section>
