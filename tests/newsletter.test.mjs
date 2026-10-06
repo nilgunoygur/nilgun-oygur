@@ -6,6 +6,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "../lib/db/schema.ts";
 import { subscribeSchema } from "../lib/contact-schema.ts";
 import { listSubscribers, subscribe, subscribersCsv } from "../lib/newsletter.ts";
+import { removeSubscriber } from "../lib/akademi/owner-commands.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -59,4 +60,15 @@ test("the export lists every subscriber and cannot be run as a formula", async (
   assert.equal(lines[0], '\uFEFF"E-posta","Kayıt tarihi"');
   assert.equal(lines[1].split(",")[0], '"ayse@example.com"');
   assert.equal(lines.at(-1), `"'=cmd@example.com","2020-01-01T00:00:00.000Z"`);
+});
+
+test("the owner removes a subscriber; the audit entry does not keep the address", async () => {
+  await db.insert(schema.user).values({ id: "owner", name: "Nilgün", email: "owner@example.com" });
+  const [{ id }] = (await listSubscribers(db, { q: "ayse@" })).subscribers;
+  assert.equal(await removeSubscriber(db, "owner", id), true);
+  assert.equal((await listSubscribers(db, { q: "ayse@" })).matching, 0);
+  assert.equal(await removeSubscriber(db, "owner", id), false, "nothing left to remove");
+  const audit = await db.select().from(schema.adminAuditLog);
+  assert.deepEqual(audit.map(entry => [entry.action, entry.resourceId]), [["newsletter.subscriber_removed", id]]);
+  assert.doesNotMatch(JSON.stringify(audit), /ayse/);
 });

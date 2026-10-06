@@ -1,11 +1,15 @@
 "use client";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useMutation } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Download } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { removeSubscriber } from "@/app/yonetim/aboneler/actions";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDelete, done } from "./confirm-delete";
 import { useDataTable } from "@/hooks/use-data-table";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { dateTimeLabel } from "@/lib/akademi/format";
@@ -16,8 +20,8 @@ export type Subscriber = { id: string; email: string; createdAt: Date };
 // Sorting, search and paging live in the URL; the page reads them and queries the database.
 const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
   {
-    id: "email", accessorKey: "email", enableColumnFilter: true, enableHiding: false,
-    meta: { label: "E-posta", placeholder: "E-posta ara…", variant: "text" },
+    id: "email", accessorKey: "email", enableColumnFilter: true,
+    meta: { placeholder: "E-posta ara…", variant: "text" },
     header: ({ column }) => <DataTableColumnHeader column={column} label="E-posta" />,
     cell: ({ row }) => <div className="flex min-w-0 items-center gap-3">
       <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mist text-sm font-semibold text-forest">{row.original.email.charAt(0).toLocaleUpperCase("tr-TR")}</span>
@@ -26,11 +30,23 @@ const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
   },
   {
     id: "createdAt", accessorKey: "createdAt", size: 200,
-    meta: { label: "Kayıt" },
     header: ({ column }) => <DataTableColumnHeader column={column} label="Kayıt" />,
     cell: ({ row }) => <span className="whitespace-nowrap text-stone">{dateTimeLabel.format(row.original.createdAt)}</span>,
   },
+  { id: "remove", size: 64, cell: ({ row }) => <RemoveSubscriber subscriber={row.original} /> },
 ];
+
+function RemoveSubscriber({ subscriber }: { subscriber: Subscriber }) {
+  const [open, setOpen] = useState(false);
+  const remove = useMutation({
+    mutationFn: () => done(removeSubscriber(subscriber.id)),
+    onSuccess: message => { toast.success(message); setOpen(false); },
+  });
+  return <>
+    <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${subscriber.email}: sil`} onClick={() => { remove.reset(); setOpen(true); }}><Trash2 /></Button>
+    <ConfirmDelete title={subscriber.email} description="Adres bülten listesinden kalıcı olarak silinir. Aynı kişi formdan yeniden abone olabilir." open={open} onClose={() => setOpen(false)} remove={{ ...remove, mutate: () => remove.mutate() }} />
+  </>;
+}
 
 export function OwnerSubscribersTable({ subscribers, pageCount, pageSize, pageSizes }: { subscribers: Subscriber[]; pageCount: number; pageSize: number; pageSizes: number[] }) {
   const [loading, startTransition] = useTransition();

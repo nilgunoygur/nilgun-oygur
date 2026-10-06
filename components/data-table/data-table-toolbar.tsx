@@ -11,10 +11,6 @@ import * as React from "react";
 
 import type { DataTableFeatures } from "@/lib/data-table-features";
 
-import { DataTableDateFilter } from "@/components/data-table/data-table-date-filter";
-import { DataTableFacetedFilter } from "@/components/data-table/data-table-faceted-filter";
-import { DataTableSliderFilter } from "@/components/data-table/data-table-slider-filter";
-import { DataTableViewOptions } from "@/components/data-table/data-table-view-options";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
@@ -75,10 +71,7 @@ export function DataTableToolbar<TData extends RowData>({
           }
         </Subscribe>
       </div>
-      <div className="flex items-center gap-2">
-        {children}
-        <DataTableViewOptions table={table} align="end" />
-      </div>
+      <div className="flex items-center gap-2">{children}</div>
     </div>
   );
 }
@@ -90,66 +83,15 @@ function DataTableToolbarFilter<TData extends RowData>({
   column,
 }: DataTableToolbarFilterProps<TData>) {
   const columnMeta = column.columnDef.meta;
-  if (!columnMeta?.variant) return null;
+  if (columnMeta?.variant !== "text") return null;
 
-  const title = columnMeta.label ?? column.id;
-  const placeholder = columnMeta.placeholder ?? columnMeta.label;
-
-  switch (columnMeta.variant) {
-    case "text":
-      return (
-        <DataTableFilterInput
-          column={column}
-          placeholder={placeholder}
-          className="w-40 lg:w-56"
-        />
-      );
-
-    case "number":
-      return (
-        <div className="relative">
-          <DataTableFilterInput
-            column={column}
-            type="number"
-            inputMode="numeric"
-            placeholder={placeholder}
-            className={cn("w-30", columnMeta.unit && "pe-8")}
-          />
-          {columnMeta.unit && (
-            <span className="absolute inset-e-0 top-0 bottom-0 flex items-center rounded-e-md bg-accent px-2 text-sm text-muted-foreground">
-              {columnMeta.unit}
-            </span>
-          )}
-        </div>
-      );
-
-    case "range":
-      return <DataTableSliderFilter column={column} title={title} />;
-
-    case "date":
-    case "dateRange":
-      return (
-        <DataTableDateFilter
-          column={column}
-          title={title}
-          multiple={columnMeta.variant === "dateRange"}
-        />
-      );
-
-    case "select":
-    case "multiSelect":
-      return (
-        <DataTableFacetedFilter
-          column={column}
-          title={title}
-          options={columnMeta.options ?? []}
-          multiple={columnMeta.variant === "multiSelect"}
-        />
-      );
-
-    default:
-      return null;
-  }
+  return (
+    <DataTableFilterInput
+      column={column}
+      placeholder={columnMeta.placeholder ?? columnMeta.label}
+      className="w-40 lg:w-56"
+    />
+  );
 }
 
 function readFilterInputValue(value: unknown) {

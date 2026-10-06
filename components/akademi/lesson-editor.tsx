@@ -14,12 +14,13 @@ import { Accordion, AccordionItem, AccordionTrigger } from "@/components/ui/acco
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
+import { ConfirmDelete, done } from "./confirm-delete";
 import { DateTimeField } from "./date-time-field";
 import { PublishSwitch } from "./publish-switch";
 import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
@@ -151,27 +152,6 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
       </FormShell>
     </div></AccordionPrimitive.Panel>
   </AccordionItem>;
-}
-
-/** The message of a finished action; a failed one is thrown, for useMutation. */
-async function done(action: Promise<FormState>) {
-  const result = await action;
-  if (result.status === "error") throw new Error(result.message);
-  return result.message;
-}
-
-function ConfirmDelete({ title, description, open, onClose, remove, children }: { title: string; description: string; open: boolean; onClose: () => void; remove: { isPending: boolean; error: Error | null; mutate: () => void }; children?: React.ReactNode }) {
-  return <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
-    <DialogContent>
-      <DialogHeader><DialogTitle>“{title}” silinsin mi?</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
-      {children}
-      {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
-      <DialogFooter>
-        <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={onClose}>Vazgeç</Button>
-        <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={remove.mutate}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>;
 }
 
 function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
