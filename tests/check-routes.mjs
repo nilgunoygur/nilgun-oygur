@@ -42,6 +42,7 @@ for (const method of ["GET", "POST"]) {
 }
 const unsigned = await fetch(new URL("/api/shopier/webhook", origin), { method: "POST", headers: { "shopier-event": "order.created" }, body: "{}" });
 assert.ok([401, 503].includes(unsigned.status), "unsigned Shopier webhooks are rejected");
+assert.equal((await fetch(new URL("/api/yonetim/subscribers/export", origin))).status, 403, "the subscriber export is for the owner");
 const anyId = "00000000-0000-4000-8000-000000000000";
 assert.equal((await fetch(new URL(`/api/lesson-files/${anyId}`, origin), { redirect: "manual" })).status, 401, "lesson files require a session");
 const product = () => { const body = new FormData(); body.set("data", "{}"); return body; };

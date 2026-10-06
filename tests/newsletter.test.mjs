@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "../lib/db/schema.ts";
 import { subscribeSchema } from "../lib/contact-schema.ts";
-import { listSubscribers, subscribe } from "../lib/newsletter.ts";
+import { listSubscribers, subscribe, subscribersCsv } from "../lib/newsletter.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -36,4 +36,27 @@ test("the owner list is newest first, searchable and paged", async () => {
   const found = await listSubscribers(db, { q: "READER_25" });
   assert.deepEqual([found.matching, found.total, found.subscribers.map(item => item.email)], [1, 27, ["reader_25@example.com"]]);
   assert.equal((await listSubscribers(db, { q: "%" })).matching, 0, "search treats % as plain text");
+});
+
+test("the owner chooses the page size and the order; unknown values fall back", async () => {
+  const sorted = await listSubscribers(db, { perPage: "10", sort: "email.desc" });
+  assert.deepEqual([sorted.pages, sorted.subscribers.length, sorted.subscribers[0].email], [3, 10, "reader_9@example.com"]);
+  assert.equal((await listSubscribers(db, { sort: "createdAt.asc" })).subscribers[0].email, "reader_0@example.com");
+  const fallback = await listSubscribers(db, { perPage: "7", sort: "id.asc,constructor.desc,email" });
+  assert.deepEqual([fallback.filter.perPage, fallback.subscribers[0].email], [25, "ayse@example.com"]);
+});
+
+test("the summary counts sign-ups from the last 30 days", async () => {
+  const list = await listSubscribers(db, {}, new Date(Date.UTC(2026, 9, 31, 12, 10)));
+  assert.equal(list.recent, 17, "reader_10 onwards, and the address subscribed during this run");
+  assert.ok(list.latest > new Date(Date.UTC(2026, 9, 1, 12, 25)));
+});
+
+test("the export lists every subscriber and cannot be run as a formula", async () => {
+  await db.insert(schema.newsletterSubscribers).values({ email: "=cmd@example.com", createdAt: new Date(Date.UTC(2020, 0, 1)) });
+  const lines = (await subscribersCsv(db)).trimEnd().split("\r\n");
+  assert.equal(lines.length, 29);
+  assert.equal(lines[0], '\uFEFF"E-posta","Kayıt tarihi"');
+  assert.equal(lines[1].split(",")[0], '"ayse@example.com"');
+  assert.equal(lines.at(-1), `"'=cmd@example.com","2020-01-01T00:00:00.000Z"`);
 });
