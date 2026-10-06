@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "../lib/db/schema.ts";
 import { subscribeSchema } from "../lib/contact-schema.ts";
-import { listSubscribers, removeSubscriber, subscribe, subscribersCsv } from "../lib/newsletter.ts";
+import { listSubscribers, removeSubscriber, subscribe, subscribersCsv, syncContacts } from "../lib/newsletter.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -56,9 +56,9 @@ test("the export lists every subscriber and cannot be run as a formula", async (
   await db.insert(schema.newsletterSubscribers).values({ email: "=cmd@example.com", createdAt: new Date(Date.UTC(2020, 0, 1)) });
   const lines = (await subscribersCsv(db)).trimEnd().split("\r\n");
   assert.equal(lines.length, 29);
-  assert.equal(lines[0], '\uFEFF"E-posta","Kayıt tarihi"');
+  assert.equal(lines[0], '\uFEFF"E-posta","Tür","Kayıt tarihi"');
   assert.equal(lines[1].split(",")[0], '"ayse@example.com"');
-  assert.equal(lines.at(-1), `"'=cmd@example.com","2020-01-01T00:00:00.000Z"`);
+  assert.equal(lines.at(-1), `"'=cmd@example.com","visitor","2020-01-01T00:00:00.000Z"`);
 });
 
 test("the owner removes a subscriber; the audit entry does not keep the address", async () => {
@@ -69,4 +69,34 @@ test("the owner removes a subscriber; the audit entry does not keep the address"
   const audit = await db.select().from(schema.adminAuditLog);
   assert.deepEqual(audit.map(entry => [entry.action, entry.resourceId]), [["newsletter.subscriber_removed", id]]);
   assert.doesNotMatch(JSON.stringify(audit), /ayse/);
+});
+
+test("Resend learns each subscriber's kind, and again when it changes", async () => {
+  await db.delete(schema.newsletterSubscribers);
+  for (const email of ["visitor@example.com", "member@example.com", "buyer@example.com", "claimed@example.com"]) await subscribe(db, email);
+  await db.insert(schema.user).values([{ id: "m", name: "M", email: "member@example.com" }, { id: "c", name: "C", email: "claimed@example.com" }]);
+  const [course] = await db.insert(schema.courses).values({ slug: "kurs", shopierProductId: "9001" }).returning();
+  const purchase = { courseId: course.id, amountKurus: 100, currency: "TRY", accessDurationDays: 30, purchasedAt: new Date() };
+  await db.insert(schema.shopierPurchases).values([
+    { ...purchase, shopierOrderId: "1", buyerEmail: "buyer@example.com" },
+    { ...purchase, shopierOrderId: "2", buyerEmail: "other@example.com", userId: "c", claimedAt: new Date() },
+  ]);
+  const kinds = async () => Object.fromEntries((await listSubscribers(db, {})).subscribers.map(item => [item.email.split("@")[0], item.kind]));
+  assert.deepEqual(await kinds(), { visitor: "visitor", member: "member", buyer: "buyer", claimed: "buyer" });
+
+  const calls = [];
+  const down = new Set(["buyer@example.com"]);
+  const send = method => async contact => { calls.push([method, contact.email, contact.properties.member_type]); return { error: down.has(contact.email) ? {} : null }; };
+  const resend = { create: send("create"), update: send("update") };
+  const run = () => syncContacts(db, resend, { wait: async () => {} });
+  assert.deepEqual(await run(), { pending: 4, synced: 3 });
+  assert.deepEqual(calls.find(call => call[1].startsWith("member")), ["create", "member@example.com", "member"]);
+
+  down.clear();
+  calls.length = 0;
+  assert.deepEqual(await run(), { pending: 1, synced: 1 }, "the failed one is retried");
+  await db.insert(schema.user).values({ id: "v", name: "V", email: "visitor@example.com" });
+  calls.length = 0;
+  assert.deepEqual([await run(), calls], [{ pending: 1, synced: 1 }, [["update", "visitor@example.com", "member"]]], "a visitor who registers is updated");
+  assert.deepEqual(await run(), { pending: 0, synced: 0 });
 });

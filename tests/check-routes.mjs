@@ -39,6 +39,7 @@ for (const method of ["GET", "POST"]) {
   assert.equal(response.status, 401, `${method} email worker requires authorization`);
   const sync = await fetch(new URL("/api/internal/shopier-sync", origin), { method });
   assert.equal(sync.status, 401, `${method} Shopier sync requires authorization`);
+  assert.equal((await fetch(new URL("/api/internal/newsletter-sync", origin), { method })).status, 401, `${method} newsletter sync requires authorization`);
 }
 const unsigned = await fetch(new URL("/api/shopier/webhook", origin), { method: "POST", headers: { "shopier-event": "order.created" }, body: "{}" });
 assert.ok([401, 503].includes(unsigned.status), "unsigned Shopier webhooks are rejected");

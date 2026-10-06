@@ -319,6 +319,8 @@ export const adminAuditLog = pgTable("admin_audit_log", {
 export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   id: id(),
   email: text("email").notNull().unique(),
+  // The kind last sent to Resend; null until the contact exists there.
+  syncedKind: text("synced_kind"),
   createdAt: time("created_at").notNull().defaultNow(),
 }, (t) => [check("newsletter_subscribers_email_normalized", sql`${t.email} = lower(trim(${t.email})) AND length(${t.email}) BETWEEN 3 AND 254`)]);
 

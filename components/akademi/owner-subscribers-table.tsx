@@ -8,14 +8,17 @@ import { removeSubscriber } from "@/app/yonetim/aboneler/actions";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { ConfirmDelete, DeleteIconButton, done } from "./confirm-delete";
 import { useDataTable } from "@/hooks/use-data-table";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { dateTimeLabel } from "@/lib/akademi/format";
+import type { SubscriberKind } from "@/lib/newsletter";
 import { cn } from "@/lib/utils";
 
-type Subscriber = { id: string; email: string; createdAt: Date };
+type Subscriber = { id: string; email: string; createdAt: Date; kind: SubscriberKind };
+const kinds: Record<SubscriberKind, string> = { visitor: "Ziyaretçi", member: "Üye", buyer: "Öğrenci" };
 
 // Sorting, search and paging live in the URL; the server page queries.
 const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
@@ -27,6 +30,11 @@ const columns: ColumnDef<DataTableFeatures, Subscriber>[] = [
       <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mist text-sm font-semibold text-forest">{row.original.email.charAt(0).toLocaleUpperCase("tr-TR")}</span>
       <a href={`mailto:${row.original.email}`} className="truncate font-medium text-foreground hover:text-forest hover:underline">{row.original.email}</a>
     </div>,
+  },
+  {
+    id: "kind", accessorKey: "kind", size: 140, enableSorting: false,
+    header: () => "Tür",
+    cell: ({ row }) => <Badge variant={row.original.kind === "visitor" ? "outline" : row.original.kind === "member" ? "secondary" : "default"}>{kinds[row.original.kind]}</Badge>,
   },
   {
     id: "createdAt", accessorKey: "createdAt", size: 220,
