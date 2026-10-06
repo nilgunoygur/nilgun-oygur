@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/reveal";
 import { GalleryStrip, ArticleCarousel } from "@/components/sliders";
+import { NewsletterForm } from "@/components/newsletter-form";
 import {
   asset,
   pages,
@@ -258,9 +259,25 @@ async function BlogSectionContent() {
     </section>
   );
 }
-export function Footer({ consentSettings = false }: { consentSettings?: boolean }) {
+export function Footer({ consentSettings = false, newsletter = false }: { consentSettings?: boolean; newsletter?: boolean }) {
   return (
     <footer className={cn(pageWidth, "pt-[60px] pb-[25px] max-tablet:pt-[30px]")}>
+      {newsletter && (
+        <section aria-labelledby="newsletter-title" className="relative isolate mb-[70px] grid grid-cols-[1.1fr_1fr] items-center gap-x-16 gap-y-8 overflow-hidden rounded-[32px] bg-forest p-14 text-white max-laptop:grid-cols-1 max-tablet:mb-10 max-tablet:rounded-[24px] max-tablet:px-6 max-tablet:py-9">
+          <div aria-hidden className={cn(ribbon, "-top-14 -right-28 bg-primary/45")} />
+          <div aria-hidden className={cn(ribbon, "-bottom-16 right-[22%] bg-lime/15 max-laptop:hidden")} />
+          <div>
+            <p className="mb-3 text-[12px] font-semibold tracking-[0.18em] text-lime">BÜLTEN</p>
+            <h2 id="newsletter-title" className="font-display text-[40px] leading-[1.15] font-normal tracking-[-0.5px] text-white max-tablet:text-[29px]">Yeni yazılar ve eğitimler önce size ulaşsın</h2>
+            <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-white/75">
+              {["Yeni yazılar", "Eğitim duyuruları"].map((item) => (
+                <li key={item} className="flex items-center gap-2"><Check className="size-4 text-lime" />{item}</li>
+              ))}
+            </ul>
+          </div>
+          <NewsletterForm />
+        </section>
+      )}
       <div className="mb-[65px] grid grid-cols-[1.4fr_0.8fr_1fr_1fr] items-start gap-[50px] max-laptop:gap-[25px] max-tablet:mb-10 max-tablet:grid-cols-2 max-tablet:gap-x-6 max-tablet:gap-y-10">
         <Link className={cn(brand, "max-tablet:col-span-full")} href="/">
           <Image src={logo} alt="" width={42} height={42} className={brandLogo} />

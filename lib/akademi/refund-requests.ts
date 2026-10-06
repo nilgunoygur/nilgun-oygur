@@ -1,5 +1,6 @@
 import { and, desc, eq, gt, isNull, ilike, or, count } from "drizzle-orm";
 import { courseAccess, courses, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
+import { containsPattern } from "../db/search.ts";
 import type { Database } from "../db/types.ts";
 import { hasFullRefund } from "./course-access.ts";
 import { refundNoticeDays } from "./claim-schema.ts";
@@ -55,7 +56,7 @@ export function studentRefundRequests(db: Database, userId: string, now: Date) {
 export const pendingRefundCount = (db: Database) => db.$count(refundRequests, eq(refundRequests.status, "pending"));
 
 export async function listRefundRequests(db: Database, { status = "all", search = "", page = 1 }: Partial<RefundListParams> = {}) {
-  const pattern = `%${search.replace(/[\\%_]/g, "\\$&")}%`;
+  const pattern = containsPattern(search);
   const where = and(status !== "all" ? eq(refundRequests.status, status) : undefined, search ? or(ilike(user.name, pattern), ilike(user.email, pattern), ilike(shopierPurchases.shopierOrderId, pattern), ilike(courses.slug, pattern)) : undefined);
   const [items, [total], counts] = await Promise.all([
     db.select({ id: refundRequests.id, orderId: shopierPurchases.shopierOrderId, courseId: courses.id, productId: courses.shopierProductId, course: courses.slug, name: user.name, email: user.email,

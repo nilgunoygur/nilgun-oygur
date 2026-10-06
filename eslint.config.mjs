@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored tablecn data table.
+    "components/data-table/**",
+    "hooks/use-debounced-callback.ts",
+    "lib/data-table-*.ts",
   ]),
 ]);
 

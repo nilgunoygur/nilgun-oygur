@@ -14,6 +14,7 @@
     "test:routes": "node tests/check-routes.mjs",
     "shopier:webhook": "node --experimental-strip-types scripts/shopier-webhook.mjs",
     "shopier:simulate": "node --experimental-strip-types scripts/shopier-simulate-order.mjs",
+    "newsletter:setup": "node --import tsx scripts/resend-contact-property.mjs",
     "email:dev": "email dev --dir emails --port 3001",
     "shopier:verify": "node --import tsx scripts/shopier-verify-delivery.mjs"
   },
@@ -34,6 +35,7 @@
     "@mux/upchunk": "^3.5.0",
     "@next/env": "16.3.6",
     "@tanstack/react-query": "^5.103.2",
+    "@tanstack/react-table": "^9.2.6",
     "@vercel/blob": "^2.8.0",
     "@vercel/functions": "^3.9.9",
     "better-auth": "1.7.5",
@@ -50,6 +52,7 @@
     "motion": "^13.2.0",
     "next": "16.3.6",
     "next-seo": "^7.3.0",
+    "nuqs": "^2.10.1",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-day-picker": "^10.0.2",

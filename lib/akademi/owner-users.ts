@@ -1,5 +1,6 @@
 import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, max, or, sql } from "drizzle-orm";
 import { courseAccess, owners, session, user } from "../db/schema.ts";
+import { containsPattern } from "../db/search.ts";
 import type { Database } from "../db/types.ts";
 import { hasActiveAccess } from "./access-policy.ts";
 import { contactColumns } from "./student-contact.ts";
@@ -19,7 +20,7 @@ export function userListFilter(params: UserListParams) {
 
 export async function ownerUsers(db: Database, params: UserListParams, now: Date) {
   const filter = userListFilter(params);
-  const pattern = `%${filter.q.replace(/[\\%_]/g, "\\$&")}%`;
+  const pattern = containsPattern(filter.q);
   // Phones (stored E.164) match by digits.
   const digits = filter.q.replace(/\D/g, "").replace(/^0+/, "");
   // ILIKE never maps ı to i, so "igdir" also matches the recognized province.

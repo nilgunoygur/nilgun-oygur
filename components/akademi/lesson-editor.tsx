@@ -14,12 +14,13 @@ import { Accordion, AccordionItem, AccordionTrigger } from "@/components/ui/acco
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
 import { FormStatus, idleForm, type FormState } from "./form-status";
+import { ConfirmDelete, DeleteIconButton, done } from "./confirm-delete";
 import { DateTimeField } from "./date-time-field";
 import { PublishSwitch } from "./publish-switch";
 import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
@@ -153,27 +154,6 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
   </AccordionItem>;
 }
 
-/** The message of a finished action; a failed one is thrown, for useMutation. */
-async function done(action: Promise<FormState>) {
-  const result = await action;
-  if (result.status === "error") throw new Error(result.message);
-  return result.message;
-}
-
-function ConfirmDelete({ title, description, open, onClose, remove, children }: { title: string; description: string; open: boolean; onClose: () => void; remove: { isPending: boolean; error: Error | null; mutate: () => void }; children?: React.ReactNode }) {
-  return <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
-    <DialogContent>
-      <DialogHeader><DialogTitle>“{title}” silinsin mi?</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
-      {children}
-      {remove.error && <p role="alert" className="text-sm text-destructive">{remove.error.message}</p>}
-      <DialogFooter>
-        <Button type="button" variant="outline" size="pill" disabled={remove.isPending} onClick={onClose}>Vazgeç</Button>
-        <Button type="button" variant="destructive" size="pill" disabled={remove.isPending} onClick={remove.mutate}>{remove.isPending ? <Spinner /> : <Trash2 />}Evet, sil</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>;
-}
-
 function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
   const [open, setOpen] = useState(false);
   const remove = useMutation({
@@ -182,7 +162,7 @@ function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
   });
   return <>
     <Button type="button" variant="destructive" size="pill" className="ml-auto" onClick={() => { remove.reset(); setOpen(true); }}><Trash2 />Dersi sil</Button>
-    <ConfirmDelete title={lesson.title} description="Ders, ödev PDF’leriyle birlikte kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video veya ses kaydı etkilenmez." open={open} onClose={() => setOpen(false)} remove={{ ...remove, mutate: () => remove.mutate() }}>
+    <ConfirmDelete title={lesson.title} description="Ders, ödev PDF’leriyle birlikte kalıcı olarak silinir ve geri alınamaz. Mux kütüphanenizdeki video veya ses kaydı etkilenmez." open={open} onClose={() => setOpen(false)} remove={remove}>
       {lesson.status === "published" && <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">Bu ders yayında. Silindiğinde öğrencileriniz derse erişemez ve bu dersteki ilerleme kayıtları da silinir.</p>}
     </ConfirmDelete>
   </>;
@@ -368,10 +348,10 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
       <FileText className="size-5 shrink-0 text-[#c2553f]" />
       <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-stone">PDF · {formatFileSize(file.sizeBytes)}</p></div>
       <Button variant="ghost" size="icon" aria-label={`${file.name}: aç`} nativeButton={false} render={<a href={`/api/lesson-files/${file.id}`} target="_blank" rel="noopener noreferrer" />}><ExternalLink /></Button>
-      <Button type="button" variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={`${file.name}: sil`} onClick={() => { remove.reset(); setRemoving(file); }}><Trash2 /></Button>
+      <DeleteIconButton name={file.name} onClick={() => { remove.reset(); setRemoving(file); }} />
     </li>)}</ul>}
     {upload.isPending && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />Yükleniyor… %{percent}</p><progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" /></div>}
     {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
-    <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={{ ...remove, mutate: () => remove.mutate() }} />
+    <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={remove} />
   </div>;
 }

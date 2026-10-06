@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, FileText, LayoutDashboard, Megaphone, Users, Undo2 } from "lucide-react";
+import { BookOpen, FileText, LayoutDashboard, Mail, Megaphone, Users, Undo2 } from "lucide-react";
 import { pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const links = [
   { href: "/yonetim/egitimler", label: "Eğitimler ve satışlar", icon: BookOpen },
   { href: "/yonetim/iadeler", label: "İade talepleri", icon: Undo2 },
   { href: "/yonetim/kullanicilar", label: "Kullanıcılar", icon: Users },
+  { href: "/yonetim/aboneler", label: "Bülten aboneleri", icon: Mail },
   { href: "/yonetim/yazilar", label: "Yazılar", icon: FileText },
   { href: "/yonetim/banner", label: "Banner", icon: Megaphone },
 ];

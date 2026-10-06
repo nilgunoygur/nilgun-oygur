@@ -26,7 +26,7 @@ for (const route of noindexRoutes) {
   assert.match(html, /<h1[ >]/, `${route} should have a heading`);
   assert.match(html, /name="robots" content="noindex, nofollow"/, `${route} must not be indexed`);
 }
-for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar", "/yonetim/iadeler"]) {
+for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar", "/yonetim/aboneler", "/yonetim/iadeler"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
   const location = new URL(response.headers.get("location"), origin);
@@ -39,9 +39,11 @@ for (const method of ["GET", "POST"]) {
   assert.equal(response.status, 401, `${method} email worker requires authorization`);
   const sync = await fetch(new URL("/api/internal/shopier-sync", origin), { method });
   assert.equal(sync.status, 401, `${method} Shopier sync requires authorization`);
+  assert.equal((await fetch(new URL("/api/internal/newsletter-sync", origin), { method })).status, 401, `${method} newsletter sync requires authorization`);
 }
 const unsigned = await fetch(new URL("/api/shopier/webhook", origin), { method: "POST", headers: { "shopier-event": "order.created" }, body: "{}" });
 assert.ok([401, 503].includes(unsigned.status), "unsigned Shopier webhooks are rejected");
+assert.equal((await fetch(new URL("/api/yonetim/subscribers/export", origin))).status, 403, "the subscriber export is for the owner");
 const anyId = "00000000-0000-4000-8000-000000000000";
 assert.equal((await fetch(new URL(`/api/lesson-files/${anyId}`, origin), { redirect: "manual" })).status, 401, "lesson files require a session");
 const product = () => { const body = new FormData(); body.set("data", "{}"); return body; };

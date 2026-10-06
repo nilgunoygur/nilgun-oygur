@@ -24,6 +24,10 @@
 
 **Owner**: the explicitly designated, verified account authorized to manage the academy’s courses, lessons, and sales. Authenticator enrollment is optional.
 
+**Newsletter subscriber**: an email address left in the footer form to receive announcements. Independent of accounts, stored once in lowercase, and listed for the owner under "Bülten aboneleri", who can export the list or delete an address. Each subscriber is also a Resend contact whose `member_type` property is their kind; newsletters are written and sent from Resend. `newsletter_opt_in` is `yes` for subscribers and `no` for the accounts that were added to Resend by hand without using the form.
+
+**Subscriber kind**: `visitor` (no account), `member` (an account with the same email) or `buyer` (a purchase under that email or that account, refunded or not). Worked out from the database, never stored.
+
 **Owner command**: an owner change applied together with its audit entry.
 
 **Provider event**: a verified webhook delivery (Shopier today, Mux later), applied once and stored only as a payload hash.

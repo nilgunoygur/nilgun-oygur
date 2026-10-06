@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { adminAuditLog, courses, refundRequests, shopierPurchases } from "../db/schema.ts";
+import { audited } from "../db/audit.ts";
 import type { Database } from "../db/types.ts";
 import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
 import { linkCourse } from "./catalog.ts";
@@ -11,18 +12,6 @@ import { refundableKurus } from "./refunds.ts";
 
 /** A problem with what the owner entered; its message is shown to them as is. */
 export class OwnerInputError extends Error {}
-
-type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type AuditEntry = { action: string; resourceType: string; resourceId: string; reason: string };
-
-async function audited(db: Database, actorId: string, entry: AuditEntry, change: (tx: Transaction) => Promise<boolean>) {
-  if (!entry.reason.trim()) throw new Error("Owner changes require a reason.");
-  return db.transaction(async (tx) => {
-    if (!await change(tx)) return false;
-    await tx.insert(adminAuditLog).values({ actorId, ...entry });
-    return true;
-  });
-}
 
 export type CourseStatus = typeof courses.$inferSelect["status"];
 

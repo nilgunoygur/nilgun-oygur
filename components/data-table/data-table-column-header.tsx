@@ -1,0 +1,141 @@
+"use client";
+
+import {
+  type Column,
+  type RowData,
+  type SortDirection,
+  type SortingState,
+  Subscribe,
+} from "@tanstack/react-table";
+import { cn } from "cn";
+import * as React from "react";
+
+import type { DataTableFeatures } from "@/lib/data-table-features";
+
+import { useDirection } from "@/components/ui/direction";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+
+interface DataTableColumnHeaderProps<
+  TData extends RowData,
+  TValue,
+> extends React.ComponentProps<typeof DropdownMenuTrigger> {
+  column: Column<DataTableFeatures, TData, TValue>;
+  label: string;
+}
+
+export function DataTableColumnHeader<TData extends RowData, TValue>({
+  column,
+  label,
+  className,
+  ...props
+}: DataTableColumnHeaderProps<TData, TValue>) {
+  if (!column.getCanSort()) {
+    return <div className={cn(className)}>{label}</div>;
+  }
+
+  return (
+    <Subscribe
+      source={column.table.store}
+      selector={(state) => getSortDirection(state.sorting, column.id)}
+    >
+      {(sortDirection) => (
+        <DataTableColumnHeaderMenu
+          column={column}
+          label={label}
+          className={className}
+          sortDirection={sortDirection}
+          {...props}
+        />
+      )}
+    </Subscribe>
+  );
+}
+
+interface DataTableColumnHeaderMenuProps<
+  TData extends RowData,
+  TValue,
+> extends DataTableColumnHeaderProps<TData, TValue> {
+  sortDirection: SortDirection | "none";
+}
+
+function DataTableColumnHeaderMenu<TData extends RowData, TValue>({
+  column,
+  label,
+  className,
+  sortDirection,
+  ...props
+}: DataTableColumnHeaderMenuProps<TData, TValue>) {
+  const dir = useDirection();
+
+  function onSortDirectionChange(direction: SortDirection) {
+    if (sortDirection === direction) {
+      column.clearSorting();
+      return;
+    }
+
+    column.toggleSorting(direction === "desc", true);
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "-ms-1.5 flex h-8 items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-accent focus:ring-1 focus:ring-ring focus:outline-none data-[state=open]:bg-accent rtl:flex-row-reverse [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
+          className,
+        )}
+        {...props}
+      >
+        {label}
+        {column.getCanSort() &&
+          (sortDirection === "desc" ? (
+            <ChevronDown />
+          ) : sortDirection === "asc" ? (
+            <ChevronUp />
+          ) : (
+            <ChevronsUpDown />
+          ))}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        dir={dir}
+        align="start"
+        className="w-32 data-closed:fill-mode-forwards"
+      >
+        {column.getCanSort() && (
+          <>
+            <DropdownMenuCheckboxItem
+              className="[&_svg]:text-muted-foreground"
+              checked={sortDirection === "asc"}
+              onClick={() => onSortDirectionChange("asc")}
+            >
+              <ChevronUp />
+              Artan
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              className="[&_svg]:text-muted-foreground"
+              checked={sortDirection === "desc"}
+              onClick={() => onSortDirectionChange("desc")}
+            >
+              <ChevronDown />
+              Azalan
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function getSortDirection(
+  sorting: SortingState,
+  columnId: string,
+): SortDirection | "none" {
+  const sort = sorting.find((sort) => sort.id === columnId);
+  if (!sort) return "none";
+  return sort.desc ? "desc" : "asc";
+}
