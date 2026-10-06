@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Reveal } from "@/components/reveal";
 import { GalleryStrip, ArticleCarousel } from "@/components/sliders";
+import { NewsletterForm } from "@/components/newsletter-form";
 import {
   asset,
   pages,
@@ -258,9 +259,18 @@ async function BlogSectionContent() {
     </section>
   );
 }
-export function Footer({ consentSettings = false }: { consentSettings?: boolean }) {
+export function Footer({ consentSettings = false, newsletter = false }: { consentSettings?: boolean; newsletter?: boolean }) {
   return (
     <footer className={cn(pageWidth, "pt-[60px] pb-[25px] max-tablet:pt-[30px]")}>
+      {newsletter && (
+        <section aria-labelledby="newsletter-title" className="mb-[60px] flex items-center justify-between gap-x-12 gap-y-6 rounded-[24px] bg-mist px-10 py-9 max-laptop:flex-col max-laptop:items-stretch max-tablet:mb-10 max-tablet:px-6 max-tablet:py-7">
+          <div>
+            <h2 id="newsletter-title" className="text-[28px] max-tablet:text-[23px]">Bültene abone olun</h2>
+            <p className="mt-2 text-[15px] text-muted-foreground">Yeni yazılar ve eğitim duyuruları e-posta kutunuza gelsin.</p>
+          </div>
+          <NewsletterForm />
+        </section>
+      )}
       <div className="mb-[65px] grid grid-cols-[1.4fr_0.8fr_1fr_1fr] items-start gap-[50px] max-laptop:gap-[25px] max-tablet:mb-10 max-tablet:grid-cols-2 max-tablet:gap-x-6 max-tablet:gap-y-10">
         <Link className={cn(brand, "max-tablet:col-span-full")} href="/">
           <Image src={logo} alt="" width={42} height={42} className={brandLogo} />

@@ -141,6 +141,13 @@
       "when": 1791220760777,
       "tag": "0019_zoom_meeting_id",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791294467368,
+      "tag": "0020_newsletter_subscribers",
+      "breakpoints": true
     }
   ]
 }

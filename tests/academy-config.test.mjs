@@ -4,12 +4,13 @@ import { parseConfig } from "../lib/config.ts";
 
 test("features switch on only when every value they need is present", () => {
   const none = parseConfig({});
-  assert.deepEqual(none.enabled, { catalog: false, webhooks: false, email: false, contact: false, auth: false });
+  assert.deepEqual(none.enabled, { catalog: false, webhooks: false, email: false, contact: false, newsletter: false, auth: false });
   assert.equal(none.siteUrl, "http://localhost:3000");
   const base = { DATABASE_URL: "postgres://x", BETTER_AUTH_URL: "https://a.example", BETTER_AUTH_SECRET: "s", EMAIL_ENCRYPTION_KEY: "k" };
   assert.equal(parseConfig(base).enabled.auth, false, "deployments need Resend");
   assert.equal(parseConfig({ ...base, NODE_ENV: "development" }).enabled.auth, true, "local dev prints emails instead");
   assert.equal(parseConfig({ ...base, NODE_ENV: "development" }).enabled.contact, false, "contact needs an inbox");
+  assert.equal(parseConfig(base).enabled.newsletter, true, "subscribing sends no email");
   assert.equal(parseConfig({ ...base, NODE_ENV: "development", RESEND_REPLY_TO: "t" }).enabled.contact, true);
   assert.equal(parseConfig({ ...base, RESEND_API_KEY: "r", RESEND_FROM: "f" }).enabled.auth, false, "Reply-To is required");
   assert.equal(parseConfig({ ...base, RESEND_API_KEY: "r", RESEND_FROM: "f", RESEND_REPLY_TO: "t" }).enabled.auth, true);

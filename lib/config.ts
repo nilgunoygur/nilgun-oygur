@@ -38,6 +38,8 @@ export function parseConfig(env: Env) {
       email: !!databaseUrl && !!auth.emailKey && (consoleEmail || resendReady),
       /** Contact mail goes to the Reply-To inbox, so it needs that address even in local dev. */
       contact: !!databaseUrl && !!auth.emailKey && !!resend.replyTo && (consoleEmail || resendReady),
+      /** Stores addresses only; the key hashes visitor IPs for the rate limit. */
+      newsletter: !!databaseUrl && !!auth.emailKey,
       auth: !!databaseUrl && !!auth.url && !!auth.secret && !!auth.emailKey && (consoleEmail || resendReady),
     },
   };

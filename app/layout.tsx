@@ -46,14 +46,14 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const banner = await getPublishedBanner();
-  const { analyticsId } = config();
+  const { analyticsId, enabled } = config();
   const site = (
     <MotionProvider>
       <QueryProvider>
       {banner && <AnnouncementBar config={banner} />}
       <Header />
       <main id="main" className="pt-[var(--announcement-offset,0px)]">{children}</main>
-      <Footer consentSettings={Boolean(analyticsId)} />
+      <Footer consentSettings={Boolean(analyticsId)} newsletter={enabled.newsletter} />
       <Toaster position="top-right" richColors />
       </QueryProvider>
     </MotionProvider>

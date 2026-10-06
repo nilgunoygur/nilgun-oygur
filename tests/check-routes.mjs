@@ -26,7 +26,7 @@ for (const route of noindexRoutes) {
   assert.match(html, /<h1[ >]/, `${route} should have a heading`);
   assert.match(html, /name="robots" content="noindex, nofollow"/, `${route} must not be indexed`);
 }
-for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar", "/yonetim/iadeler"]) {
+for (const route of ["/akademi/hesabim", "/akademi/siparis-ekle", "/yonetim", "/yonetim/guvenlik", "/yonetim/egitimler", "/yonetim/kullanicilar", "/yonetim/aboneler", "/yonetim/iadeler"]) {
   const response = await fetch(new URL(route, origin), { redirect: "manual" });
   assert.equal(response.status, 307, `${route} requires a session`);
   const location = new URL(response.headers.get("location"), origin);

@@ -316,6 +316,16 @@ export const adminAuditLog = pgTable("admin_audit_log", {
   createdAt: time("created_at").notNull().defaultNow(),
 }, (t) => [check("audit_reason_required", sql`length(trim(${t.reason})) > 0`), index("audit_resource_idx").on(t.resourceType, t.resourceId)]);
 
+// Footer sign-ups for new article and course announcements; visitors subscribe without an account.
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id: id(),
+  email: text("email").notNull().unique(),
+  createdAt: time("created_at").notNull().defaultNow(),
+}, (t) => [
+  check("newsletter_subscribers_email_normalized", sql`${t.email} = lower(trim(${t.email})) AND length(${t.email}) BETWEEN 3 AND 254`),
+  index("newsletter_subscribers_created_idx").on(t.createdAt),
+]);
+
 // Database-backed rate limits survive serverless instance recycling.
 export const rateLimit = pgTable("rate_limit", {
   id: text("id").primaryKey(),
