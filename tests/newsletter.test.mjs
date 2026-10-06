@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as schema from "../lib/db/schema.ts";
 import { subscribeSchema } from "../lib/contact-schema.ts";
-import { listSubscribers, removeSubscriber, subscribe, subscribersCsv, syncContacts } from "../lib/newsletter.ts";
+import { listSubscribers, removeSubscriber, subscribe, subscribersCsv, syncContacts, accountsOutsideNewsletter } from "../lib/newsletter.ts";
 
 const client = new PGlite();
 const db = drizzle(client, { schema });
@@ -62,7 +62,7 @@ test("the export lists every subscriber and cannot be run as a formula", async (
 });
 
 test("the owner removes a subscriber; the audit entry does not keep the address", async () => {
-  await db.insert(schema.user).values({ id: "owner", name: "Nilgün", email: "owner@example.com" });
+  await db.insert(schema.user).values({ id: "owner", name: "Nilgün", email: "owner@example.com", emailVerified: true });
   const [{ id }] = (await listSubscribers(db, { q: "ayse@" })).subscribers;
   assert.equal(await removeSubscriber(db, "owner", id), true);
   assert.equal(await removeSubscriber(db, "owner", id), false, "nothing left to remove");
@@ -99,4 +99,5 @@ test("Resend learns each subscriber's kind, and again when it changes", async ()
   calls.length = 0;
   assert.deepEqual([await run(), calls], [{ pending: 1, synced: 1 }, [["update", "visitor@example.com", "member"]]], "a visitor who registers is updated");
   assert.deepEqual(await run(), { pending: 0, synced: 0 });
+  assert.deepEqual(await accountsOutsideNewsletter(db), [{ email: "owner@example.com", kind: "member" }], "accounts that never subscribed; unverified ones are left out");
 });
