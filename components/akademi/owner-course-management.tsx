@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFormState } from "react-hook-form";
+import { useForm, useFormState, useWatch } from "react-hook-form";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Package, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
@@ -109,7 +109,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
     <Dialog open={editing?.kind === "product" || editing?.kind === "create"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>{editing?.kind === "create" ? "Yeni eğitim" : "Shopier ürününü düzenle"}</DialogTitle><DialogDescription>{editing?.kind === "create" ? "Shopier’de dijital bir ürün oluşturulur ve sitede eğitim olarak eklenir." : "Değişiklikler Shopier’deki ürüne kaydedilir; sitedeki eğitim sayfası buradan beslenir."}</DialogDescription></DialogHeader>
-      {(editing?.kind === "product" || editing?.kind === "create") && <ProductForm key={editing.kind === "product" ? editing.course.id : "new"} course={editing.kind === "product" ? editing.course : null} filesConfigured={filesConfigured}
+      {(editing?.kind === "product" || editing?.kind === "create") && <ProductForm key={editing.kind === "product" ? editing.course.id : "new"} course={editing.kind === "product" ? editing.course : null} courses={courses} filesConfigured={filesConfigured}
         onSaved={created => { setEditing(null); if (created) { setTab("all"); setPage(1); } }} />}
     </DialogContent></Dialog>
   </>;
@@ -122,32 +122,38 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
     <DialogFooter><SubmitButton>Kaydet</SubmitButton></DialogFooter>
   </FormShell>;
 }
+function BundleOptions({ courses, selected, onChange }: { courses: OwnerCourse[]; selected: string[]; onChange: (courseIds: string[]) => void }) {
+  if (!courses.length) return <p className="text-sm text-muted-foreground">Pakete eklenebilecek başka eğitim yok.</p>;
+  return <ul className="grid max-h-[50vh] gap-1 overflow-y-auto">{courses.map(item => <li key={item.id}><label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-muted/50">
+    <Checkbox checked={selected.includes(item.id)} onCheckedChange={checked => onChange(checked ? [...selected, item.id] : selected.filter(id => id !== item.id))} />
+    <span className="font-medium">{item.title}</span>{item.status !== "published" && <span className="text-xs text-muted-foreground">{statusLabel[item.status]}</span>}
+  </label></li>)}</ul>;
+}
+
 /** A bundle holds ordinary courses only, so other bundles are not offered. */
 function BundleForm({ course, courses, saving, onSave }: { course: OwnerCourse; courses: OwnerCourse[]; saving: boolean; onSave: (courseIds: string[]) => void }) {
   const [selected, setSelected] = useState(course.includes);
   const options = courses.filter(item => item.id !== course.id && !item.includes.length && (item.status !== "archived" || course.includes.includes(item.id)));
   return <form className="grid gap-5" onSubmit={event => { event.preventDefault(); onSave(selected); }}>
-    {options.length === 0 ? <p className="text-sm text-muted-foreground">Pakete eklenebilecek başka eğitim yok.</p> : <ul className="grid max-h-[50vh] gap-1 overflow-y-auto">{options.map(item => <li key={item.id}><label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-muted/50">
-      <Checkbox checked={selected.includes(item.id)} onCheckedChange={checked => setSelected(current => checked ? [...current, item.id] : current.filter(id => id !== item.id))} />
-      <span className="font-medium">{item.title}</span>{item.status !== "published" && <span className="text-xs text-muted-foreground">{statusLabel[item.status]}</span>}
-    </label></li>)}</ul>}
+    <BundleOptions courses={options} selected={selected} onChange={setSelected} />
     <p className="text-xs text-muted-foreground">Erişim süresi paketin kendi süresidir ({course.accessDurationDays} gün). Hiçbir eğitim seçilmezse bu ürün tek bir eğitim olarak satılır. Önceki satışlar değişmez.</p>
     <DialogFooter><Button type="submit" size="pill" disabled={saving}>{saving && <Spinner />}Kaydet</Button></DialogFooter>
   </form>;
 }
 
 /** `course === null` creates a course; an edit sends only the fields that changed. */
-function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse | null; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
+function ProductForm({ course, courses, filesConfigured, onSaved }: { course: OwnerCourse | null; courses: OwnerCourse[]; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
   const client = useQueryClient();
   const product = course?.product;
   const form = useForm({
     resolver: zodResolver(productFormSchema), mode: "onTouched",
     defaultValues: {
       title: course?.title ?? "", description: product?.description ?? "", price: liraInput(product?.listPriceKurus), discountedPrice: course?.discounted ? liraInput(course.priceKurus) : "",
-      listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false,
+      listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false, includes: [] as string[],
     },
   });
   const { dirtyFields } = useFormState({ control: form.control });
+  const includes = useWatch({ control: form.control, name: "includes" });
   // Read when saving: the compiler would memoize a list derived from this object during render.
   const changed = () => productKeys.filter(key => dirtyFields[key]);
   const [image, setImage] = useState<{ file: File; preview: string } | null>(null);
@@ -196,6 +202,11 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
         <TextField control={form.control} name="accessDays" label="Erişim süresi (gün)" type="number" inputMode="numeric" step="1" min={1} className="bg-white" />
         <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Yayınlandığında hem sitede hem Shopier mağazasında görünür olur." className="sm:pt-6" />
       </div>}
+    {!course && <div className="grid gap-2">
+      <p className="text-sm font-medium">Paket içeriği</p>
+      <p className="text-xs text-muted-foreground">Bu ürün birkaç eğitimi birlikte satan bir paketse içindeki eğitimleri seçin; satın alan öğrenciye hepsi açılır. Tek bir eğitimse boş bırakın.</p>
+      <BundleOptions courses={courses.filter(item => !item.includes.length && item.status !== "archived")} selected={includes} onChange={ids => form.setValue("includes", ids)} />
+    </div>}
     <FormMessage />
     <DialogFooter><SubmitButton>{course ? "Shopier’e kaydet" : "Eğitimi oluştur"}</SubmitButton></DialogFooter>
   </FormShell>;

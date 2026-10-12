@@ -17,15 +17,16 @@ export async function POST(request: Request) {
   if (viewer instanceof Response) return viewer;
   const form = await readProductForm(request, productFormSchema);
   if (form instanceof Response) return form;
-  const { title, description, price, discountedPrice, listed, accessDays, publish } = form.data;
+  const { title, description, price, discountedPrice, listed, accessDays, publish, includes } = form.data;
   try {
     const cover = form.image && await shareCover(form.image);
-    const { product } = await akademi().owner.createCourse(viewer.user.id, {
+    const { courseId, product } = await akademi().owner.createCourse(viewer.user.id, {
       title, description: markupDescription(description), priceKurus: kurus(price), discountedPriceKurus: discountedPrice && kurus(discountedPrice),
       // Shopier needs one image to create a product.
       imageUrl: cover?.url ?? `${publicOrigin}${fallbackCover}`, hidden: !listed, accessDurationDays: accessDays, status: publish ? "published" : "draft",
     });
     await releaseCover(cover, product);
+    if (includes.length) await akademi().owner.setBundleCourses(viewer.user.id, courseId, includes);
     return new Response(null, { status: 201, headers: privateNoStore });
   } catch (error) {
     return productFailure(error);

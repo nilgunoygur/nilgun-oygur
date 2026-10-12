@@ -116,7 +116,7 @@ test("the owner catalog carries what the edit form needs, in the owner's plain-t
 });
 
 test("product forms accept lira amounts, treat an empty discount as none and send partial edits", () => {
-  const form = { title: " Nefes ", description: "", price: "950,5".replace(",", "."), discountedPrice: "", listed: true, inStock: true, accessDays: "365", publish: false };
+  const form = { title: " Nefes ", description: "", price: "950,5".replace(",", "."), discountedPrice: "", listed: true, inStock: true, accessDays: "365", publish: false, includes: [] };
   const parsed = productFormSchema.parse(form);
   assert.deepEqual([parsed.title, parsed.price, parsed.discountedPrice, parsed.accessDays], ["Nefes", 950.5, null, 365]);
   assert.deepEqual(productFormSchema.parse(parsed), parsed, "the server re-parses what the form submits");
