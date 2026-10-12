@@ -28,7 +28,7 @@ export type CatalogCourse = {
   compareAtPriceKurus: number | null;
   accessDurationDays: number;
   shopierUrl: string;
-  /** The courses a bundle grants; empty for an ordinary course. */
+  /** Empty for an ordinary course. */
   includes: { slug: string; title: string }[];
 };
 
@@ -50,15 +50,16 @@ function toCatalogCourse(row: typeof courses.$inferSelect, product: ShopierProdu
   };
 }
 
-/** What each of these bundles grants, titled by `titleOf`; a course whose product is gone is left out. */
+/** Included courses per bundle; a course whose product is gone is left out. */
 async function bundleContents(db: Database, bundleIds: string[], titleOf: (productId: string) => Promise<string | undefined> | string | undefined) {
   const contents = new Map<string, CatalogCourse["includes"]>();
   if (!bundleIds.length) return contents;
   const items = await db.select({ bundleId: bundleItems.bundleId, slug: courses.slug, productId: courses.shopierProductId }).from(bundleItems)
     .innerJoin(courses, eq(courses.id, bundleItems.courseId)).where(inArray(bundleItems.bundleId, bundleIds)).orderBy(asc(courses.createdAt));
-  for (const item of items) {
-    const title = await titleOf(item.productId);
-    if (title) contents.set(item.bundleId, [...contents.get(item.bundleId) ?? [], { slug: item.slug, title }]);
+  const titles = await Promise.all(items.map(item => titleOf(item.productId)));
+  for (const [index, { bundleId, slug }] of items.entries()) {
+    const title = titles[index];
+    if (title) contents.set(bundleId, [...contents.get(bundleId) ?? [], { slug, title }]);
   }
   return contents;
 }
@@ -76,8 +77,8 @@ export async function findCatalogCourse(db: Database, rawSlug: string, getProduc
   if (!slug) return null;
   const [row] = await db.select().from(courses).where(and(eq(courses.status, "published"), eq(courses.slug, slug))).limit(1);
   if (!row) return null;
-  const contents = await bundleContents(db, [row.id], async id => (await getProduct(id))?.title);
-  return toCatalogCourse(row, await getProduct(row.shopierProductId), contents.get(row.id) ?? []);
+  const [product, contents] = await Promise.all([getProduct(row.shopierProductId), bundleContents(db, [row.id], async id => (await getProduct(id))?.title)]);
+  return toCatalogCourse(row, product, contents.get(row.id) ?? []);
 }
 
 /** Product title and cover by id, whatever its sale state, so buyers still see courses no longer for sale. */
@@ -105,10 +106,10 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
       const product = byId.get(row.productId);
       const details = product ? saleDetails(product) : null;
       const includes = items.filter(item => item.bundleId === row.id).map(item => item.courseId);
+      // A bundle's sales are its orders; the purchases themselves belong to the included courses.
+      const orders = includes.length ? ordersOf.get(row.id) ?? 0 : null;
       return {
-        ...row, title: titleOf(row.productId), includes, inBundle: items.some(item => item.courseId === row.id),
-        // A bundle's sales are its orders; the purchases themselves belong to the included courses.
-        ...(includes.length && { sales: ordersOf.get(row.id) ?? 0, claimed: ordersOf.get(row.id) ?? 0 }), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
+        ...row, sales: orders ?? row.sales, claimed: orders ?? row.claimed, title: titleOf(row.productId), includes, inBundle: items.some(item => item.courseId === row.id), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
         blocker: !product ? "missing" as const : courseProductBlocker(product) ?? (details ? null : "unpriced" as const),
         // Raw Shopier values for the edit form.
         product: product && isEditableProduct(product) ? {

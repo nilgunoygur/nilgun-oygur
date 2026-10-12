@@ -1,6 +1,5 @@
 "use client";
 
-import { useErrorToast } from "@/components/akademi/form-status";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,7 +38,6 @@ export function OwnerRefundManagement({ initialData }: { initialData: OwnerRefun
   const [decision, setDecision] = useState<"approve" | "decline" | null>(null);
   useEffect(() => { const timer = setTimeout(() => { setFilter(search.trim()); setPage(1); }, 250); return () => clearTimeout(timer); }, [search]);
   const { data, isFetching, isError, refetch } = useQuery(ownerRefundQueryOptions({ status, search: filter, page }, initialData));
-  useErrorToast(isError && "İade talepleri yüklenemedi. Yenile düğmesiyle tekrar deneyin.");
   const counts = data?.counts ?? initialData.counts;
   const totalCount = counts.pending + counts.approved + counts.declined;
   const pages = data?.pages ?? 1;

@@ -1,6 +1,5 @@
 "use client";
 
-import { useErrorToast } from "@/components/akademi/form-status";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -10,11 +9,8 @@ import { formatMoney, shortDate } from "@/lib/akademi/format";
 import { ownerTransactionsQueryOptions } from "@/lib/akademi/owner-queries";
 
 export function OwnerRecentTransactions({ from, to }: { from: string; to: string }) {
-  const { data, isPending, isError, isFetching } = useQuery(ownerTransactionsQueryOptions(from, to));
+  const { data, isPending, isFetching } = useQuery(ownerTransactionsQueryOptions(from, to));
 
-  useErrorToast(isError && (data ? "Yenileme başarısız oldu; son yüklenen veriler gösteriliyor." : "Shopier işlemleri şu anda yüklenemiyor. Birazdan yeniden deneyin."));
-  useErrorToast(data?.unavailable && "Shopier işlemleri şu anda tam alınamıyor.");
-  useErrorToast(data?.refundsUnavailable && "İade bilgileri şu anda Shopier’den alınamıyor; satışlar gösteriliyor.");
   if (isPending) return <div className="flex min-h-32 items-center justify-center"><Spinner size={28} className="text-forest" aria-label="İşlemler yükleniyor" /></div>;
   if (!data) return null;
   return <>

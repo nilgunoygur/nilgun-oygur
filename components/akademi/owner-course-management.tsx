@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFormState, useWatch } from "react-hook-form";
+import { useForm, useFormState } from "react-hook-form";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Package, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
@@ -20,11 +20,10 @@ import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/p
 import { Spinner } from "@/components/ui/spinner";
 import { PublishSwitch } from "./publish-switch";
 import { ConfirmDelete } from "./confirm-delete";
-import { useErrorToast } from "./form-status";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { courseAccessSchema, coverRules, productFormSchema, productKeys, type CourseChange } from "@/lib/akademi/owner-forms";
-import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
+import { CheckboxField, ControlledField, FileButton, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
 type Edit = { kind: "access" | "product" | "bundle" | "delete"; course: OwnerCourse } | { kind: "create" } | null;
@@ -38,8 +37,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Edit>(null);
-  const { data, isFetching, isError } = useQuery(ownerCatalogQueryOptions(initialData));
-  useErrorToast(isError && "Yenileme başarısız oldu. Son yüklenen veriler gösteriliyor.");
+  const { data, isFetching } = useQuery(ownerCatalogQueryOptions(initialData));
   const queryKey = ownerQueryKeys.catalog();
   const invalidate = () => client.invalidateQueries({ queryKey });
   const update = useMutation({
@@ -51,7 +49,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
       client.setQueryData<OwnerCatalogSnapshot>(queryKey, current => current && { ...current, courses: current.courses.map(item => item.id === course.id ? { ...item, ...patch } : item) });
       return { previous };
     },
-    onError: (error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error(error.message); },
+    onError: (_error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); },
     onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : change.kind === "bundle" ? "Paket içeriği kaydedildi." : "Değişiklik kaydedildi."); },
     onSettled: invalidate,
   });
@@ -61,7 +59,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     onSettled: invalidate,
   });
   const savingId = update.isPending ? update.variables.course.id : null;
-  const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onError: error => toast.error(error.message), onSettled: invalidate });
+  const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onSettled: invalidate });
 
   const courses = data.courses;
   const published = courses.filter(item => item.status === "published").length;
@@ -106,7 +104,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
     <ConfirmDelete open={editing?.kind === "delete"} onClose={() => setEditing(null)} title={editing?.kind === "delete" ? editing.course.title : ""}
       description="Eğitim, dersleri ve Shopier’deki ürünü kalıcı olarak silinir; geri alınamaz. Satışı veya öğrencisi olan eğitimler silinemez."
-      remove={{ isPending: remove.isPending, error: remove.error, mutate: () => { if (editing?.kind === "delete") remove.mutate(editing.course); } }} />
+      remove={{ isPending: remove.isPending, mutate: () => { if (editing?.kind === "delete") remove.mutate(editing.course); } }} />
 
     <Dialog open={editing?.kind === "product" || editing?.kind === "create"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>{editing?.kind === "create" ? "Yeni eğitim" : "Shopier ürününü düzenle"}</DialogTitle><DialogDescription>{editing?.kind === "create" ? "Shopier’de dijital bir ürün oluşturulur ve sitede eğitim olarak eklenir." : "Değişiklikler Shopier’deki ürüne kaydedilir; sitedeki eğitim sayfası buradan beslenir."}</DialogDescription></DialogHeader>
@@ -123,6 +121,10 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
     <DialogFooter><SubmitButton>Kaydet</SubmitButton></DialogFooter>
   </FormShell>;
 }
+
+/** A bundle holds ordinary courses that are still on offer. */
+const bundleable = (course: OwnerCourse) => !course.includes.length && course.status !== "archived";
+
 function BundleOptions({ courses, selected, onChange }: { courses: OwnerCourse[]; selected: string[]; onChange: (courseIds: string[]) => void }) {
   if (!courses.length) return <p className="text-sm text-muted-foreground">Pakete eklenebilecek başka eğitim yok.</p>;
   return <ul className="grid max-h-[50vh] gap-1 overflow-y-auto">{courses.map(item => <li key={item.id}><label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-muted/50">
@@ -131,10 +133,9 @@ function BundleOptions({ courses, selected, onChange }: { courses: OwnerCourse[]
   </label></li>)}</ul>;
 }
 
-/** A bundle holds ordinary courses only, so other bundles are not offered. */
 function BundleForm({ course, courses, saving, onSave }: { course: OwnerCourse; courses: OwnerCourse[]; saving: boolean; onSave: (courseIds: string[]) => void }) {
   const [selected, setSelected] = useState(course.includes);
-  const options = courses.filter(item => item.id !== course.id && !item.includes.length && (item.status !== "archived" || course.includes.includes(item.id)));
+  const options = courses.filter(item => item.id !== course.id && (bundleable(item) || course.includes.includes(item.id)));
   return <form className="grid gap-5" onSubmit={event => { event.preventDefault(); onSave(selected); }}>
     <BundleOptions courses={options} selected={selected} onChange={setSelected} />
     <p className="text-xs text-muted-foreground">Erişim süresi paketin kendi süresidir ({course.accessDurationDays} gün). Hiçbir eğitim seçilmezse bu ürün tek bir eğitim olarak satılır. Önceki satışlar değişmez.</p>
@@ -154,7 +155,6 @@ function ProductForm({ course, courses, filesConfigured, onSaved }: { course: Ow
     },
   });
   const { dirtyFields } = useFormState({ control: form.control });
-  const includes = useWatch({ control: form.control, name: "includes" });
   // Read when saving: the compiler would memoize a list derived from this object during render.
   const changed = () => productKeys.filter(key => dirtyFields[key]);
   const [image, setImage] = useState<{ file: File; preview: string } | null>(null);
@@ -164,7 +164,6 @@ function ProductForm({ course, courses, filesConfigured, onSaved }: { course: Ow
       ? updateOwnerProduct(course.id, Object.fromEntries(changed().map(key => [key, values[key]])) as Partial<ProductValues>, image?.file ?? null)
       : createOwnerCourse(values, image?.file ?? null),
     onSuccess: () => { toast.success(course ? "Shopier ürünü güncellendi." : "Eğitim oluşturuldu. Şimdi derslerini ekleyebilirsiniz."); onSaved(!course); },
-    onError: error => form.setError("root", { message: error.message }),
     // A write can reach Shopier before a later step fails, so the catalog is re-read either way.
     onSettled: () => client.invalidateQueries({ queryKey: ownerQueryKeys.catalog() }),
   });
@@ -200,12 +199,9 @@ function ProductForm({ course, courses, filesConfigured, onSaved }: { course: Ow
         <TextField control={form.control} name="accessDays" label="Erişim süresi (gün)" type="number" inputMode="numeric" step="1" min={1} className="bg-white" />
         <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Yayınlandığında hem sitede hem Shopier mağazasında görünür olur." className="sm:pt-6" />
       </div>}
-    {!course && <div className="grid gap-2">
-      <p className="text-sm font-medium">Paket içeriği</p>
-      <p className="text-xs text-muted-foreground">Bu ürün birkaç eğitimi birlikte satan bir paketse içindeki eğitimleri seçin; satın alan öğrenciye hepsi açılır. Tek bir eğitimse boş bırakın.</p>
-      <BundleOptions courses={courses.filter(item => !item.includes.length && item.status !== "archived")} selected={includes} onChange={ids => form.setValue("includes", ids)} />
-    </div>}
-    <FormMessage />
+    {!course && <ControlledField control={form.control} name="includes" label="Paket içeriği" description="Bu ürün birkaç eğitimi birlikte satan bir paketse içindeki eğitimleri seçin; satın alan öğrenciye hepsi açılır. Tek bir eğitimse boş bırakın.">
+      {field => <BundleOptions courses={courses.filter(bundleable)} selected={field.value} onChange={field.onChange} />}
+    </ControlledField>}
     <DialogFooter><SubmitButton>{course ? "Shopier’e kaydet" : "Eğitimi oluştur"}</SubmitButton></DialogFooter>
   </FormShell>;
 }

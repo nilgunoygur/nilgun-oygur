@@ -140,24 +140,22 @@ export function ArticleCarousel({ articles }: { articles: Article[] }) {
 export function CopyLink() {
   const [copied, setCopied] = useState(false);
   return (
-    <>
-      <Button
-        variant="secondary"
-        size="pill"
-        className="mb-6"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(window.location.href);
-            setCopied(true);
-            toast.success("Bağlantı kopyalandı");
-          } catch {
-            toast.error("Bağlantıyı adres çubuğundan kopyalayabilirsiniz.");
-          }
-        }}
-      >
-        {copied ? <Check /> : <Copy />} Copy Link
-      </Button>
-    </>
+    <Button
+      variant="secondary"
+      size="pill"
+      className="mb-6"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          setCopied(true);
+          toast.success("Bağlantı kopyalandı");
+        } catch {
+          toast.error("Bağlantıyı adres çubuğundan kopyalayabilirsiniz.");
+        }
+      }}
+    >
+      {copied ? <Check /> : <Copy />} Copy Link
+    </Button>
   );
 }
 

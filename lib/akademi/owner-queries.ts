@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { z } from "zod";
 import { refundStatuses, type CourseChange, type productFormSchema, type RefundDecisionInput, type RefundListParams } from "./owner-forms";
 
@@ -54,9 +55,14 @@ async function ownerFetch(url: string, init: RequestInit, fallback: string) {
 export function ownerTransactionsQueryOptions(from: string, to: string) {
   return queryOptions({
     queryKey: ownerQueryKeys.transactions(from, to),
-    queryFn: async ({ signal }): Promise<OwnerTransactions> => ownerTransactionsSchema.parse(
-      await (await ownerFetch(`/api/yonetim/transactions?${new URLSearchParams({ from, to })}`, { signal }, "Shopier işlemleri yüklenemedi.")).json()),
+    queryFn: async ({ signal }): Promise<OwnerTransactions> => {
+      const data = ownerTransactionsSchema.parse(await (await ownerFetch(`/api/yonetim/transactions?${new URLSearchParams({ from, to })}`, { signal }, "Shopier işlemleri yüklenemedi.")).json());
+      if (data.unavailable) toast.error("Shopier işlemleri şu anda tam alınamıyor.");
+      else if (data.refundsUnavailable) toast.error("İade bilgileri şu anda Shopier’den alınamıyor; satışlar gösteriliyor.");
+      return data;
+    },
     staleTime: 30_000,
+    meta: { errorToast: "Shopier işlemleri şu anda yüklenemiyor. Birazdan yeniden deneyin." },
   });
 }
 
@@ -78,6 +84,7 @@ export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
     queryFn: async ({ signal }) => ownerCatalogSnapshotSchema.parse(await (await ownerFetch("/api/yonetim/courses", { signal }, "Yönetim verileri yenilenemedi.")).json()),
     initialData,
     staleTime: 20_000,
+    meta: { errorToast: "Yenileme başarısız oldu. Son yüklenen veriler gösteriliyor." },
   });
 }
 
@@ -97,5 +104,6 @@ export function ownerRefundQueryOptions(params: RefundListParams, initialData?: 
     initialData: params.status === "pending" && !params.search && params.page === 1 ? initialData : undefined,
     placeholderData: keepPreviousData,
     staleTime: 15_000,
+    meta: { errorToast: "İade talepleri yüklenemedi. Yenile düğmesiyle tekrar deneyin." },
   });
 }

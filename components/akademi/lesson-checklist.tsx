@@ -1,6 +1,5 @@
 "use client";
 import { toast } from "sonner";
-import { useErrorToast } from "@/components/akademi/form-status";
 import { useRef, useState, useTransition } from "react";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LockKeyhole, Paperclip, Video } from "lucide-react";
@@ -136,7 +135,6 @@ function LivePreparation() {
 
 /** Saves the position at most every 15 seconds, one save at a time. */
 function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds: number) => void) {
-  const [progressError, setProgressError] = useState("");
   const lastSaved = useRef(0);
   const position = useRef(startTime);
   const saves = useRef(Promise.resolve());
@@ -147,17 +145,20 @@ function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds:
     if (Date.now() - lastSaved.current < 15000) return;
     lastSaved.current = Date.now();
     saves.current = saves.current.then(async () => {
-      const result = await updateProgress({ lessonId, position: Math.floor(time) });
-      setProgressError(result.ok ? "" : "İzleme konumunuz kaydedilemedi.");
-    }).catch(() => setProgressError("İzleme konumunuz kaydedilemedi."));
+      if (!(await updateProgress({ lessonId, position: Math.floor(time) })).ok) throw new Error();
+    }).catch(() => { toast.error("İzleme konumunuz kaydedilemedi.", { id: "progress" }); });
   }
-  useErrorToast(progressError);
-  return { position, savePosition, setProgressError };
+  return { position, savePosition };
 }
 
 type PlayerProps = { lessonId: string; title: string; startTime: number; onTime: (seconds: number) => void; onEnded: () => void };
 
 type Playback = Awaited<ReturnType<typeof getPlayback>>;
+async function requestPlayback(lessonId: string) {
+  const playback = await getPlayback(lessonId);
+  if (playback.error) toast.error(playback.error);
+  return playback;
+}
 const playable = (playback: Playback) => playback.playbackId && playback.tokens ? { playbackId: playback.playbackId, tokens: playback.tokens } : null;
 
 const lessonQueryKeys = {
@@ -174,13 +175,12 @@ const stillAllowed = (query: { state: { data?: { allowed: boolean | null } } }) 
 // The audio player asks for another token only when playback fails.
 function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { duration: number; peaks: number[] | null }) {
   const { savePosition } = useSavedPosition(lessonId, startTime, onTime);
-  const { data: playback, isError } = useQuery({ queryKey: lessonQueryKeys.playback("audio", lessonId), queryFn: () => getPlayback(lessonId), ...playbackQuery });
+  const { data: playback, isError } = useQuery({ queryKey: lessonQueryKeys.playback("audio", lessonId), queryFn: () => requestPlayback(lessonId), ...playbackQuery, meta: { errorToast: "Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın." } });
   const source = playback && playable(playback);
-  useErrorToast(isError ? "Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın." : playback && !source && playback.error);
   if (isError) return null;
   if (!playback) return <div className="flex h-44 items-center justify-center rounded-[22px] bg-forest text-white"><Spinner size={32} aria-label="Ses kaydı yükleniyor" /></div>;
   if (!source) return null;
-  return <div><LessonAudio {...source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => playable(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} /></div>;
+  return <LessonAudio {...source} title={title} duration={duration} peaks={peaks} startTime={startTime} metadata={{ video_id: lessonId, video_title: title }} refresh={async () => playable(await getPlayback(lessonId))} onTime={savePosition} onEnded={onEnded} />;
 }
 
 type Document = Lesson["documents"][number];
@@ -201,18 +201,17 @@ function Homework({ documents }: { documents: Document[] }) {
 }
 
 function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerProps) {
-  const { position, savePosition, setProgressError } = useSavedPosition(lessonId, startTime, onTime);
+  const { position, savePosition } = useSavedPosition(lessonId, startTime, onTime);
   const playing = useRef(false);
   // Each renewal remounts the player, so it records where to resume; a failed one leaves the current player running.
   const { data: playback, isError } = useQuery({
     queryKey: lessonQueryKeys.playback("video", lessonId),
-    queryFn: async () => ({ ...await getPlayback(lessonId), resume: { time: position.current, playing: playing.current } }),
+    queryFn: async () => ({ ...await requestPlayback(lessonId), resume: { time: position.current, playing: playing.current } }),
     ...playbackQuery, refetchInterval: playbackLifetimeMs.video * renewAt, refetchIntervalInBackground: true,
+    meta: { errorToast: "Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın." },
   });
-  const unplayable = !!playback && (!!playback.error || !playback.playbackId);
-  useErrorToast(isError && !playback ? "Video bağlantısı yenilenemedi. Dersi kapatıp yeniden açın." : unplayable && (playback.error || "Video açılamadı."));
   if (isError && !playback) return null;
   if (!playback) return <div className="flex aspect-video items-center justify-center rounded-2xl bg-mist"><Spinner size={32} className="text-forest" aria-label="Video yükleniyor" /></div>;
-  if (unplayable || !playback.playbackId) return null;
-  return <div><LessonVideo key={playback.expiresAt} playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} startTime={playback.resume.time} autoPlay={playback.resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => setProgressError("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} /></div>;
+  if (playback.error || !playback.playbackId) return null;
+  return <LessonVideo key={playback.expiresAt} playbackId={playback.playbackId} tokens={playback.tokens} metadata={{ video_id: lessonId, video_title: title }} startTime={playback.resume.time} autoPlay={playback.resume.playing} onPlaying={() => { playing.current = true; }} onPause={() => { playing.current = false; }} onEnded={() => { playing.current = false; onEnded(); }} onTimeUpdate={event => { const target = event.currentTarget; if (target && "currentTime" in target && typeof target.currentTime === "number") savePosition(target.currentTime); }} onError={() => toast.error("Video oynatılamadı. Bağlantınızı kontrol edip dersi yeniden açın.")} />;
 }

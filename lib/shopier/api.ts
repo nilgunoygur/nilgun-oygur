@@ -186,7 +186,7 @@ export type ShopierClient = ReturnType<typeof createShopierClient>;
 
 export function createShopierClient(token: string, fetcher: typeof fetch = fetch) {
   if (!token) throw new Error("Shopier API token is not configured.");
-  async function call<T>(path: string, init: RequestInit = {}, hasBody = true): Promise<T> {
+  async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       const response = await fetcher(API + path, {
         ...init,
@@ -201,7 +201,8 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
         continue;
       }
       if (!response.ok) throw new ShopierError(response.status, `Shopier ${init.method ?? "GET"} ${path.split("?")[0]} failed with ${response.status}.`, (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 300));
-      return (hasBody ? response.json() : undefined) as Promise<T>;
+      // Shopier documents no body for a delete.
+      return (init.method === "DELETE" ? undefined : response.json()) as Promise<T>;
     }
   }
   // Shopier answers 500 to refund date filters, so read every page; `orderId` narrows it to one order.
@@ -287,7 +288,7 @@ export function createShopierClient(token: string, fetcher: typeof fetch = fetch
     async deleteProduct(id: string) {
       if (!isShopierId(id)) throw new Error("Invalid Shopier product.");
       try {
-        await call(`/products/${id}`, { method: "DELETE" }, false);
+        await call(`/products/${id}`, { method: "DELETE" });
       } catch (error) {
         if (!(error instanceof ShopierError && error.status === 404)) throw error;
       }

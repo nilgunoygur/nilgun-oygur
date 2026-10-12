@@ -217,7 +217,6 @@ export const shopierPurchases = pgTable("shopier_purchases", {
   id: id(),
   shopierOrderId: text("shopier_order_id").notNull(),
   courseId: uuid("course_id").notNull().references(() => courses.id),
-  // The bundle this course was bought in, if any.
   bundleId: uuid("bundle_id").references(() => courses.id),
   buyerEmail: text("buyer_email").notNull(),
   amountKurus: integer("amount_kurus").notNull(),

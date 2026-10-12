@@ -21,15 +21,16 @@ export async function recordShopierOrder(db: Database, order: ShopierOrder): Pro
   const email = buyerEmail(order);
   if (!email) return { purchaseIds: [], granted: 0, reason: "no_email" };
   const items = await db.select().from(bundleItems).where(inArray(bundleItems.bundleId, matched.map(course => course.id)));
-  // A bundle line becomes one purchase per included course, for the bundle's duration, its total split between them.
+  // A bundle line becomes one purchase per included course, its total split between them.
   const lines = new Map<string, { amountKurus: number; days: number; bundleId: string | null }>();
   for (const course of matched) {
     const included = items.filter(item => item.bundleId === course.id).map(item => item.courseId).sort();
+    const targets = included.length ? included : [course.id];
     const total = productTotalKurus(order, course.productId);
-    const share = Math.floor(total / (included.length || 1));
-    for (const [index, courseId] of (included.length ? included : [course.id]).entries()) {
+    const share = Math.floor(total / targets.length);
+    for (const [index, courseId] of targets.entries()) {
       const line = lines.get(courseId);
-      const amountKurus = index === 0 ? total - share * Math.max(included.length - 1, 0) : share;
+      const amountKurus = index === 0 ? total - share * (targets.length - 1) : share;
       // Bought alone and in a bundle in one order: one purchase, for the longer duration.
       lines.set(courseId, { amountKurus: amountKurus + (line?.amountKurus ?? 0), days: Math.max(course.days, line?.days ?? 0), bundleId: included.length ? course.id : line?.bundleId ?? null });
     }

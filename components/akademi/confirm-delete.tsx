@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { useErrorToast, type FormState } from "./form-status";
+import type { FormState } from "./form-status";
 
 /** The message of a finished action; a failed one is thrown, for useMutation. */
 export async function done(action: Promise<FormState>) {
@@ -12,8 +12,7 @@ export async function done(action: Promise<FormState>) {
   return result.message;
 }
 
-export function ConfirmDelete({ title, description, open, onClose, remove, children }: { title: string; description: string; open: boolean; onClose: () => void; remove: { isPending: boolean; error: Error | null; mutate: () => void }; children?: React.ReactNode }) {
-  useErrorToast(remove.error);
+export function ConfirmDelete({ title, description, open, onClose, remove, children }: { title: string; description: string; open: boolean; onClose: () => void; remove: { isPending: boolean; mutate: () => void }; children?: React.ReactNode }) {
   return <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
     <DialogContent>
       <DialogHeader><DialogTitle>“{title}” silinsin mi?</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>

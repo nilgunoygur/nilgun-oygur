@@ -7,13 +7,13 @@ import { claimOrder } from "@/app/akademi/hesabim/actions";
 import { claimSchema } from "@/lib/akademi/claim-schema";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { EmailField, FormMessage, FormShell, SubmitButton, submitAction, TextField } from "./form-fields";
+import { EmailField, FormShell, SubmitButton, submitAction, TextField } from "./form-fields";
 
 export function ClaimOrderForm({ defaultEmail = "" }: { defaultEmail?: string }) {
   const [granted, setGranted] = useState<string | null>(null);
   const form = useForm({ resolver: zodResolver(claimSchema), mode: "onTouched", defaultValues: { orderNumber: "", email: defaultEmail } });
   const submit = form.handleSubmit(async (values) => {
-    const result = await submitAction(form, () => claimOrder(values), "Sipariş şu anda doğrulanamıyor. Lütfen biraz sonra yeniden deneyin.");
+    const result = await submitAction(() => claimOrder(values), "Sipariş şu anda doğrulanamıyor. Lütfen biraz sonra yeniden deneyin.");
     if (result) setGranted(result.message);
   });
   const again = () => { form.reset(); setGranted(null); };
@@ -23,7 +23,6 @@ export function ClaimOrderForm({ defaultEmail = "" }: { defaultEmail?: string })
     <TextField control={form.control} name="orderNumber" label="Shopier sipariş numarası" inputMode="numeric" autoComplete="off" placeholder="Sipariş numaranızı yazın" maxLength={22}
       description="Shopier’in gönderdiği sipariş onay e-postasında yer alır. Başındaki # işaretini de yapıştırabilirsiniz." />
     <EmailField control={form.control} name="email" label="Shopier’de kullandığınız e-posta" description="Satın alırken farklı bir adres kullandıysanız bu alanı değiştirin." />
-    <FormMessage />
     <div className="flex flex-wrap gap-3">
       <SubmitButton pendingLabel="Shopier’de kontrol ediliyor…">Siparişimi doğrula ve ekle</SubmitButton>
       {form.formState.errors.root && <Button type="button" variant="outline" onClick={again}>Temizle ve tekrar dene</Button>}

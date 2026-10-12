@@ -1,9 +1,10 @@
 import { and, eq, inArray, or } from "drizzle-orm";
-import { adminAuditLog, bundleItems, courseAccess, courses, lessonFiles, lessonProgress, lessons, liveSessions, modules, refundRequests, shopierPurchases } from "../db/schema.ts";
+import { adminAuditLog, bundleItems, courseAccess, courses, lessons, modules, refundRequests, shopierPurchases } from "../db/schema.ts";
 import { audited } from "../db/audit.ts";
 import type { Database } from "../db/types.ts";
 import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
 import { linkCourse } from "./catalog.ts";
+import { removeLessons } from "./lesson-editor.ts";
 import { formatMoney } from "./format.ts";
 import { refundableKurus } from "./refunds.ts";
 
@@ -39,7 +40,7 @@ export async function setAccessDuration(db: Database, actorId: string, courseId:
   });
 }
 
-/** Makes the course a bundle of `courseIds`; an empty list makes it an ordinary course again. Past purchases are untouched. */
+/** An empty list makes it an ordinary course again; past purchases are untouched. */
 export async function setBundleCourses(db: Database, actorId: string, bundleId: string, courseIds: string[]) {
   const ids = [...new Set(courseIds)];
   if (ids.includes(bundleId)) throw new OwnerInputError("Bir paket kendisini içeremez.");
@@ -55,10 +56,7 @@ export async function setBundleCourses(db: Database, actorId: string, bundleId: 
   });
 }
 
-/**
- * Removes an archived course that was never sold or granted, with its lessons and its Shopier product.
- * Mux assets are kept; returns the removed PDFs' pathnames for the caller to delete from storage.
- */
+/** Only an archived course never sold or granted; returns the removed PDFs' pathnames. */
 export async function deleteCourse(db: Database, actorId: string, courseId: string, shopier: Pick<ShopierClient, "deleteProduct">) {
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
   if (!course) throw new OwnerInputError("Eğitim bulunamadı.");
@@ -76,16 +74,12 @@ export async function deleteCourse(db: Database, actorId: string, courseId: stri
   await withShopier(db, actorId, { resourceType: "course", resourceId: courseId }, "course.product_delete", `ürün ${course.shopierProductId} silinsin`, () => shopier.deleteProduct(course.shopierProductId));
   return db.transaction(async (tx) => {
     await check(tx);
-    const lessonIds = tx.select({ id: lessons.id }).from(lessons).where(eq(lessons.courseId, courseId));
-    await tx.delete(liveSessions).where(inArray(liveSessions.lessonId, lessonIds));
-    await tx.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
-    const files = await tx.delete(lessonFiles).where(inArray(lessonFiles.lessonId, lessonIds)).returning({ pathname: lessonFiles.pathname });
-    await tx.delete(lessons).where(eq(lessons.courseId, courseId));
+    const files = await removeLessons(tx, eq(lessons.courseId, courseId));
     await tx.delete(modules).where(eq(modules.courseId, courseId));
     await tx.delete(bundleItems).where(eq(bundleItems.bundleId, courseId));
     await tx.delete(courses).where(eq(courses.id, courseId));
     await tx.insert(adminAuditLog).values({ actorId, action: "course.delete", resourceType: "course", resourceId: courseId, reason: `“${course.slug}” eğitimi silindi (Shopier ürünü ${course.shopierProductId})` });
-    return files.map(file => file.pathname);
+    return files;
   });
 }
 

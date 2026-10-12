@@ -1,23 +1,20 @@
 "use client";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Field, FieldDescription } from "@/components/ui/field";
-import { idleForm, type FormState } from "@/components/akademi/form-status";
-import { EmailField, FormMessage, FormShell, SubmitButton, submitAction, TextareaField, TextField } from "@/components/akademi/form-fields";
+import { EmailField, FormShell, SubmitButton, submitAction, TextareaField, TextField } from "@/components/akademi/form-fields";
 import { sendContactMessage, sendSupportMessage } from "@/app/iletisim/actions";
 import { supportSchema } from "@/lib/contact-schema";
 import { track } from "@/lib/analytics";
 
-
 export function ContactForm({ enabled, support = false }: { enabled: boolean; support?: boolean }) {
-  const [sent, setSent] = useState<FormState>(idleForm);
   const form = useForm({ resolver: zodResolver(supportSchema), mode: "onTouched", defaultValues: { name: "", email: "", orderNumber: "", message: "" } });
   const submit = form.handleSubmit(async (values) => {
-    const result = await submitAction(form, () => support ? sendSupportMessage(values) : sendContactMessage(values), "Mesajınız alınamadı. Lütfen biraz sonra tekrar deneyin veya bize e-posta gönderin.");
-    setSent(result ?? idleForm);
+    const result = await submitAction(() => support ? sendSupportMessage(values) : sendContactMessage(values), "Mesajınız alınamadı. Lütfen biraz sonra tekrar deneyin veya bize e-posta gönderin.");
     if (!result) return;
+    toast.success(result.message);
     track("generate_lead", { method: support ? "support_form" : "contact_form" });
     form.reset();
   });
@@ -32,7 +29,6 @@ export function ContactForm({ enabled, support = false }: { enabled: boolean; su
         <FieldDescription>Mesajınız doğrudan ekibimize iletilir. Yanıtımız formda yazdığınız e-posta adresine gönderilir.</FieldDescription>
       </Field>
       {!enabled && <Alert variant="destructive"><AlertDescription>İletişim formu şu anda kullanılamıyor. Lütfen bize e-posta ile ulaşın.</AlertDescription></Alert>}
-      <FormMessage status={sent} />
     </FormShell>
   );
 }
