@@ -1,4 +1,5 @@
-import { pageMetadata } from "@/lib/seo";
+import { OrganizationJsonLd } from "next-seo";
+import { absoluteUrl, pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import { IntroVideo } from "@/components/intro-video";
 import Link from "next/link";
@@ -23,7 +24,7 @@ import {
   Booking,
 } from "@/components/site";
 import { Reveal } from "@/components/reveal";
-import { asset, pages } from "@/lib/content";
+import { asset, email, logo, pages, socials } from "@/lib/content";
 import { eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 const steps = [
@@ -50,6 +51,7 @@ export const metadata = { ...pageMetadata("Nilgün Oygur - Kişisel Yolculuğunu
 export default function Home() {
   return (
     <>
+      <OrganizationJsonLd name="Nilgün Oygur" url={absoluteUrl("/")} logo={absoluteUrl(logo)} email={email} sameAs={socials.map(social => social.href)} />
       <Hero
         eyebrow="Potansiyelinizi Keşfedin"
         title="Kendinizi Keşfetme Yolculuğuna Çıkın"

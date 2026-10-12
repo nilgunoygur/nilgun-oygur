@@ -8,8 +8,8 @@ import { Reveal } from "@/components/reveal";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
-  title: "Yazılarım",
-  description: "Nilgün Oygur'un kişisel gelişim, farkındalık ve dönüşüm üzerine yazılarını keşfedin.",
+  title: "Kişisel Gelişim ve Farkındalık Yazıları",
+  description: "Nilgün Oygur'un bilinçaltı, meditasyon, kuantum, doğal taşlar ve etkili iletişim üzerine kişisel gelişim ve farkındalık yazılarını okuyun.",
   alternates: { canonical: "/blog" },
 };
 export default function Blog() {
@@ -19,7 +19,7 @@ async function BlogContent() {
   const articles = await getPublicArticles();
   if (!articles.length) return <section className={cn(pageWidth, "min-h-[70vh] pt-[175px] max-tablet:pt-[135px]")}><h1>Yazılarım</h1><p className="mt-5 text-stone">Yeni yazılar yakında burada olacak.</p></section>;
   const featured =
-    articles.find((a) => a.href.includes("biliçaltının")) || articles[0];
+    articles.find((a) => a.href.includes("bilincaltinin")) || articles[0];
   return (
     <section className={cn(pageWidth, "relative isolate pt-[175px] pb-20 before:absolute before:inset-x-0 before:top-[442px] before:bottom-0 before:-z-1 before:bg-muted before:content-[''] max-tablet:pt-[135px]")}>
       <h1 className="sr-only">Yazılarım</h1>
