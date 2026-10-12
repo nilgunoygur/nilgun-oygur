@@ -1,9 +1,10 @@
 "use client";
+import { toast } from "sonner";
 import { useId, useState, type FormEvent } from "react";
 import { ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { idleForm, type FormState } from "@/components/akademi/form-status";
+import type { FormState } from "@/components/akademi/form-status";
 import { subscribeSchema } from "@/lib/contact-schema";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
@@ -13,22 +14,22 @@ const failed: FormState = { status: "error", message: "Kaydınız alınamadı. L
 // One field on every public page, so no form library.
 export function NewsletterForm() {
   const id = useId();
-  const [state, setState] = useState<FormState>(idleForm);
+  const [error, setError] = useState(false);
   const [pending, setPending] = useState(false);
-  const error = state.status === "error";
+  const show = (state: FormState) => { setError(state.status === "error"); if (state.status !== "idle") toast[state.status](state.message); };
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const input = subscribeSchema.safeParse(Object.fromEntries(new FormData(form)));
-    if (!input.success) return setState({ status: "error", message: input.error.issues[0].message });
+    if (!input.success) return show({ status: "error", message: input.error.issues[0].message });
     setPending(true);
     try {
       const response = await fetch("/api/newsletter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input.data) });
       const result: FormState = await response.json();
-      setState(result.status === "success" || result.status === "error" ? result : failed);
+      show(result.status === "success" || result.status === "error" ? result : failed);
       if (result.status === "success") { track("generate_lead", { method: "newsletter" }); form.reset(); }
-    } catch { setState(failed); } finally { setPending(false); }
+    } catch { show(failed); } finally { setPending(false); }
   }
 
   return (
@@ -41,8 +42,8 @@ export function NewsletterForm() {
           {pending ? <><Spinner />Kaydediliyor…</> : <>Abone ol<ArrowRight data-icon="inline-end" /></>}
         </Button>
       </div>
-      <p id={`${id}-note`} role="status" className={cn("mt-3 px-5 text-[13px] text-white/60 max-[460px]:px-2", error && "font-medium text-[#ffc9c0]", state.status === "success" && "font-medium text-lime")}>
-        {state.message || "Abone olarak duyuruları e-postayla almayı kabul edersiniz."}
+      <p id={`${id}-note`} className="mt-3 px-5 text-[13px] text-white/60 max-[460px]:px-2">
+        Abone olarak duyuruları e-postayla almayı kabul edersiniz.
       </p>
     </form>
   );

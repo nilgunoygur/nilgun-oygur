@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -9,7 +10,6 @@ import { sendContactMessage, sendSupportMessage } from "@/app/iletisim/actions";
 import { supportSchema } from "@/lib/contact-schema";
 import { track } from "@/lib/analytics";
 
-const unavailable: FormState = { status: "error", message: "İletişim formu şu anda kullanılamıyor. Lütfen bize e-posta ile ulaşın." };
 
 export function ContactForm({ enabled, support = false }: { enabled: boolean; support?: boolean }) {
   const [sent, setSent] = useState<FormState>(idleForm);
@@ -31,7 +31,8 @@ export function ContactForm({ enabled, support = false }: { enabled: boolean; su
         <SubmitButton size="pill" pendingLabel="Gönderiliyor…">Mesajı Gönder</SubmitButton>
         <FieldDescription>Mesajınız doğrudan ekibimize iletilir. Yanıtımız formda yazdığınız e-posta adresine gönderilir.</FieldDescription>
       </Field>
-      <FormMessage status={enabled ? sent : unavailable} />
+      {!enabled && <Alert variant="destructive"><AlertDescription>İletişim formu şu anda kullanılamıyor. Lütfen bize e-posta ile ulaşın.</AlertDescription></Alert>}
+      <FormMessage status={sent} />
     </FormShell>
   );
 }

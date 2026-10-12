@@ -4,7 +4,6 @@ import { Controller, FormProvider, useFormState, type Control, type ControllerRe
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { authErrorMessage } from "@/lib/auth/navigation";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -13,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { FormStatus, type FormState } from "./form-status";
+import { FormStatus, useErrorToast, type FormState } from "./form-status";
 
 // Sets --control-h, which Input, InputGroup, Select and the pickers read.
 const controlHeights = { sm: "[--control-h:2rem]", md: "[--control-h:2.75rem]", lg: "[--control-h:3rem]" };
@@ -41,9 +40,9 @@ export function AuthSubmit({ children }: { children: ReactNode }) {
   return <SubmitButton size="pill" className="w-full min-h-12" pendingLabel="Lütfen bekleyin…">{children}<ArrowRight data-icon="inline-end" /></SubmitButton>;
 }
 
+/** Toasts the form's root error and `status`; renders nothing. Field errors stay under their fields. */
 export function FormMessage({ status }: { status?: FormState }) {
-  const message = useFormState().errors.root?.message;
-  if (message) return <Alert variant="destructive"><AlertDescription>{message}</AlertDescription></Alert>;
+  useErrorToast(useFormState().errors.root);
   return status ? <FormStatus state={status} /> : null;
 }
 

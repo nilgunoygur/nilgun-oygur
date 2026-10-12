@@ -1,4 +1,5 @@
 "use client";
+import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Pause, Play, RotateCcw, RotateCw } from "lucide-react";
@@ -37,7 +38,6 @@ export function LessonAudio({ playbackId, tokens, title, duration: knownDuration
   const [time, setTime] = useState(startTime);
   const [measured, setMeasured] = useState<number | null>(null);
   const [speed, setSpeed] = useState(1);
-  const [error, setError] = useState("");
   const source = renewed ?? { playbackId, tokens, startTime, play: false };
   const duration = measured ?? knownDuration;
 
@@ -51,8 +51,7 @@ export function LessonAudio({ playbackId, tokens, title, duration: knownDuration
   const toggle = () => {
     const audio = element();
     if (!audio) return;
-    setError("");
-    if (audio.paused) audio.play().catch(() => setError("Ses kaydı başlatılamadı. Bağlantınızı kontrol edip yeniden deneyin."));
+    if (audio.paused) audio.play().catch(() => toast.error("Ses kaydı başlatılamadı. Bağlantınızı kontrol edip yeniden deneyin."));
     else audio.pause();
   };
   const cycleSpeed = () => {
@@ -66,7 +65,7 @@ export function LessonAudio({ playbackId, tokens, title, duration: knownDuration
     const next = retried.current || !refresh ? null : await refresh().catch(() => null);
     retried.current = true;
     if (next) setRenewed({ ...next, startTime: resumeAt.current, play: playing });
-    else { setPlaying(false); setWaiting(false); setError("Ses kaydı yüklenemedi. Dersi kapatıp yeniden açın."); }
+    else { setPlaying(false); setWaiting(false); toast.error("Ses kaydı yüklenemedi. Dersi kapatıp yeniden açın."); }
   };
 
   return <div className="rounded-[22px] bg-forest p-5 text-white shadow-[0_18px_40px_-28px_rgba(34,76,64,0.9)] sm:p-7">
@@ -90,7 +89,6 @@ export function LessonAudio({ playbackId, tokens, title, duration: knownDuration
       <button type="button" className={control} onClick={() => seek(time + 15)} aria-label="15 saniye ileri">15<RotateCw size={15} /></button>
       <button type="button" className={cn(control, "ml-auto min-w-16 tabular-nums")} onClick={cycleSpeed} aria-label={`Oynatma hızı ${speed}×. Değiştir.`}>{String(speed).replace(".", ",")}×</button>
     </div>
-    {error && <p role="alert" className="mt-4 rounded-xl bg-white/10 px-4 py-3 text-sm text-white">{error}</p>}
   </div>;
 }
 

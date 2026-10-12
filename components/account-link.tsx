@@ -1,4 +1,5 @@
 "use client";
+import { toast } from "sonner";
 import Link from "next/link";
 import { useState } from "react";
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -30,7 +31,6 @@ export function AccountLink({ compact = false }: { compact?: boolean }) {
   // Opening waits for the options, so the owner link never pops in late.
   const [wanted, setWanted] = useState(false);
   const menuOpen = wanted && !isPending, waiting = wanted && isPending;
-  const [error, setError] = useState("");
   if (!data?.user.emailVerified) return null;
   const user = data.user;
   const firstName = user.name.trim().split(/\s+/)[0] || "Hesabım";
@@ -77,10 +77,9 @@ export function AccountLink({ compact = false }: { compact?: boolean }) {
         <DropdownMenuSeparator className="my-2 bg-forest/10" />
         <DropdownMenuGroup><DropdownMenuItem className={`${menuItemClass} text-destructive focus:text-destructive [&_svg]:text-destructive`} variant="destructive" onClick={async () => {
           try { const result = await authClient.signOut(); if (result.error) throw new Error(); router.replace("/akademi/giris"); router.refresh(); }
-          catch { setError("Çıkış yapılamadı. Lütfen tekrar deneyin."); }
+          catch { toast.error("Çıkış yapılamadı. Lütfen tekrar deneyin."); }
         }}><LogOut />Çıkış yap</DropdownMenuItem></DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-    {error && <span role="alert" className="text-sm text-destructive">{error}</span>}
   </>;
 }

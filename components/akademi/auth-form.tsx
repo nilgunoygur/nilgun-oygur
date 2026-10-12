@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -22,7 +23,9 @@ const inboxHint = "Gelen kutunuzu ve spam klasörünüzü kontrol edin.";
 export function AuthForm({ mode, configured, localEmail = false, token, destination, initialMessage }: {
   mode: AuthMode; configured: boolean; localEmail?: boolean; token?: string; destination?: string; initialMessage?: string;
 }) {
-  const [notice, setNotice] = useState(initialMessage ?? "");
+  // The message a link brought along is an update; what replaces a sent form below is the page's content.
+  useEffect(() => { if (initialMessage) toast.success(initialMessage); }, [initialMessage]);
+  const [notice, setNotice] = useState("");
   const [done, setDone] = useState(false);
   const invalidReset = mode === "reset" && !token;
   const sent = (link: string, text: string) => {

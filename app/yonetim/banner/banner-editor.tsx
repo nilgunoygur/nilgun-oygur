@@ -74,7 +74,7 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
       <Button type="button" size="pill" onClick={submit("publish")}>{published ? "Değişiklikleri yayınla" : "Yayınla"}</Button>
       {published && <Button type="button" variant="destructive" size="pill" onClick={() => run("unpublish", null)}>Yayından kaldır</Button>}
     </div>
-    <div role="status"><FormMessage status={status} /></div>
+    <FormMessage status={status} />
   </FormShell>;
 }
 

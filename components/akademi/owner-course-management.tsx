@@ -20,6 +20,7 @@ import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/p
 import { Spinner } from "@/components/ui/spinner";
 import { PublishSwitch } from "./publish-switch";
 import { ConfirmDelete } from "./confirm-delete";
+import { useErrorToast } from "./form-status";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { courseAccessSchema, coverRules, productFormSchema, productKeys, type CourseChange } from "@/lib/akademi/owner-forms";
@@ -38,6 +39,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Edit>(null);
   const { data, isFetching, isError } = useQuery(ownerCatalogQueryOptions(initialData));
+  useErrorToast(isError && "Yenileme başarısız oldu. Son yüklenen veriler gösteriliyor.");
   const queryKey = ownerQueryKeys.catalog();
   const invalidate = () => client.invalidateQueries({ queryKey });
   const update = useMutation({
@@ -82,7 +84,6 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
       <TabsContent value="courses">
         <Card className="border-forest/10 shadow-sm"><CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle>Eğitim kataloğu</CardTitle><CardDescription>Shopier fiyatı ve satışları, öğrenci erişimi ve ders programı.</CardDescription></div><div className="flex flex-wrap gap-2"><Button type="button" size="sm" onClick={() => setEditing({ kind: "create" })}><Plus /> Yeni eğitim</Button><Button type="button" variant="outline" size="sm" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? <Spinner /> : <RefreshCw />} Shopier ile eşitle</Button></div></CardHeader><CardContent>
-          {isError && <p className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="status">Yenileme başarısız oldu. Son yüklenen veriler gösteriliyor.</p>}
           {isFetching && <p className="sr-only" aria-live="polite">Eğitim yönetimi verileri yenileniyor</p>}
           <Tabs value={tab} onValueChange={changeTab}>
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><TabsList><TabsTrigger value="published">Yayında <Badge variant="secondary">{counts.published}</Badge></TabsTrigger><TabsTrigger value="inactive">Yayında değil <Badge variant="secondary">{counts.inactive}</Badge></TabsTrigger><TabsTrigger value="all">Tümü <Badge variant="secondary">{counts.all}</Badge></TabsTrigger></TabsList><div className="relative w-full sm:max-w-64"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Eğitim ara" placeholder="Eğitim ara…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pl-9" /></div></div>
@@ -157,7 +158,6 @@ function ProductForm({ course, courses, filesConfigured, onSaved }: { course: Ow
   // Read when saving: the compiler would memoize a list derived from this object during render.
   const changed = () => productKeys.filter(key => dirtyFields[key]);
   const [image, setImage] = useState<{ file: File; preview: string } | null>(null);
-  const [imageError, setImageError] = useState("");
   useEffect(() => () => { if (image) URL.revokeObjectURL(image.preview); }, [image]);
   const save = useMutation({
     mutationFn: (values: ProductValues) => course
@@ -188,13 +188,11 @@ function ProductForm({ course, courses, filesConfigured, onSaved }: { course: Ow
         <div className="grid gap-2">
           <FileButton variant="outline" size="sm" className="w-fit" disabled={!filesConfigured} accept={coverRules.types.join(",")} onFiles={([file]) => {
             const usable = coverRules.types.includes(file.type) && file.size <= coverRules.maxBytes;
-            setImageError(usable ? "" : `Bu görsel kullanılamıyor. ${coverRules.hint}`);
-            if (usable) setImage({ file, preview: URL.createObjectURL(file) });
+            if (usable) setImage({ file, preview: URL.createObjectURL(file) }); else toast.error(`Bu görsel kullanılamıyor. ${coverRules.hint}`);
           }}><ImagePlus /> {cover ? "Görseli değiştir" : "Görsel seç"}</FileButton>
           <p className="max-w-xs text-xs text-muted-foreground">{!filesConfigured ? `Görsel yüklemek için dosya depolama bağlantısı gerekir.${course ? "" : " Şimdilik akademinin varsayılan kapağı kullanılır."}` : `${coverRules.hint}${course ? " Ürünün mevcut görsellerinin yerini alır." : " Seçmezseniz akademinin varsayılan kapağı kullanılır."}`}</p>
         </div>
       </div>
-      {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
     </div>
     {course?.status === "published" ? <p className="text-sm text-muted-foreground">Yayındaki eğitim Shopier mağazasında da listelenir. Gizlemek için eğitimi taslağa alın.</p> : <CheckboxField control={form.control} name="listed" label="Shopier mağazasında listelensin" description="Eğitimi yayınladığınızda mağazada da görünür olur. Taslağa aldığınızda mağazadan gizlenir." />}
     {course ? <CheckboxField control={form.control} name="inStock" label="Satışa açık" description="Kapalıyken ürün Shopier’de tükendi görünür ve sitede satın alınamaz." />

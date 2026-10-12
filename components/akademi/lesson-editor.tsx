@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
-import { FormStatus, idleForm, type FormState } from "./form-status";
+import { FormStatus, idleForm, useErrorToast, type FormState } from "./form-status";
 import { ConfirmDelete, DeleteIconButton, done } from "./confirm-delete";
 import { DateTimeField } from "./date-time-field";
 import { PublishSwitch } from "./publish-switch";
@@ -170,7 +170,6 @@ function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
 
 const captionLabels = { ready: "Türkçe altyazı hazır", preparing: "Altyazı hazırlanıyor", failed: "Altyazı oluşturulamadı", none: "Altyazı yok" };
 const softPill = "border-forest/10 bg-mist text-forest hover:bg-mist/80";
-const problem = "rounded-xl bg-destructive/10 p-3 text-sm text-destructive";
 
 // Video and audio lessons share the Mux flow; only the wording and the preview differ.
 type MediaKind = "video" | "audio";
@@ -233,6 +232,9 @@ function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
     enabled: previewing,
     staleTime: 30 * 60_000,
   });
+  const previewError = preview.data && "error" in preview.data ? preview.data.error : null;
+  useErrorToast(upload.error);
+  useErrorToast(previewing && previewError);
   const busy = upload.isPending;
   const details = [asset?.durationSeconds && formatDuration(asset.durationSeconds), !audio && video?.captions && captionLabels[video.captions]].filter(Boolean).join(" · ");
   const playback = preview.data && !("error" in preview.data) ? { playbackId: preview.data.playbackId, tokens: preview.data.tokens, metadata: { video_id: lesson.id, video_title: lesson.title, viewer_user_id: "owner-preview" } } : null;
@@ -247,7 +249,7 @@ function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
         {muxConfigured && <Button type="button" variant="outline" size="pill" aria-expanded={changing} onClick={() => setChanging(!changing)}><Replace />{changing ? "Vazgeç" : "Değiştir"}</Button>}
       </div>
     </div> : !busy && <p className="text-sm">{text.none}</p>}
-    {previewing && (!preview.data ? <Spinner /> : !playback ? <p role="alert" className="text-sm text-destructive">{"error" in preview.data ? preview.data.error : ""}</p>
+    {previewing && (!preview.data ? <Spinner /> : !playback ? null
       : audio ? <LessonAudio {...playback} title={lesson.title} duration={asset?.durationSeconds ?? 0} peaks={asset?.peaks} />
       : <LessonVideo {...playback} className="aspect-video overflow-hidden rounded-xl" />)}
     {busy && <p className="flex items-center gap-2 text-sm" role="status"><Spinner />{percent !== null ? `Dosya Mux’a yükleniyor… %${percent}` : `${text.preparing} ${ready ? text.current : "Bu sayfadan ayrılırsanız dosyayı sonra Mux kütüphanesinden seçebilirsiniz."}`}</p>}
@@ -260,7 +262,6 @@ function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
         <FileButton variant="outline" size="pill" className={softPill} accept={text.accept} onFiles={([file]) => upload.mutate(file)}><Upload />Dosya seç</FileButton>
       </MediaOption>
     </div>}
-    {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
   </div>;
 }
 
@@ -296,6 +297,8 @@ function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: LibraryPr
     mutationFn: (assetId: string) => done(attachMuxAsset(lessonId, assetId)),
     onSuccess: message => { toast.success(message); void client.invalidateQueries({ queryKey: ownerQueryKeys.muxLibrary() }); onAttached(); },
   });
+  useErrorToast(attach.error);
+  useErrorToast(library.error);
   const needle = search.trim().toLocaleLowerCase("tr-TR");
   // An asset still being prepared has no tracks yet, so it is listed for both kinds.
   const ofKind = (library.data ?? []).filter(asset => !asset.ready || asset.audioOnly === audio);
@@ -303,9 +306,8 @@ function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: LibraryPr
     .sort((a, b) => Number(b.id === currentAssetId) - Number(a.id === currentAssetId));
   return <>
     <div className="relative"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" aria-label="Kütüphanede ara" placeholder={text.search} value={search} onChange={event => setSearch(event.target.value)} className="pl-9" /></div>
-    {attach.error && <p role="alert" className="text-sm text-destructive">{attach.error.message}</p>}
     {library.isPending ? <p className="flex items-center gap-2 py-6 text-stone"><Spinner />Kütüphane yükleniyor…</p>
-      : library.error ? <p role="alert" className="text-destructive">{library.error.message}</p>
+      : library.error ? null
       : assets.length === 0 ? <p className="py-6 text-stone">{ofKind.length ? "Aramanızla eşleşen kayıt yok." : text.empty}</p>
       : <ul className="grid gap-3">{assets.map(asset => <li key={asset.id} className={`flex flex-wrap items-center gap-4 rounded-xl border p-3 sm:flex-nowrap ${asset.id === currentAssetId ? "border-forest bg-mist" : "border-border"}`}>
         {audio ? <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-mist text-forest"><Headphones size={20} /></div>
@@ -334,6 +336,7 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
     },
     onSuccess: message => toast.success(message),
   });
+  useErrorToast(upload.error);
   const remove = useMutation({
     mutationFn: () => done(deleteLessonFile(removing!.id)),
     onSuccess: message => { toast.success(message); setRemoving(null); },
@@ -342,7 +345,7 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-[11px] font-semibold tracking-[1.4px] text-[#82623a]">ÖDEV VE MATERYALLER</p><p className="mt-1 text-xs text-stone">Öğrenciler bu PDF’leri dersin altında görür ve indirebilir. {lessonFileRules.hint}</p></div>
       <FileButton variant="outline" size="pill" className={softPill} accept={lessonFileRules.accept} multiple disabled={!filesConfigured || upload.isPending || documents.length >= maxLessonDocuments}
-        onFiles={async files => { try { for (const file of files) await upload.mutateAsync(file); } catch { /* shown below */ } }}><Plus />PDF ekle</FileButton>
+        onFiles={async files => { try { for (const file of files) await upload.mutateAsync(file); } catch { /* toasted by the mutation */ } }}><Plus />PDF ekle</FileButton>
     </div>
     {documents.length > 0 && <ul className="grid gap-2">{documents.map(file => <li key={file.id} className="flex items-center gap-3 rounded-xl bg-white p-3">
       <FileText className="size-5 shrink-0 text-[#c2553f]" />
@@ -351,7 +354,6 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
       <DeleteIconButton name={file.name} onClick={() => { remove.reset(); setRemoving(file); }} />
     </li>)}</ul>}
     {upload.isPending && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />Yükleniyor… %{percent}</p><progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" /></div>}
-    {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
     <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={remove} />
   </div>;
 }
