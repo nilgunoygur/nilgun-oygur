@@ -19,11 +19,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addLessons, attachMuxAsset, checkUpload, deleteLessonFile, listMuxLibrary, prepareLessonFile, previewPlayback, removeLesson, saveLesson, saveLessonOrder, saveLessonFile, startUpload } from "@/app/yonetim/egitimler/[slug]/actions";
-import { FormStatus, idleForm, type FormState } from "./form-status";
+import { idleForm, type FormState } from "./form-status";
 import { ConfirmDelete, DeleteIconButton, done } from "./confirm-delete";
 import { DateTimeField } from "./date-time-field";
 import { PublishSwitch } from "./publish-switch";
-import { ControlledField, FileButton, FormMessage, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
+import { ControlledField, FileButton, FormShell, SelectField, SubmitButton, submitAction, TextField } from "./form-fields";
 import { lessonFormSchema } from "@/lib/akademi/owner-forms";
 import type { ownerLessons } from "@/lib/akademi/lesson-editor";
 import type { AttachedVideo } from "@/lib/video/mux";
@@ -45,9 +45,9 @@ const filters = ["all", "video", "audio", "live", "draft"] as const;
 type Filter = typeof filters[number];
 
 export function CourseEditor({ courseId, rows, muxConfigured, filesConfigured }: { courseId: string; rows: Row[] } & Services) {
-  const [state, action, pending] = useActionState(async (previous: FormState, form: FormData) => {
+  const [, action, pending] = useActionState(async (previous: FormState, form: FormData) => {
     const result = await addLessons(previous, form);
-    if (result.status === "success") toast.success(result.message);
+    if (result.status !== "idle") toast[result.status](result.message);
     return result;
   }, idleForm);
   const [filter, setFilter] = useState<Filter>("all");
@@ -57,7 +57,7 @@ export function CourseEditor({ courseId, rows, muxConfigured, filesConfigured }:
   const draftCount = rows.length - publishedCount;
   const visibleRows = rows.filter(row => filter === "all" || filter === "draft" ? filter !== "draft" || row.lesson.status === "draft" : row.lesson.kind === filter);
   return <div className="grid gap-6">
-    <Card className="border-forest/10 shadow-sm"><CardContent className="p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-5"><div><h2 className="text-xl font-semibold text-forest">Eğitim programı</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve yayınlayın. Taslaklarınızı öğrenciler görmez.</p></div><div className="flex gap-2"><Badge variant="secondary">{publishedCount} yayında</Badge><Badge variant="outline">{draftCount} taslak</Badge></div></div><form action={action} className="mt-5 border-t border-border pt-5"><input type="hidden" name="courseId" value={courseId} /><div className="flex flex-wrap gap-2">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />Örnek program ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="audio" disabled={pending}><Headphones size={16} />Ses dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div>{state.status === "error" && <div className="mt-3" role="alert"><FormStatus state={state} /></div>}</form></CardContent></Card>
+    <Card className="border-forest/10 shadow-sm"><CardContent className="p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-5"><div><h2 className="text-xl font-semibold text-forest">Eğitim programı</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone">Dersleri ekleyin, sıralayın ve yayınlayın. Taslaklarınızı öğrenciler görmez.</p></div><div className="flex gap-2"><Badge variant="secondary">{publishedCount} yayında</Badge><Badge variant="outline">{draftCount} taslak</Badge></div></div><form action={action} className="mt-5 border-t border-border pt-5"><input type="hidden" name="courseId" value={courseId} /><div className="flex flex-wrap gap-2">{rows.length === 0 && <button className={pillAction} name="kind" value="template" disabled={pending}><Plus size={16} />Örnek program ekle</button>}<button className={pillAction} name="kind" value="video" disabled={pending}><CirclePlay size={16} />Video dersi ekle</button><button className={pillAction} name="kind" value="audio" disabled={pending}><Headphones size={16} />Ses dersi ekle</button><button className={pillAction} name="kind" value="live" disabled={pending}><CalendarDays size={16} />Canlı ders ekle</button></div></form></CardContent></Card>
     {!muxConfigured && <p className="rounded-2xl border border-[#e7d7bc] bg-[#fbf6ed] p-5 text-sm leading-relaxed">Video ve ses yükleme henüz bağlanmadı. Ders başlıklarını, açıklamalarını ve canlı buluşmaları hazırlayabilirsiniz. Kayıtları yükleyip yayınlamak için Mux bağlantısını tamamlayın.</p>}
     {!filesConfigured && <p className="rounded-2xl border border-[#e7d7bc] bg-[#fbf6ed] p-5 text-sm leading-relaxed">Dosya depolama henüz bağlanmadı. Ödev PDF’lerini yüklemek için Vercel Blob bağlantısını tamamlayın.</p>}
     <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={filter} onValueChange={value => { const next = filters.find(item => item === value); if (next) setFilter(next); }}><TabsList className="h-auto flex-wrap"><TabsTrigger value="all">Tüm dersler <span className="ml-1 text-xs text-muted-foreground">{rows.length}</span></TabsTrigger><TabsTrigger value="video">Video <span className="ml-1 text-xs text-muted-foreground">{count("video")}</span></TabsTrigger><TabsTrigger value="audio">Ses <span className="ml-1 text-xs text-muted-foreground">{count("audio")}</span></TabsTrigger><TabsTrigger value="live">Canlı ders <span className="ml-1 text-xs text-muted-foreground">{count("live")}</span></TabsTrigger><TabsTrigger value="draft">Taslaklar <span className="ml-1 text-xs text-muted-foreground">{draftCount}</span></TabsTrigger></TabsList></Tabs><p className="text-xs text-muted-foreground">{filter === "all" ? "Sıralamak için dersleri tutamacından sürükleyin." : "Sıralamak için “Tüm dersler” sekmesine geçin."}</p></div>
@@ -78,7 +78,7 @@ function SortableLessons({ courseId, rows, services }: { courseId: string; rows:
   const save = useMutation({
     mutationFn: async (ids: string[]) => { const result = await saveLessonOrder(courseId, ids); if (result.status === "error") throw new Error(result.message); return result.message; },
     onSuccess: message => toast.success(message),
-    onError: error => { setDraft(null); toast.error(error.message); },
+    onError: () => setDraft(null),
   });
   const commit = (ids: string[]) => { if (ids.join() !== serverKey) save.mutate(ids); };
   const move = (id: string, step: number) => {
@@ -122,7 +122,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
     },
   });
   const submit = form.handleSubmit(async (values) => {
-    const result = await submitAction(form, () => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.");
+    const result = await submitAction(() => saveLesson({ ...values, courseId: lesson.courseId, lessonId: lesson.id }), "Ders kaydedilemedi. Yönetim oturumunuzu kontrol edin.");
     if (result) toast.success(result.message);
   });
   return <AccordionItem value={lesson.id} className="rounded-[22px] border border-border bg-white">
@@ -148,7 +148,7 @@ function EditorCard({ row, index, handle, services }: { row: Row; index: number;
           <TextField control={form.control} name="passcode" label="Toplantı şifresi (isteğe bağlı)" maxLength={100} className="bg-white" />
           <SelectField control={form.control} name="liveStatus" label="Buluşma durumu" options={liveStatuses} className="bg-white" />
         </div>}
-        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><FormMessage /><DeleteLesson lesson={lesson} /></div>
+        <div className="flex flex-wrap items-center gap-5"><SubmitButton className={pillAction}>Dersi kaydet</SubmitButton><DeleteLesson lesson={lesson} /></div>
       </FormShell>
     </div></AccordionPrimitive.Panel>
   </AccordionItem>;
@@ -170,7 +170,6 @@ function DeleteLesson({ lesson }: { lesson: Row["lesson"] }) {
 
 const captionLabels = { ready: "Türkçe altyazı hazır", preparing: "Altyazı hazırlanıyor", failed: "Altyazı oluşturulamadı", none: "Altyazı yok" };
 const softPill = "border-forest/10 bg-mist text-forest hover:bg-mist/80";
-const problem = "rounded-xl bg-destructive/10 p-3 text-sm text-destructive";
 
 // Video and audio lessons share the Mux flow; only the wording and the preview differ.
 type MediaKind = "video" | "audio";
@@ -229,7 +228,7 @@ function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
   });
   const preview = useQuery({
     queryKey: ownerQueryKeys.preview(lesson.id, asset?.signedPlaybackId),
-    queryFn: () => previewPlayback(lesson.id),
+    queryFn: async () => { const result = await previewPlayback(lesson.id); if ("error" in result) toast.error(result.error); return result; },
     enabled: previewing,
     staleTime: 30 * 60_000,
   });
@@ -247,7 +246,7 @@ function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
         {muxConfigured && <Button type="button" variant="outline" size="pill" aria-expanded={changing} onClick={() => setChanging(!changing)}><Replace />{changing ? "Vazgeç" : "Değiştir"}</Button>}
       </div>
     </div> : !busy && <p className="text-sm">{text.none}</p>}
-    {previewing && (!preview.data ? <Spinner /> : !playback ? <p role="alert" className="text-sm text-destructive">{"error" in preview.data ? preview.data.error : ""}</p>
+    {previewing && (!preview.data ? <Spinner /> : !playback ? null
       : audio ? <LessonAudio {...playback} title={lesson.title} duration={asset?.durationSeconds ?? 0} peaks={asset?.peaks} />
       : <LessonVideo {...playback} className="aspect-video overflow-hidden rounded-xl" />)}
     {busy && <p className="flex items-center gap-2 text-sm" role="status"><Spinner />{percent !== null ? `Dosya Mux’a yükleniyor… %${percent}` : `${text.preparing} ${ready ? text.current : "Bu sayfadan ayrılırsanız dosyayı sonra Mux kütüphanesinden seçebilirsiniz."}`}</p>}
@@ -260,7 +259,6 @@ function MediaUpload({ row: { lesson, asset, video }, muxConfigured }: { row: Ro
         <FileButton variant="outline" size="pill" className={softPill} accept={text.accept} onFiles={([file]) => upload.mutate(file)}><Upload />Dosya seç</FileButton>
       </MediaOption>
     </div>}
-    {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
   </div>;
 }
 
@@ -291,6 +289,7 @@ function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: LibraryPr
     queryKey: ownerQueryKeys.muxLibrary(),
     queryFn: async () => { const result = await listMuxLibrary(); if ("error" in result) throw new Error(result.error); return result.assets; },
     staleTime: 5 * 60_000,
+    meta: { errorToast: true },
   });
   const attach = useMutation({
     mutationFn: (assetId: string) => done(attachMuxAsset(lessonId, assetId)),
@@ -303,9 +302,8 @@ function LibraryPicker({ lessonId, kind, currentAssetId, onAttached }: LibraryPr
     .sort((a, b) => Number(b.id === currentAssetId) - Number(a.id === currentAssetId));
   return <>
     <div className="relative"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" aria-label="Kütüphanede ara" placeholder={text.search} value={search} onChange={event => setSearch(event.target.value)} className="pl-9" /></div>
-    {attach.error && <p role="alert" className="text-sm text-destructive">{attach.error.message}</p>}
     {library.isPending ? <p className="flex items-center gap-2 py-6 text-stone"><Spinner />Kütüphane yükleniyor…</p>
-      : library.error ? <p role="alert" className="text-destructive">{library.error.message}</p>
+      : library.error ? null
       : assets.length === 0 ? <p className="py-6 text-stone">{ofKind.length ? "Aramanızla eşleşen kayıt yok." : text.empty}</p>
       : <ul className="grid gap-3">{assets.map(asset => <li key={asset.id} className={`flex flex-wrap items-center gap-4 rounded-xl border p-3 sm:flex-nowrap ${asset.id === currentAssetId ? "border-forest bg-mist" : "border-border"}`}>
         {audio ? <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-mist text-forest"><Headphones size={20} /></div>
@@ -342,7 +340,7 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-[11px] font-semibold tracking-[1.4px] text-[#82623a]">ÖDEV VE MATERYALLER</p><p className="mt-1 text-xs text-stone">Öğrenciler bu PDF’leri dersin altında görür ve indirebilir. {lessonFileRules.hint}</p></div>
       <FileButton variant="outline" size="pill" className={softPill} accept={lessonFileRules.accept} multiple disabled={!filesConfigured || upload.isPending || documents.length >= maxLessonDocuments}
-        onFiles={async files => { try { for (const file of files) await upload.mutateAsync(file); } catch { /* shown below */ } }}><Plus />PDF ekle</FileButton>
+        onFiles={async files => { try { for (const file of files) await upload.mutateAsync(file); } catch { /* toasted by the mutation */ } }}><Plus />PDF ekle</FileButton>
     </div>
     {documents.length > 0 && <ul className="grid gap-2">{documents.map(file => <li key={file.id} className="flex items-center gap-3 rounded-xl bg-white p-3">
       <FileText className="size-5 shrink-0 text-[#c2553f]" />
@@ -351,7 +349,6 @@ function Homework({ row: { lesson, documents }, filesConfigured }: { row: Row; f
       <DeleteIconButton name={file.name} onClick={() => { remove.reset(); setRemoving(file); }} />
     </li>)}</ul>}
     {upload.isPending && <div className="grid gap-2" role="status"><p className="flex items-center gap-2 text-sm"><Spinner />Yükleniyor… %{percent}</p><progress className="h-2 w-full accent-forest" max={100} value={percent} aria-label="PDF yükleme ilerlemesi" /></div>}
-    {upload.error && <p role="alert" className={problem}>{upload.error.message}</p>}
     <ConfirmDelete title={removing?.name ?? ""} description="PDF kalıcı olarak silinir; öğrencileriniz artık indiremez." open={!!removing} onClose={() => setRemoving(null)} remove={remove} />
   </div>;
 }

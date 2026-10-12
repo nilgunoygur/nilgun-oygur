@@ -5,12 +5,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFormState } from "react-hook-form";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
+import { Archive, BookOpen, ExternalLink, ImagePlus, MoreHorizontal, Package, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { dateTimeLabel, formatPrice, formatMoney, liraInput } from "@/lib/akademi/format";
-import { createOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type ProductValues } from "@/lib/akademi/owner-queries";
+import { createOwnerCourse, deleteOwnerCourse, ownerCatalogQueryOptions, ownerQueryKeys, syncOwnerCatalog, updateOwnerCourse, updateOwnerProduct, type OwnerCatalogSnapshot, type OwnerCourse, type ProductValues } from "@/lib/akademi/owner-queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLinkItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,13 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
 import { PublishSwitch } from "./publish-switch";
+import { ConfirmDelete } from "./confirm-delete";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { courseAccessSchema, coverRules, productFormSchema, productKeys, type CourseChange } from "@/lib/akademi/owner-forms";
-import { CheckboxField, FileButton, FormMessage, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
+import { CheckboxField, ControlledField, FileButton, FormShell, SubmitButton, TextField, TextareaField } from "./form-fields";
 
 type Filter = "published" | "inactive" | "all";
-type Edit = { kind: "access" | "product"; course: OwnerCourse } | { kind: "create" } | null;
+type Edit = { kind: "access" | "product" | "bundle" | "delete"; course: OwnerCourse } | { kind: "create" } | null;
 const perPage = 6;
 const statusLabel = { published: "Yayında", draft: "Taslak", archived: "Arşivde" } as const;
 const blockerLabel = { missing: "Shopier ürünü bulunamadı.", notDigital: "Shopier ürünü dijital değil.", outOfStock: "ürün satışa kapalı.", unpriced: "ürünün geçerli bir ₺ fiyatı yok." } as const;
@@ -35,7 +37,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Edit>(null);
-  const { data, isFetching, isError } = useQuery(ownerCatalogQueryOptions(initialData));
+  const { data, isFetching } = useQuery(ownerCatalogQueryOptions(initialData));
   const queryKey = ownerQueryKeys.catalog();
   const invalidate = () => client.invalidateQueries({ queryKey });
   const update = useMutation({
@@ -43,16 +45,21 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     onMutate: async ({ course, change }) => {
       await client.cancelQueries({ queryKey });
       const previous = client.getQueryData<OwnerCatalogSnapshot>(queryKey);
-      const patch = change.kind === "status" ? { status: change.status } : { accessDurationDays: change.value };
+      const patch = change.kind === "status" ? { status: change.status } : change.kind === "bundle" ? { includes: change.courseIds } : { accessDurationDays: change.value };
       client.setQueryData<OwnerCatalogSnapshot>(queryKey, current => current && { ...current, courses: current.courses.map(item => item.id === course.id ? { ...item, ...patch } : item) });
       return { previous };
     },
-    onError: (error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); toast.error(error.message); },
-    onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : "Değişiklik kaydedildi."); },
+    onError: (_error, _variables, context) => { if (context?.previous) client.setQueryData(queryKey, context.previous); },
+    onSuccess: (_data, { change }) => { setEditing(null); toast.success(change.kind === "status" ? "Eğitim durumu güncellendi." : change.kind === "bundle" ? "Paket içeriği kaydedildi." : "Değişiklik kaydedildi."); },
+    onSettled: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: (course: OwnerCourse) => deleteOwnerCourse(course.id),
+    onSuccess: () => { setEditing(null); toast.success("Eğitim silindi."); },
     onSettled: invalidate,
   });
   const savingId = update.isPending ? update.variables.course.id : null;
-  const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onError: error => toast.error(error.message), onSettled: invalidate });
+  const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onSettled: invalidate });
 
   const courses = data.courses;
   const published = courses.filter(item => item.status === "published").length;
@@ -75,12 +82,11 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
       <TabsContent value="courses">
         <Card className="border-forest/10 shadow-sm"><CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle>Eğitim kataloğu</CardTitle><CardDescription>Shopier fiyatı ve satışları, öğrenci erişimi ve ders programı.</CardDescription></div><div className="flex flex-wrap gap-2"><Button type="button" size="sm" onClick={() => setEditing({ kind: "create" })}><Plus /> Yeni eğitim</Button><Button type="button" variant="outline" size="sm" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? <Spinner /> : <RefreshCw />} Shopier ile eşitle</Button></div></CardHeader><CardContent>
-          {isError && <p className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="status">Yenileme başarısız oldu. Son yüklenen veriler gösteriliyor.</p>}
           {isFetching && <p className="sr-only" aria-live="polite">Eğitim yönetimi verileri yenileniyor</p>}
           <Tabs value={tab} onValueChange={changeTab}>
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><TabsList><TabsTrigger value="published">Yayında <Badge variant="secondary">{counts.published}</Badge></TabsTrigger><TabsTrigger value="inactive">Yayında değil <Badge variant="secondary">{counts.inactive}</Badge></TabsTrigger><TabsTrigger value="all">Tümü <Badge variant="secondary">{counts.all}</Badge></TabsTrigger></TabsList><div className="relative w-full sm:max-w-64"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Eğitim ara" placeholder="Eğitim ara…" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="pl-9" /></div></div>
             <TabsContent value={tab}>
-              {visible.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{courses.length === 0 ? "Henüz eğitim yok. “Yeni eğitim” ile oluşturun veya Shopier’deki dijital ürünlerinizi eşitleyin." : "Bu aramayla eşleşen eğitim bulunamadı."}</div> : <div className="overflow-x-auto rounded-xl border"><Table className="min-w-[720px]"><TableHeader><TableRow className="bg-muted/30"><TableHead className="w-[38%] pl-5">Eğitim</TableHead><TableHead>Fiyat ve erişim</TableHead><TableHead>Satış</TableHead><TableHead>Durum</TableHead><TableHead className="w-14 text-right"><span className="sr-only">İşlemler</span></TableHead></TableRow></TableHeader><TableBody>{visible.map(course => <TableRow key={course.id} className="h-20"><TableCell className="pl-5"><Link href={`/yonetim/egitimler/${course.slug}`} className="block font-semibold text-foreground hover:text-primary hover:underline">{course.title}</Link><span className="mt-1 block max-w-[320px] truncate text-xs text-muted-foreground">/akademi/{course.slug}</span></TableCell><TableCell><span className="block font-medium">{course.priceKurus ? formatPrice(course.priceKurus) : "Fiyat yok"}</span><span className="text-xs text-muted-foreground">{course.accessDurationDays} gün erişim</span></TableCell><TableCell><span className="block font-medium">{course.sales}</span>{course.sales - course.claimed > 0 && <span className="text-xs text-muted-foreground">{course.sales - course.claimed} hesap bekliyor</span>}</TableCell><TableCell><PublishSwitch aria-label={`${course.title} yayında`} status={course.status} disabled={savingId === course.id} onChange={status => update.mutate({ course, change: { kind: "status", status } })}>{statusLabel[course.status]}</PublishSwitch>{course.status === "published" && course.blocker && <span className="mt-1 block text-xs text-destructive">Sitede görünmüyor: {blockerLabel[course.blocker]}</span>}</TableCell><TableCell className="pr-4 text-right"><DropdownMenu><DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" />} aria-label={`${course.title} işlemleri`}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-52"><DropdownMenuGroup><DropdownMenuLinkItem render={<Link href={`/yonetim/egitimler/${course.slug}`} />}><BookOpen />Dersleri düzenle</DropdownMenuLinkItem><DropdownMenuItem onClick={() => setEditing({ kind: "access", course })}><SlidersHorizontal />Erişim süresi</DropdownMenuItem>{course.product && <DropdownMenuItem onClick={() => setEditing({ kind: "product", course })}><Pencil />Shopier ürününü düzenle</DropdownMenuItem>}<DropdownMenuLinkItem href={course.product?.url ?? `https://www.shopier.com/${course.productId}`} target="_blank" rel="noopener noreferrer"><ExternalLink />Shopier’de aç</DropdownMenuLinkItem></DropdownMenuGroup>{course.status !== "archived" && <><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuItem disabled={savingId === course.id} onClick={() => update.mutate({ course, change: { kind: "status", status: "archived" } })}><Archive />Arşivle</DropdownMenuItem></DropdownMenuGroup></>}</DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table></div>}
+              {visible.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{courses.length === 0 ? "Henüz eğitim yok. “Yeni eğitim” ile oluşturun veya Shopier’deki dijital ürünlerinizi eşitleyin." : "Bu aramayla eşleşen eğitim bulunamadı."}</div> : <div className="overflow-x-auto rounded-xl border"><Table className="min-w-[720px]"><TableHeader><TableRow className="bg-muted/30"><TableHead className="w-[38%] pl-5">Eğitim</TableHead><TableHead>Fiyat ve erişim</TableHead><TableHead>Satış</TableHead><TableHead>Durum</TableHead><TableHead className="w-14 text-right"><span className="sr-only">İşlemler</span></TableHead></TableRow></TableHeader><TableBody>{visible.map(course => <TableRow key={course.id} className="h-20"><TableCell className="pl-5"><Link href={`/yonetim/egitimler/${course.slug}`} className="block font-semibold text-foreground hover:text-primary hover:underline">{course.title}</Link><span className="mt-1 block max-w-[320px] truncate text-xs text-muted-foreground">/akademi/{course.slug}</span>{course.includes.length > 0 && <Badge variant="secondary" className="mt-1"><Package />Paket · {course.includes.length} eğitim</Badge>}</TableCell><TableCell><span className="block font-medium">{course.priceKurus ? formatPrice(course.priceKurus) : "Fiyat yok"}</span><span className="text-xs text-muted-foreground">{course.accessDurationDays} gün erişim</span></TableCell><TableCell><span className="block font-medium">{course.sales}</span>{course.sales - course.claimed > 0 && <span className="text-xs text-muted-foreground">{course.sales - course.claimed} hesap bekliyor</span>}</TableCell><TableCell><PublishSwitch aria-label={`${course.title} yayında`} status={course.status} disabled={savingId === course.id} onChange={status => update.mutate({ course, change: { kind: "status", status } })}>{statusLabel[course.status]}</PublishSwitch>{course.status === "published" && course.blocker && <span className="mt-1 block text-xs text-destructive">Sitede görünmüyor: {blockerLabel[course.blocker]}</span>}</TableCell><TableCell className="pr-4 text-right"><DropdownMenu><DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" />} aria-label={`${course.title} işlemleri`}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-52"><DropdownMenuGroup><DropdownMenuLinkItem render={<Link href={`/yonetim/egitimler/${course.slug}`} />}><BookOpen />Dersleri düzenle</DropdownMenuLinkItem><DropdownMenuItem onClick={() => setEditing({ kind: "access", course })}><SlidersHorizontal />Erişim süresi</DropdownMenuItem>{!course.inBundle && <DropdownMenuItem onClick={() => setEditing({ kind: "bundle", course })}><Package />Paket içeriği</DropdownMenuItem>}{course.product && <DropdownMenuItem onClick={() => setEditing({ kind: "product", course })}><Pencil />Shopier ürününü düzenle</DropdownMenuItem>}<DropdownMenuLinkItem href={course.product?.url ?? `https://www.shopier.com/${course.productId}`} target="_blank" rel="noopener noreferrer"><ExternalLink />Shopier’de aç</DropdownMenuLinkItem></DropdownMenuGroup>{course.status !== "archived" && <><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuItem disabled={savingId === course.id} onClick={() => update.mutate({ course, change: { kind: "status", status: "archived" } })}><Archive />Arşivle</DropdownMenuItem></DropdownMenuGroup></>}{course.status === "archived" && <><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuItem variant="destructive" onClick={() => { remove.reset(); setEditing({ kind: "delete", course }); }}><Trash2 />Sil</DropdownMenuItem></DropdownMenuGroup></>}</DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table></div>}
             </TabsContent>
           </Tabs>
           {pages > 1 && <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">{matching.length} eğitim · Sayfa {currentPage}/{pages}</p><Pagination className="mx-0 w-auto"><PaginationContent><PaginationItem><Button type="button" size="sm" variant="outline" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Önceki</Button></PaginationItem><PaginationItem><Button type="button" size="sm" variant="outline" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Sonraki</Button></PaginationItem></PaginationContent></Pagination></div>}
@@ -94,9 +100,15 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
 
     <Dialog open={editing?.kind === "access"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent><DialogHeader><DialogTitle>Erişim süresini değiştir</DialogTitle><DialogDescription>{editing?.kind === "access" && editing.course.title}</DialogDescription></DialogHeader>{editing?.kind === "access" && <AccessForm key={editing.course.id} course={editing.course} onSave={value => update.mutateAsync({ course: editing.course, change: { kind: "access", value } }).catch(() => {})} />}</DialogContent></Dialog>
 
+    <Dialog open={editing?.kind === "bundle"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent><DialogHeader><DialogTitle>Paket içeriği</DialogTitle><DialogDescription>{editing?.kind === "bundle" && `“${editing.course.title}” satın alındığında öğrenciye seçtiğiniz eğitimlerin hepsi açılır.`}</DialogDescription></DialogHeader>{editing?.kind === "bundle" && <BundleForm key={editing.course.id} course={editing.course} courses={courses} saving={update.isPending} onSave={courseIds => update.mutate({ course: editing.course, change: { kind: "bundle", courseIds } })} />}</DialogContent></Dialog>
+
+    <ConfirmDelete open={editing?.kind === "delete"} onClose={() => setEditing(null)} title={editing?.kind === "delete" ? editing.course.title : ""}
+      description="Eğitim, dersleri ve Shopier’deki ürünü kalıcı olarak silinir; geri alınamaz. Satışı veya öğrencisi olan eğitimler silinemez."
+      remove={{ isPending: remove.isPending, mutate: () => { if (editing?.kind === "delete") remove.mutate(editing.course); } }} />
+
     <Dialog open={editing?.kind === "product" || editing?.kind === "create"} onOpenChange={open => { if (!open) setEditing(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>{editing?.kind === "create" ? "Yeni eğitim" : "Shopier ürününü düzenle"}</DialogTitle><DialogDescription>{editing?.kind === "create" ? "Shopier’de dijital bir ürün oluşturulur ve sitede eğitim olarak eklenir." : "Değişiklikler Shopier’deki ürüne kaydedilir; sitedeki eğitim sayfası buradan beslenir."}</DialogDescription></DialogHeader>
-      {(editing?.kind === "product" || editing?.kind === "create") && <ProductForm key={editing.kind === "product" ? editing.course.id : "new"} course={editing.kind === "product" ? editing.course : null} filesConfigured={filesConfigured}
+      {(editing?.kind === "product" || editing?.kind === "create") && <ProductForm key={editing.kind === "product" ? editing.course.id : "new"} course={editing.kind === "product" ? editing.course : null} courses={courses} filesConfigured={filesConfigured}
         onSaved={created => { setEditing(null); if (created) { setTab("all"); setPage(1); } }} />}
     </DialogContent></Dialog>
   </>;
@@ -110,30 +122,48 @@ function AccessForm({ course, onSave }: { course: OwnerCourse; onSave: (value: n
   </FormShell>;
 }
 
+/** A bundle holds ordinary courses that are still on offer. */
+const bundleable = (course: OwnerCourse) => !course.includes.length && course.status !== "archived";
+
+function BundleOptions({ courses, selected, onChange }: { courses: OwnerCourse[]; selected: string[]; onChange: (courseIds: string[]) => void }) {
+  if (!courses.length) return <p className="text-sm text-muted-foreground">Pakete eklenebilecek başka eğitim yok.</p>;
+  return <ul className="grid max-h-[50vh] gap-1 overflow-y-auto">{courses.map(item => <li key={item.id}><label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-muted/50">
+    <Checkbox checked={selected.includes(item.id)} onCheckedChange={checked => onChange(checked ? [...selected, item.id] : selected.filter(id => id !== item.id))} />
+    <span className="font-medium">{item.title}</span>{item.status !== "published" && <span className="text-xs text-muted-foreground">{statusLabel[item.status]}</span>}
+  </label></li>)}</ul>;
+}
+
+function BundleForm({ course, courses, saving, onSave }: { course: OwnerCourse; courses: OwnerCourse[]; saving: boolean; onSave: (courseIds: string[]) => void }) {
+  const [selected, setSelected] = useState(course.includes);
+  const options = courses.filter(item => item.id !== course.id && (bundleable(item) || course.includes.includes(item.id)));
+  return <form className="grid gap-5" onSubmit={event => { event.preventDefault(); onSave(selected); }}>
+    <BundleOptions courses={options} selected={selected} onChange={setSelected} />
+    <p className="text-xs text-muted-foreground">Erişim süresi paketin kendi süresidir ({course.accessDurationDays} gün). Hiçbir eğitim seçilmezse bu ürün tek bir eğitim olarak satılır. Önceki satışlar değişmez.</p>
+    <DialogFooter><Button type="submit" size="pill" disabled={saving}>{saving && <Spinner />}Kaydet</Button></DialogFooter>
+  </form>;
+}
 
 /** `course === null` creates a course; an edit sends only the fields that changed. */
-function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse | null; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
+function ProductForm({ course, courses, filesConfigured, onSaved }: { course: OwnerCourse | null; courses: OwnerCourse[]; filesConfigured: boolean; onSaved: (created: boolean) => void }) {
   const client = useQueryClient();
   const product = course?.product;
   const form = useForm({
     resolver: zodResolver(productFormSchema), mode: "onTouched",
     defaultValues: {
       title: course?.title ?? "", description: product?.description ?? "", price: liraInput(product?.listPriceKurus), discountedPrice: course?.discounted ? liraInput(course.priceKurus) : "",
-      listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false,
+      listed: !product?.hidden, inStock: product?.inStock ?? true, accessDays: "365", publish: false, includes: [] as string[],
     },
   });
   const { dirtyFields } = useFormState({ control: form.control });
   // Read when saving: the compiler would memoize a list derived from this object during render.
   const changed = () => productKeys.filter(key => dirtyFields[key]);
   const [image, setImage] = useState<{ file: File; preview: string } | null>(null);
-  const [imageError, setImageError] = useState("");
   useEffect(() => () => { if (image) URL.revokeObjectURL(image.preview); }, [image]);
   const save = useMutation({
     mutationFn: (values: ProductValues) => course
       ? updateOwnerProduct(course.id, Object.fromEntries(changed().map(key => [key, values[key]])) as Partial<ProductValues>, image?.file ?? null)
       : createOwnerCourse(values, image?.file ?? null),
     onSuccess: () => { toast.success(course ? "Shopier ürünü güncellendi." : "Eğitim oluşturuldu. Şimdi derslerini ekleyebilirsiniz."); onSaved(!course); },
-    onError: error => form.setError("root", { message: error.message }),
     // A write can reach Shopier before a later step fails, so the catalog is re-read either way.
     onSettled: () => client.invalidateQueries({ queryKey: ownerQueryKeys.catalog() }),
   });
@@ -157,13 +187,11 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
         <div className="grid gap-2">
           <FileButton variant="outline" size="sm" className="w-fit" disabled={!filesConfigured} accept={coverRules.types.join(",")} onFiles={([file]) => {
             const usable = coverRules.types.includes(file.type) && file.size <= coverRules.maxBytes;
-            setImageError(usable ? "" : `Bu görsel kullanılamıyor. ${coverRules.hint}`);
-            if (usable) setImage({ file, preview: URL.createObjectURL(file) });
+            if (usable) setImage({ file, preview: URL.createObjectURL(file) }); else toast.error(`Bu görsel kullanılamıyor. ${coverRules.hint}`);
           }}><ImagePlus /> {cover ? "Görseli değiştir" : "Görsel seç"}</FileButton>
           <p className="max-w-xs text-xs text-muted-foreground">{!filesConfigured ? `Görsel yüklemek için dosya depolama bağlantısı gerekir.${course ? "" : " Şimdilik akademinin varsayılan kapağı kullanılır."}` : `${coverRules.hint}${course ? " Ürünün mevcut görsellerinin yerini alır." : " Seçmezseniz akademinin varsayılan kapağı kullanılır."}`}</p>
         </div>
       </div>
-      {imageError && <p role="alert" className="text-sm text-destructive">{imageError}</p>}
     </div>
     {course?.status === "published" ? <p className="text-sm text-muted-foreground">Yayındaki eğitim Shopier mağazasında da listelenir. Gizlemek için eğitimi taslağa alın.</p> : <CheckboxField control={form.control} name="listed" label="Shopier mağazasında listelensin" description="Eğitimi yayınladığınızda mağazada da görünür olur. Taslağa aldığınızda mağazadan gizlenir." />}
     {course ? <CheckboxField control={form.control} name="inStock" label="Satışa açık" description="Kapalıyken ürün Shopier’de tükendi görünür ve sitede satın alınamaz." />
@@ -171,7 +199,9 @@ function ProductForm({ course, filesConfigured, onSaved }: { course: OwnerCourse
         <TextField control={form.control} name="accessDays" label="Erişim süresi (gün)" type="number" inputMode="numeric" step="1" min={1} className="bg-white" />
         <CheckboxField control={form.control} name="publish" label="Sitede hemen yayınla" description="Yayınlandığında hem sitede hem Shopier mağazasında görünür olur." className="sm:pt-6" />
       </div>}
-    <FormMessage />
+    {!course && <ControlledField control={form.control} name="includes" label="Paket içeriği" description="Bu ürün birkaç eğitimi birlikte satan bir paketse içindeki eğitimleri seçin; satın alan öğrenciye hepsi açılır. Tek bir eğitimse boş bırakın.">
+      {field => <BundleOptions courses={courses.filter(bundleable)} selected={field.value} onChange={field.onChange} />}
+    </ControlledField>}
     <DialogFooter><SubmitButton>{course ? "Shopier’e kaydet" : "Eğitimi oluştur"}</SubmitButton></DialogFooter>
   </FormShell>;
 }

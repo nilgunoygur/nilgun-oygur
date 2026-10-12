@@ -1,4 +1,5 @@
 "use client";
+import { toast } from "sonner";
 import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -13,9 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
-import { idleForm, type FormState } from "./form-status";
 import { ContactFields } from "./contact-fields";
-import { authAttempt, FormMessage, FormShell, PasswordField, SubmitButton, submitAction, TextField } from "./form-fields";
+import { authAttempt, FormShell, PasswordField, SubmitButton, submitAction, TextField } from "./form-fields";
 
 type User = { name: string; email: string; image?: string | null };
 
@@ -46,13 +46,11 @@ async function avatarFrom(file: File) {
 function PersonalForm({ user }: { user: User }) {
   const { refetch } = authClient.useSession();
   const id = useId();
-  const [status, setStatus] = useState<FormState>(idleForm);
   const [processing, setProcessing] = useState(false);
   const form = useForm({ resolver: zodResolver(profileInput), mode: "onTouched", defaultValues: { name: user.name, image: avatarSource(user.image) ?? null } });
   const submit = form.handleSubmit(async (values) => {
-    const result = await submitAction(form, () => saveProfile(values), "Profil kaydedilemedi. Lütfen tekrar deneyin.");
-    setStatus(result ?? idleForm);
-    if (result) { form.reset(values); void refetch(); }
+    const result = await submitAction(() => saveProfile(values), "Profil kaydedilemedi. Lütfen tekrar deneyin.");
+    if (result) { toast.success(result.message); form.reset(values); void refetch(); }
   });
   const name = useWatch({ control: form.control, name: "name" });
   return <FormShell form={form} onSubmit={submit} size="lg" busy={processing} className={accountCard}>
@@ -77,44 +75,38 @@ function PersonalForm({ user }: { user: User }) {
     )} />
     <TextField control={form.control} name="name" label="Adınız soyadınız" autoComplete="name" maxLength={100} />
     <Field><FieldLabel>E-posta adresiniz</FieldLabel><p className="rounded-lg bg-mist px-4 py-3 text-sm text-stone">{user.email}</p><FieldDescription>Bu adres hesap ayarlarından değiştirilemez.</FieldDescription></Field>
-    <FormMessage status={status} />
     <SubmitButton>Profili kaydet</SubmitButton>
   </FormShell>;
 }
 
 function ContactForm({ contact }: { contact: Contact }) {
-  const [status, setStatus] = useState<FormState>(idleForm);
   const form = useForm({ resolver: zodResolver(contactFormSchema), mode: "onTouched", defaultValues: { contact: contactFormValues(contact) } });
   const submit = form.handleSubmit(async ({ contact: values }) => {
-    const result = await submitAction(form, () => saveContact(values), "İletişim bilgileri kaydedilemedi. Lütfen tekrar deneyin.");
-    setStatus(result ?? idleForm);
-    if (result) form.reset({ contact: contactFormValues(values) });
+    const result = await submitAction(() => saveContact(values), "İletişim bilgileri kaydedilemedi. Lütfen tekrar deneyin.");
+    if (result) { toast.success(result.message); form.reset({ contact: contactFormValues(values) }); }
   });
   return <FormShell form={form} onSubmit={submit} size="lg" id="iletisim" className={accountCard}>
     <CardHeading title="İletişim bilgileri" description="Eğitimlerinizle ilgili size ulaşabilmemiz için telefon ve adresinizi güncel tutun." />
     {!hasCompleteContact(contact) && <Alert><AlertDescription>Telefon veya adres bilginiz eksik. Lütfen tamamlayın.</AlertDescription></Alert>}
     <ContactFields />
-    <FormMessage status={status} />
     <SubmitButton>İletişim bilgilerini kaydet</SubmitButton>
   </FormShell>;
 }
 
 function PasswordForm({ email, localEmail }: { email: string; localEmail: boolean }) {
-  const [status, setStatus] = useState<FormState>(idleForm);
   const [sending, setSending] = useState(false);
   const form = useForm({ resolver: zodResolver(passwordChangeSchema), mode: "onTouched", defaultValues: { currentPassword: "", password: "", confirmPassword: "" } });
   const submit = form.handleSubmit(async ({ currentPassword, password }) => {
-    setStatus(idleForm);
     try {
       const result = await authClient.changePassword({ currentPassword, newPassword: password, revokeOtherSessions: true });
       if (result.error) { form.setError("currentPassword", { message: "Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin." }); return; }
-      form.reset(); setStatus({ status: "success", message: "Şifreniz değiştirildi. Diğer cihazlardaki oturumlar kapatıldı." });
-    } catch { form.setError("root", { message: "Şifre değiştirilemedi. Lütfen tekrar deneyin." }); }
+      form.reset(); toast.success("Şifreniz değiştirildi. Diğer cihazlardaki oturumlar kapatıldı.");
+    } catch { toast.error("Şifre değiştirilemedi. Lütfen tekrar deneyin."); }
   });
   const sendReset = async () => {
-    setSending(true); setStatus(idleForm); form.clearErrors("root");
-    if (await authAttempt(form, () => authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" }))) {
-      setStatus({ status: "success", message: localEmail ? "Şifre sıfırlama bağlantısı geliştirme terminaline yazıldı." : "Şifre sıfırlama bağlantısı için e-posta kutunuzu kontrol edin." });
+    setSending(true);
+    if (await authAttempt(() => authClient.requestPasswordReset({ email, redirectTo: "/akademi/sifre-yenile" }))) {
+      toast.success(localEmail ? "Şifre sıfırlama bağlantısı geliştirme terminaline yazıldı." : "Şifre sıfırlama bağlantısı için e-posta kutunuzu kontrol edin.");
     }
     setSending(false);
   };
@@ -123,7 +115,6 @@ function PasswordForm({ email, localEmail }: { email: string; localEmail: boolea
     <PasswordField control={form.control} name="currentPassword" label="Mevcut şifreniz" autoComplete="current-password" />
     <PasswordField control={form.control} name="password" label="Yeni şifreniz" autoComplete="new-password" description="En az 8 karakter." />
     <PasswordField control={form.control} name="confirmPassword" label="Yeni şifreniz (tekrar)" autoComplete="new-password" />
-    <FormMessage status={status} />
     <SubmitButton pendingLabel="İşleniyor…">Şifreyi değiştir</SubmitButton>
     <Button type="button" variant="link" className="h-auto whitespace-normal text-center" onClick={sendReset}>Şifremi unuttum · Sıfırlama bağlantısı gönder</Button>
   </FormShell>;

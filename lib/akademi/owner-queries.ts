@@ -1,13 +1,14 @@
 "use client";
 
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { z } from "zod";
 import { refundStatuses, type CourseChange, type productFormSchema, type RefundDecisionInput, type RefundListParams } from "./owner-forms";
 
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
   priceKurus: z.number().nullable(), discounted: z.boolean(), blocker: z.enum(["missing", "notDigital", "outOfStock", "unpriced"]).nullable(), accessDurationDays: z.number(),
-  sales: z.number(), claimed: z.number(), status: z.enum(["published", "draft", "archived"]),
+  sales: z.number(), claimed: z.number(), includes: z.array(z.string()), inBundle: z.boolean(), status: z.enum(["published", "draft", "archived"]),
   product: z.object({ description: z.string(), listPriceKurus: z.number().nullable(), image: z.string().nullable(), hidden: z.boolean(), inStock: z.boolean(), url: z.string().nullable() }).nullable(),
 });
 const saleSchema = z.object({
@@ -54,14 +55,20 @@ async function ownerFetch(url: string, init: RequestInit, fallback: string) {
 export function ownerTransactionsQueryOptions(from: string, to: string) {
   return queryOptions({
     queryKey: ownerQueryKeys.transactions(from, to),
-    queryFn: async ({ signal }): Promise<OwnerTransactions> => ownerTransactionsSchema.parse(
-      await (await ownerFetch(`/api/yonetim/transactions?${new URLSearchParams({ from, to })}`, { signal }, "Shopier işlemleri yüklenemedi.")).json()),
+    queryFn: async ({ signal }): Promise<OwnerTransactions> => {
+      const data = ownerTransactionsSchema.parse(await (await ownerFetch(`/api/yonetim/transactions?${new URLSearchParams({ from, to })}`, { signal }, "Shopier işlemleri yüklenemedi.")).json());
+      if (data.unavailable) toast.error("Shopier işlemleri şu anda tam alınamıyor.");
+      else if (data.refundsUnavailable) toast.error("İade bilgileri şu anda Shopier’den alınamıyor; satışlar gösteriliyor.");
+      return data;
+    },
     staleTime: 30_000,
+    meta: { errorToast: "Shopier işlemleri şu anda yüklenemiyor. Birazdan yeniden deneyin." },
   });
 }
 
 export const updateOwnerCourse = (courseId: string, change: CourseChange) => ownerFetch(`/api/yonetim/courses/${courseId}`,
   { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) }, "Değişiklik kaydedilemedi.");
+export const deleteOwnerCourse = (courseId: string) => ownerFetch(`/api/yonetim/courses/${courseId}`, { method: "DELETE" }, "Eğitim silinemedi.");
 export type ProductValues = z.output<typeof productFormSchema>;
 const withCover = (data: Partial<ProductValues>, image: File | null) => { const body = new FormData(); body.set("data", JSON.stringify(data)); if (image) body.set("image", image); return body; };
 export const updateOwnerProduct = (courseId: string, changes: Partial<ProductValues>, image: File | null) => ownerFetch(`/api/yonetim/courses/${courseId}/product`,
@@ -77,6 +84,7 @@ export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
     queryFn: async ({ signal }) => ownerCatalogSnapshotSchema.parse(await (await ownerFetch("/api/yonetim/courses", { signal }, "Yönetim verileri yenilenemedi.")).json()),
     initialData,
     staleTime: 20_000,
+    meta: { errorToast: "Yenileme başarısız oldu. Son yüklenen veriler gösteriliyor." },
   });
 }
 
@@ -96,5 +104,6 @@ export function ownerRefundQueryOptions(params: RefundListParams, initialData?: 
     initialData: params.status === "pending" && !params.search && params.page === 1 ? initialData : undefined,
     placeholderData: keepPreviousData,
     staleTime: 15_000,
+    meta: { errorToast: "İade talepleri yüklenemedi. Yenile düğmesiyle tekrar deneyin." },
   });
 }

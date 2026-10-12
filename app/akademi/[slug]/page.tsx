@@ -60,6 +60,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
         <p className={cn(kicker, "my-5")}>KENDİNİZE BİR ALAN AÇIN</p>
         <h2 className="my-5 text-[32px] leading-[1.25]">Yolculuğunuz burada başlasın.</h2>
         <CoursePrice large className="mt-3 mb-[25px]" priceClassName="text-[44px]" priceKurus={course.priceKurus} compareAtPriceKurus={course.compareAtPriceKurus} />
+        {course.includes.length > 0 && <div className="mb-[25px] border-t border-[#dce4d5] pt-5 text-[14px]"><p className="mb-3 font-semibold">Bu pakette {course.includes.length} eğitim var</p><ul className="grid list-none gap-[10px] p-0">{course.includes.map(item => <li key={item.slug} className="flex items-center gap-[10px]"><Check size={17} aria-hidden="true" />{item.title}</li>)}</ul></div>}
         <ul className="mb-[30px] grid list-none gap-[15px] p-0 text-[14px]">{[formatAccess(course.accessDurationDays), "Kendi ritminizde öğrenme", "Kişisel eğitim alanı"].map(x => <li key={x} className="flex items-center gap-[10px]"><Check size={17} aria-hidden="true" />{x}</li>)}</ul>
         <Link className={buttonVariants({ size: "hero", className: "w-full gap-3 rounded-[30px] bg-forest hover:bg-forest" })} href={`/akademi/${course.slug}/satin-al`}>Satın al <ArrowUpRight size={18} /></Link>
         <Link href="/akademi/giris" className={cn(textLink, "text-[12px]")}>Zaten hesabınız var mı? Giriş yapın</Link>

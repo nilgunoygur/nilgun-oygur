@@ -9,10 +9,12 @@ const number = (label: string, min: number, max: number, step: "integer" | "pric
     .refine(value => value >= min && value <= max, `${label} ${min} ile ${max.toLocaleString("tr-TR")} arasında olmalıdır.`));
 
 const accessDays = number("Erişim süresi", 1, 3650, "integer");
+const bundleCourseIds = z.array(z.uuid()).max(20);
 export const courseAccessSchema = z.object({ value: accessDays });
 export const courseChangeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("status"), status: z.enum(["draft", "published", "archived"]) }),
   courseAccessSchema.extend({ kind: z.literal("access") }),
+  z.object({ kind: z.literal("bundle"), courseIds: bundleCourseIds }),
 ]);
 export type CourseChange = z.output<typeof courseChangeSchema>;
 
@@ -30,7 +32,7 @@ const productFields = {
 };
 export const productKeys = Object.keys(productFields) as (keyof typeof productFields)[];
 /** One form for create and edit; an edit ignores the course fields. */
-export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean() }).refine(cheaper, cheaperIssue);
+export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean(), includes: bundleCourseIds }).refine(cheaper, cheaperIssue);
 export const productChangeSchema = z.object(productFields).partial().refine(cheaper, cheaperIssue);
 const refundNote = z.string().trim().max(500, "Not en fazla 500 karakter olabilir.");
 export const refundDecisionSchema = z.discriminatedUnion("decision", [

@@ -1,12 +1,12 @@
 "use client";
 
+import { toast } from "sonner";
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import { AnnouncementBar } from "@/components/announcement-bar";
-import { CheckboxField, ControlledField, FormMessage, FormShell, SelectField, submitAction, TextField } from "@/components/akademi/form-fields";
-import { idleForm, type FormState } from "@/components/akademi/form-status";
+import { CheckboxField, ControlledField, FormShell, SelectField, submitAction, TextField } from "@/components/akademi/form-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,15 +33,14 @@ const formValues = (banner: BannerConfig): BannerFormValues => ({
 
 export function BannerEditor({ initial, initiallyPublished }: { initial: BannerConfig; initiallyPublished: boolean }) {
   const [published, setPublished] = useState(initiallyPublished);
-  const [status, setStatus] = useState<FormState>(idleForm);
   const [pending, startTransition] = useTransition();
   const form = useForm({ resolver: zodResolver(bannerSchema), mode: "onTouched", defaultValues: formValues(initial) });
   const items = useFieldArray({ control: form.control, name: "items" });
   const animation = useWatch({ control: form.control, name: "animation" });
 
   const run = (intent: Intent, values: BannerFormValues | null) => startTransition(async () => {
-    const result = await submitAction(form, () => saveBanner(intent, values), "Banner kaydedilemedi. Lütfen tekrar deneyin.");
-    setStatus(result ?? idleForm);
+    const result = await submitAction(() => saveBanner(intent, values), "Banner kaydedilemedi. Lütfen tekrar deneyin.");
+    if (result) toast.success(result.message);
     if (result?.isPublished !== undefined) setPublished(result.isPublished);
   });
   const submit = (intent: Exclude<Intent, "unpublish">) => form.handleSubmit(values => run(intent, values));
@@ -74,7 +73,6 @@ export function BannerEditor({ initial, initiallyPublished }: { initial: BannerC
       <Button type="button" size="pill" onClick={submit("publish")}>{published ? "Değişiklikleri yayınla" : "Yayınla"}</Button>
       {published && <Button type="button" variant="destructive" size="pill" onClick={() => run("unpublish", null)}>Yayından kaldır</Button>}
     </div>
-    <div role="status"><FormMessage status={status} /></div>
   </FormShell>;
 }
 

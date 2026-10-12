@@ -1,10 +1,10 @@
 "use client";
+import { toast } from "sonner";
 import { useId, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { Controller, FormProvider, useFormState, type Control, type ControllerRenderProps, type FieldPath, type FieldValues, type UseFormReturn } from "react-hook-form";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { authErrorMessage } from "@/lib/auth/navigation";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { FormStatus, type FormState } from "./form-status";
+import type { FormState } from "./form-status";
 
 // Sets --control-h, which Input, InputGroup, Select and the pickers read.
 const controlHeights = { sm: "[--control-h:2rem]", md: "[--control-h:2.75rem]", lg: "[--control-h:3rem]" };
@@ -39,12 +39,6 @@ export function SubmitButton({ children, pendingLabel = "Kaydediliyor…", disab
 
 export function AuthSubmit({ children }: { children: ReactNode }) {
   return <SubmitButton size="pill" className="w-full min-h-12" pendingLabel="Lütfen bekleyin…">{children}<ArrowRight data-icon="inline-end" /></SubmitButton>;
-}
-
-export function FormMessage({ status }: { status?: FormState }) {
-  const message = useFormState().errors.root?.message;
-  if (message) return <Alert variant="destructive"><AlertDescription>{message}</AlertDescription></Alert>;
-  return status ? <FormStatus state={status} /> : null;
 }
 
 export type Controlled<T extends FieldValues, U, N extends FieldPath<T> = FieldPath<T>> = { control: Control<T, unknown, U>; name: N; label: ReactNode; description?: ReactNode };
@@ -122,23 +116,21 @@ export function FileButton({ accept, multiple, onFiles, ...button }: Omit<Compon
   </>;
 }
 
-type RootErrors = { setError: (name: "root", error: { message: string }) => void };
-
-/** Sets the root error on failure; null if failed. */
-export async function submitAction<R extends FormState>(form: RootErrors, action: () => Promise<R>, fallback: string): Promise<R | null> {
+/** Toasts a failure and returns null. */
+export async function submitAction<R extends FormState>(action: () => Promise<R>, fallback: string): Promise<R | null> {
   try {
     const result = await action();
     if (result.status !== "error") return result;
-    form.setError("root", { message: result.message });
-  } catch { form.setError("root", { message: fallback }); }
+    toast.error(result.message);
+  } catch { toast.error(fallback); }
   return null;
 }
 
-export async function authAttempt<D>(form: RootErrors, call: () => Promise<{ data: D | null; error: { code?: string; status?: number } | null }>): Promise<{ data: D | null } | null> {
+export async function authAttempt<D>(call: () => Promise<{ data: D | null; error: { code?: string; status?: number } | null }>): Promise<{ data: D | null } | null> {
   try {
     const { data, error } = await call();
     if (!error) return { data };
-    form.setError("root", { message: authErrorMessage(error) });
-  } catch { form.setError("root", { message: "Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip yeniden deneyin." }); }
+    toast.error(authErrorMessage(error));
+  } catch { toast.error("Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip yeniden deneyin."); }
   return null;
 }

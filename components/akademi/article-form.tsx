@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ControlledField, FormMessage, FormShell, submitAction, TextField } from "./form-fields";
+import { ControlledField, FormShell, submitAction, TextField } from "./form-fields";
 
 type ArticleValues = { title: string; slug: string; category: string; image: string; date: string; duration: string; body: string };
 
@@ -72,7 +72,7 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
   const [leaving, setLeaving] = useState(false);
   useEffect(() => () => setLeaving(false), []);
   const save = (status: "draft" | "published") => form.handleSubmit(async (values) => {
-    if (!await submitAction(form, () => saveArticle(values, status, article?.slug), "Yazı kaydedilemedi. Yönetim oturumunuzu kontrol edip tekrar deneyin.")) return;
+    if (!await submitAction(() => saveArticle(values, status, article?.slug), "Yazı kaydedilemedi. Yönetim oturumunuzu kontrol edip tekrar deneyin.")) return;
     setLeaving(true);
     router.push("/yonetim/yazilar");
   });
@@ -112,7 +112,6 @@ export function ArticleForm({ article, initialImages }: { article?: ArticleValue
       {field => <ArticleRichEditor initialHtml={article?.body ?? ""} onChange={field.onChange} images={{ choices: images, upload: uploadImage }} />}
     </ControlledField>
     <div className="grid gap-3 sm:col-span-2">
-      <FormMessage />
       <div className="flex flex-wrap gap-3"><Button type="submit" variant="outline" size="pill">Taslak olarak kaydet</Button><Button type="button" size="pill" onClick={save("published")}>Yayınla</Button></div>
     </div>
   </FormShell>;

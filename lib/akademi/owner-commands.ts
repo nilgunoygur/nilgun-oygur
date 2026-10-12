@@ -1,9 +1,10 @@
-import { and, eq } from "drizzle-orm";
-import { adminAuditLog, courses, refundRequests, shopierPurchases } from "../db/schema.ts";
+import { and, eq, inArray, or } from "drizzle-orm";
+import { adminAuditLog, bundleItems, courseAccess, courses, lessons, modules, refundRequests, shopierPurchases } from "../db/schema.ts";
 import { audited } from "../db/audit.ts";
 import type { Database } from "../db/types.ts";
 import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
 import { linkCourse } from "./catalog.ts";
+import { removeLessons } from "./lesson-editor.ts";
 import { formatMoney } from "./format.ts";
 import { refundableKurus } from "./refunds.ts";
 
@@ -36,6 +37,49 @@ export async function setAccessDuration(db: Database, actorId: string, courseId:
   return audited(db, actorId, { action: "course.access_duration", resourceType: "course", resourceId: courseId, reason: `${days} gün` }, async (tx) => {
     const changed = await tx.update(courses).set({ accessDurationDays: days }).where(eq(courses.id, courseId)).returning({ id: courses.id });
     return changed.length > 0;
+  });
+}
+
+/** An empty list makes it an ordinary course again; past purchases are untouched. */
+export async function setBundleCourses(db: Database, actorId: string, bundleId: string, courseIds: string[]) {
+  const ids = [...new Set(courseIds)];
+  if (ids.includes(bundleId)) throw new OwnerInputError("Bir paket kendisini içeremez.");
+  return audited(db, actorId, { action: "course.bundle", resourceType: "course", resourceId: bundleId, reason: ids.length ? `Paket içeriği: ${ids.length} eğitim` : "Paket içeriği kaldırıldı" }, async (tx) => {
+    const found = await tx.select({ id: courses.id }).from(courses).where(inArray(courses.id, [bundleId, ...ids])).for("update");
+    if (found.length !== ids.length + 1) throw new OwnerInputError("Eğitim bulunamadı.");
+    // One level only: a bundle is never inside a bundle.
+    const nested = ids.length ? await tx.select({ id: bundleItems.bundleId }).from(bundleItems).where(or(eq(bundleItems.courseId, bundleId), inArray(bundleItems.bundleId, ids))).limit(1) : [];
+    if (nested.length) throw new OwnerInputError("Bir paket başka bir paketin içinde yer alamaz.");
+    await tx.delete(bundleItems).where(eq(bundleItems.bundleId, bundleId));
+    if (ids.length) await tx.insert(bundleItems).values(ids.map(courseId => ({ bundleId, courseId })));
+    return true;
+  });
+}
+
+/** Only an archived course never sold or granted; returns the removed PDFs' pathnames. */
+export async function deleteCourse(db: Database, actorId: string, courseId: string, shopier: Pick<ShopierClient, "deleteProduct">) {
+  const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
+  if (!course) throw new OwnerInputError("Eğitim bulunamadı.");
+  const check = async (tx: Database) => {
+    const [current] = await tx.select({ status: courses.status }).from(courses).where(eq(courses.id, courseId)).for("update");
+    if (current?.status !== "archived") throw new OwnerInputError("Yalnızca arşivdeki eğitimler silinebilir.");
+    const [sold] = await tx.select({ id: shopierPurchases.id }).from(shopierPurchases).where(or(eq(shopierPurchases.courseId, courseId), eq(shopierPurchases.bundleId, courseId))).limit(1);
+    const [granted] = await tx.select({ id: courseAccess.id }).from(courseAccess).where(eq(courseAccess.courseId, courseId)).limit(1);
+    if (sold || granted) throw new OwnerInputError("Satışı veya öğrencisi olan eğitim silinemez; kayıtları korunması için arşivde kalır.");
+    const [bundled] = await tx.select({ id: bundleItems.bundleId }).from(bundleItems).where(eq(bundleItems.courseId, courseId)).limit(1);
+    if (bundled) throw new OwnerInputError("Bu eğitim bir paketin içinde. Önce paket içeriğinden çıkarın.");
+  };
+  await check(db);
+  // Shopier first: a product left there would be linked again by the next sync.
+  await withShopier(db, actorId, { resourceType: "course", resourceId: courseId }, "course.product_delete", `ürün ${course.shopierProductId} silinsin`, () => shopier.deleteProduct(course.shopierProductId));
+  return db.transaction(async (tx) => {
+    await check(tx);
+    const files = await removeLessons(tx, eq(lessons.courseId, courseId));
+    await tx.delete(modules).where(eq(modules.courseId, courseId));
+    await tx.delete(bundleItems).where(eq(bundleItems.bundleId, courseId));
+    await tx.delete(courses).where(eq(courses.id, courseId));
+    await tx.insert(adminAuditLog).values({ actorId, action: "course.delete", resourceType: "course", resourceId: courseId, reason: `“${course.slug}” eğitimi silindi (Shopier ürünü ${course.shopierProductId})` });
+    return files;
   });
 }
 

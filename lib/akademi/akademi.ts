@@ -2,7 +2,7 @@ import type { Database } from "../db/types.ts";
 import type { ProductChanges, ShopierClient } from "../shopier/api.ts";
 import { activeCourseAccess, claimShopierOrder, recordShopierOrder } from "./course-access.ts";
 import { findCatalogCourse, listCatalog, ownerCatalog, productCards, syncCatalogFromShopier } from "./catalog.ts";
-import { createCourse, decideRefundRequest, setAccessDuration, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse, type RefundDecision } from "./owner-commands.ts";
+import { createCourse, decideRefundRequest, deleteCourse, setAccessDuration, setBundleCourses, setCourseStatus, syncCatalogAsOwner, updateCourseProduct, type CourseStatus, type NewCourse, type RefundDecision } from "./owner-commands.ts";
 import { failedEvents } from "./provider-inbox.ts";
 import { createOwnerOverview } from "./dashboard.ts";
 import { ownerUsers, type UserListParams } from "./owner-users.ts";
@@ -16,7 +16,7 @@ import { latestRefundRequest, pendingRefundCount, requestRefund, listRefundReque
 type Dependencies = {
   db: Database;
   refundNotification?: RefundNotification;
-  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "listSucceededRefunds" | "createRefund" | "createProduct" | "updateProduct">;
+  shopier: Pick<ShopierClient, "getOrder" | "getProduct" | "listProducts" | "listOrdersSince" | "listRecentTransactions" | "listSucceededRefunds" | "createRefund" | "createProduct" | "updateProduct" | "deleteProduct">;
   now?: () => Date;
 };
 
@@ -93,6 +93,8 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
       users: (params: UserListParams) => ownerUsers(db, params, now()),
       setCourseStatus: (actorId: string, courseId: string, status: CourseStatus) => setCourseStatus(db, actorId, courseId, status, shopier),
       setAccessDuration: (actorId: string, courseId: string, days: number) => setAccessDuration(db, actorId, courseId, days),
+      setBundleCourses: (actorId: string, courseId: string, courseIds: string[]) => setBundleCourses(db, actorId, courseId, courseIds),
+      deleteCourse: (actorId: string, courseId: string) => deleteCourse(db, actorId, courseId, shopier),
       updateCourseProduct: (actorId: string, courseId: string, changes: ProductChanges) => updateCourseProduct(db, actorId, courseId, changes, shopier),
       createCourse: (actorId: string, course: NewCourse) => createCourse(db, actorId, course, shopier),
       /** A refund Shopier completes at once is applied now. */

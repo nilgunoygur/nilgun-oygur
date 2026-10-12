@@ -122,6 +122,15 @@ export const courses = pgTable("courses", {
   status: courseStatus("status").notNull().default("published"),
   ...timestamps(),
 }, (t) => [check("courses_duration_valid", sql`${t.accessDurationDays} > 0`)]);
+// A bundle is a course whose purchase grants these courses instead of itself.
+export const bundleItems = pgTable("course_bundle_items", {
+  bundleId: uuid("bundle_id").notNull().references(() => courses.id),
+  courseId: uuid("course_id").notNull().references(() => courses.id),
+}, (t) => [
+  primaryKey({ columns: [t.bundleId, t.courseId] }),
+  index("course_bundle_items_course_idx").on(t.courseId),
+  check("course_bundle_items_not_itself", sql`${t.bundleId} <> ${t.courseId}`),
+]);
 export const modules = pgTable("modules", {
   id: id(),
   courseId: uuid("course_id").notNull().references(() => courses.id),
@@ -208,6 +217,7 @@ export const shopierPurchases = pgTable("shopier_purchases", {
   id: id(),
   shopierOrderId: text("shopier_order_id").notNull(),
   courseId: uuid("course_id").notNull().references(() => courses.id),
+  bundleId: uuid("bundle_id").references(() => courses.id),
   buyerEmail: text("buyer_email").notNull(),
   amountKurus: integer("amount_kurus").notNull(),
   currency: text("currency").notNull(),

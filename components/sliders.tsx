@@ -2,6 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import * as m from "motion/react-m";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
@@ -137,27 +138,24 @@ export function ArticleCarousel({ articles }: { articles: Article[] }) {
   );
 }
 export function CopyLink() {
-  const [status, setStatus] = useState("");
+  const [copied, setCopied] = useState(false);
   return (
-    <>
-      <Button
-        variant="secondary"
-        size="pill"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(window.location.href);
-            setStatus("Bağlantı kopyalandı");
-          } catch {
-            setStatus("Bağlantıyı adres çubuğundan kopyalayabilirsiniz.");
-          }
-        }}
-      >
-        {status === "Bağlantı kopyalandı" ? <Check /> : <Copy />} Copy Link
-      </Button>
-      <span className="mt-[10px] mb-6 block min-h-5 text-[13px] text-primary" role="status">
-        {status}
-      </span>
-    </>
+    <Button
+      variant="secondary"
+      size="pill"
+      className="mb-6"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          setCopied(true);
+          toast.success("Bağlantı kopyalandı");
+        } catch {
+          toast.error("Bağlantıyı adres çubuğundan kopyalayabilirsiniz.");
+        }
+      }}
+    >
+      {copied ? <Check /> : <Copy />} Copy Link
+    </Button>
   );
 }
 

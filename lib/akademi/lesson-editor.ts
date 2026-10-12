@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { adminAuditLog, courses, lessonFiles, lessonProgress, lessons, liveSessions, modules, videoAssets } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { lessonDocuments } from "./lesson-files.ts";
@@ -62,17 +62,23 @@ export async function updateLesson(db: Database, actorId: string, raw: unknown) 
   return input;
 }
 
-// The Mux asset is kept; returns the removed PDFs' pathnames for the caller to delete from storage.
+/** Mux assets are kept; returns the removed PDFs' pathnames for the caller to delete from storage. */
+export async function removeLessons(tx: Database, where: SQL | undefined) {
+  const ids = tx.select({ id: lessons.id }).from(lessons).where(where);
+  await tx.delete(liveSessions).where(inArray(liveSessions.lessonId, ids));
+  await tx.delete(lessonProgress).where(inArray(lessonProgress.lessonId, ids));
+  const files = await tx.delete(lessonFiles).where(inArray(lessonFiles.lessonId, ids)).returning({ pathname: lessonFiles.pathname });
+  await tx.delete(lessons).where(where);
+  return files.map(file => file.pathname);
+}
+
 export async function deleteLesson(db: Database, actorId: string, courseId: string, lessonId: string) {
   return db.transaction(async tx => {
     const [lesson] = await tx.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId))).for("update");
     if (!lesson) throw new Error("Ders bulunamadı.");
-    await tx.delete(liveSessions).where(eq(liveSessions.lessonId, lesson.id));
-    await tx.delete(lessonProgress).where(eq(lessonProgress.lessonId, lesson.id));
-    const files = await tx.delete(lessonFiles).where(eq(lessonFiles.lessonId, lesson.id)).returning({ pathname: lessonFiles.pathname });
-    await tx.delete(lessons).where(eq(lessons.id, lesson.id));
+    const files = await removeLessons(tx, eq(lessons.id, lesson.id));
     await tx.insert(adminAuditLog).values({ actorId, action: "lesson.delete", resourceType: "course", resourceId: courseId, reason: `“${lesson.title}” dersi silindi (${lesson.status})` });
-    return files.map(file => file.pathname);
+    return files;
   });
 }
 

@@ -312,3 +312,46 @@ test("a Shopier checkout fills only an empty phone and address; odd contact valu
   assert.equal(await claimShopierOrder(db, gift, "gift-contact@example.com", "contact-claim"), "granted");
   assert.deepEqual(await contactOf("contact-claim"), { phone: "+905321234567", city: "İstanbul", district: "Kadıköy", address: "Moda Cad. No: 12 Daire 3", postcode: "34710" }, "claiming by order number adopts the checkout contact too");
 });
+
+test("a bundle purchase grants every included course for the bundle's duration and splits the total", async () => {
+  const { setBundleCourses } = await import("../lib/akademi/owner-commands.ts");
+  const { recordShopierRefund } = await import("../lib/akademi/refunds.ts");
+  const { shopierRefundSchema } = await import("../lib/shopier/api.ts");
+  await db.insert(schema.user).values([{ id: "bundle-buyer", name: "P", email: "bundle@example.com", emailVerified: true }, { id: "owner", name: "O", email: "owner@example.com", emailVerified: true }]);
+  const [bundle, a, b, c] = await db.insert(schema.courses).values([
+    { slug: "lansman-paket", accessDurationDays: 90, shopierProductId: "91000000" },
+    ...["91000001", "91000002", "91000003"].map(id => ({ slug: `paket-${id}`, accessDurationDays: 30, shopierProductId: id })),
+  ]).returning();
+  await assert.rejects(() => setBundleCourses(db, "owner", bundle.id, [bundle.id]), /kendisini/);
+  assert.equal(await setBundleCourses(db, "owner", bundle.id, [a.id, b.id, c.id]), true);
+  await assert.rejects(() => setBundleCourses(db, "owner", a.id, [b.id]), /başka bir paketin/, "an included course cannot become a bundle");
+  await assert.rejects(() => setBundleCourses(db, "owner", other.id, [bundle.id]), /başka bir paketin/, "a bundle cannot be included");
+
+  const email = { shippingInfo: { email: "bundle@example.com" } };
+  // The bundle and one of its courses in the same order: one purchase per course.
+  const paid = order({ ...email, lineItems: [{ productId: "91000000", total: "1000.00" }, { productId: "91000001", total: "50.00" }] });
+  assert.equal((await recordShopierOrder(db, paid)).granted, 3);
+  assert.equal((await recordShopierOrder(db, paid)).granted, 0);
+  const purchases = await db.select().from(schema.shopierPurchases).where(eq(schema.shopierPurchases.shopierOrderId, paid.id));
+  assert.equal(purchases.length, 3);
+  assert.equal(purchases.reduce((sum, p) => sum + p.amountKurus, 0), 105000, "the split loses no kuruş");
+  assert.ok(purchases.every(p => p.amountKurus >= 33333));
+  assert.ok(purchases.every(p => p.bundleId === bundle.id && p.accessDurationDays === 90));
+  const inside = new Date(paid.dateCreated.getTime() + 60 * DAY);
+  assert.deepEqual((await activeCourseAccess(db, "bundle-buyer", inside)).map(g => g.courseId).sort(), [a.id, b.id, c.id].sort());
+  assert.equal(await activeGrant(db, "bundle-buyer", bundle.id, inside), null, "the bundle itself is not a course to open");
+
+  const { courses: owned } = await ownerCatalog(db, []);
+  const row = owned.find(item => item.id === bundle.id);
+  assert.deepEqual([row.includes.length, row.sales, row.inBundle], [3, 1, false]);
+  assert.equal(owned.find(item => item.id === a.id).inBundle, true);
+
+  // A full refund of the order closes all three.
+  await recordShopierRefund(db, shopierRefundSchema.parse({ id: "88000001", orderId: paid.id, status: "succeeded", type: "full", dateCreated: "2026-09-22T10:00:00+0300", currency: "TRY", total: "1050.00" }));
+  assert.deepEqual(await activeCourseAccess(db, "bundle-buyer", inside), []);
+
+  // Emptied, the product sells as an ordinary course again.
+  await setBundleCourses(db, "owner", bundle.id, []);
+  await recordShopierOrder(db, order({ ...email, lineItems: [{ productId: "91000000", total: "10.00" }] }));
+  assert.deepEqual((await activeCourseAccess(db, "bundle-buyer", inside)).map(g => g.courseId), [bundle.id]);
+});
