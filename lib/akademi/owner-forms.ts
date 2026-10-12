@@ -13,6 +13,7 @@ export const courseAccessSchema = z.object({ value: accessDays });
 export const courseChangeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("status"), status: z.enum(["draft", "published", "archived"]) }),
   courseAccessSchema.extend({ kind: z.literal("access") }),
+  z.object({ kind: z.literal("bundle"), courseIds: z.array(z.uuid()).max(20) }),
 ]);
 export type CourseChange = z.output<typeof courseChangeSchema>;
 

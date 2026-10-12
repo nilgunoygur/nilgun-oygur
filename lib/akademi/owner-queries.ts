@@ -7,7 +7,7 @@ import { refundStatuses, type CourseChange, type productFormSchema, type RefundD
 const courseSchema = z.object({
   id: z.string(), slug: z.string(), productId: z.string(), title: z.string(),
   priceKurus: z.number().nullable(), discounted: z.boolean(), blocker: z.enum(["missing", "notDigital", "outOfStock", "unpriced"]).nullable(), accessDurationDays: z.number(),
-  sales: z.number(), claimed: z.number(), status: z.enum(["published", "draft", "archived"]),
+  sales: z.number(), claimed: z.number(), includes: z.array(z.string()), inBundle: z.boolean(), status: z.enum(["published", "draft", "archived"]),
   product: z.object({ description: z.string(), listPriceKurus: z.number().nullable(), image: z.string().nullable(), hidden: z.boolean(), inStock: z.boolean(), url: z.string().nullable() }).nullable(),
 });
 const saleSchema = z.object({
@@ -62,6 +62,7 @@ export function ownerTransactionsQueryOptions(from: string, to: string) {
 
 export const updateOwnerCourse = (courseId: string, change: CourseChange) => ownerFetch(`/api/yonetim/courses/${courseId}`,
   { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) }, "Değişiklik kaydedilemedi.");
+export const deleteOwnerCourse = (courseId: string) => ownerFetch(`/api/yonetim/courses/${courseId}`, { method: "DELETE" }, "Eğitim silinemedi.");
 export type ProductValues = z.output<typeof productFormSchema>;
 const withCover = (data: Partial<ProductValues>, image: File | null) => { const body = new FormData(); body.set("data", JSON.stringify(data)); if (image) body.set("image", image); return body; };
 export const updateOwnerProduct = (courseId: string, changes: Partial<ProductValues>, image: File | null) => ownerFetch(`/api/yonetim/courses/${courseId}/product`,

@@ -159,3 +159,42 @@ test("creating a published course overrides a hidden listing choice", async () =
   await createCourse(db, "owner", { title: "Published demo", description: "", priceKurus: 100, imageUrl: "https://files.example/demo.jpg", hidden: true, accessDurationDays: 365, status: "published" }, shopier);
   assert.equal(calls.find(call => call.method === "POST").body.customListing, false);
 });
+
+test("only an archived course without sales is deleted, with its lessons and its Shopier product", async () => {
+  const { deleteCourse, setBundleCourses } = await import("../lib/akademi/owner-commands.ts");
+  const deleted = [];
+  const shopier = { deleteProduct: async id => { deleted.push(id); } };
+  const [sold, empty, pack] = await db.insert(schema.courses).values([
+    { slug: "satilmis", shopierProductId: "71000001", status: "archived" },
+    { slug: "bos", shopierProductId: "71000002" },
+    { slug: "paket", shopierProductId: "71000003" },
+  ]).returning();
+  await db.insert(schema.shopierPurchases).values({ shopierOrderId: "1", courseId: sold.id, buyerEmail: "a@example.com", amountKurus: 100, currency: "TRY", accessDurationDays: 30, purchasedAt: new Date() });
+  const [section] = await db.insert(schema.modules).values({ courseId: empty.id, title: "Program" }).returning();
+  const [lesson] = await db.insert(schema.lessons).values({ courseId: empty.id, moduleId: section.id, slug: "ders", title: "Ders", kind: "live" }).returning();
+  await db.insert(schema.liveSessions).values({ lessonId: lesson.id, startsAt: new Date(), durationMinutes: 60, zoomMeetingId: "123456789", zoomPasscode: "" });
+  await db.insert(schema.lessonFiles).values({ lessonId: lesson.id, name: "odev.pdf", pathname: "lessons/odev.pdf", mime: "application/pdf", sizeBytes: 10 });
+
+  await assert.rejects(() => deleteCourse(db, "owner", empty.id, shopier), /arşivdeki/);
+  await assert.rejects(() => deleteCourse(db, "owner", sold.id, shopier), /Satışı/);
+  await db.update(schema.courses).set({ status: "archived" }).where(eq(schema.courses.id, empty.id));
+  await setBundleCourses(db, "owner", pack.id, [empty.id]);
+  await assert.rejects(() => deleteCourse(db, "owner", empty.id, shopier), /paketin içinde/);
+  assert.deepEqual(deleted, [], "nothing is deleted on Shopier for a refused delete");
+  await setBundleCourses(db, "owner", pack.id, []);
+
+  const refusing = { deleteProduct: async () => { throw new ShopierError(403, "forbidden"); } };
+  await assert.rejects(() => deleteCourse(db, "owner", empty.id, refusing), ShopierError);
+  assert.equal((await db.select().from(schema.lessons).where(eq(schema.lessons.courseId, empty.id))).length, 1, "the course stays when Shopier refuses");
+
+  assert.deepEqual(await deleteCourse(db, "owner", empty.id, shopier), ["lessons/odev.pdf"]);
+  assert.deepEqual(deleted, ["71000002"]);
+  assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.id, empty.id))).length, 0);
+  assert.equal((await audits()).at(-1), "course.delete");
+
+  // The client treats a product that is already gone as deleted and reads no body.
+  const gone = createShopierClient("token", async () => new Response("", { status: 404 }));
+  await gone.deleteProduct("71000002");
+  const ok = createShopierClient("token", async (_url, init) => { assert.equal(init.method, "DELETE"); return new Response("", { status: 200 }); });
+  await ok.deleteProduct("71000002");
+});

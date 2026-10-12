@@ -3,6 +3,7 @@ import { ownerRoute, privateNoStore } from "@/lib/auth/viewer";
 import { akademi, catalogChangedByOwner } from "@/lib/akademi/server";
 import { productFailure, refuse } from "@/lib/akademi/product-request";
 import { courseChangeSchema } from "@/lib/akademi/owner-forms";
+import { deleteStoredFiles } from "@/lib/files/storage";
 
 export async function PATCH(request: Request, { params }: RouteContext<"/api/yonetim/courses/[courseId]">) {
   const viewer = await ownerRoute();
@@ -15,12 +16,28 @@ export async function PATCH(request: Request, { params }: RouteContext<"/api/yon
   const { owner } = akademi(), edit = change.data;
   try {
     if (edit.kind === "status") await owner.setCourseStatus(actorId, courseId.data, edit.status);
+    else if (edit.kind === "bundle") { if (await owner.setBundleCourses(actorId, courseId.data, edit.courseIds)) catalogChangedByOwner(); }
     else if (await owner.setAccessDuration(actorId, courseId.data, edit.value)) catalogChangedByOwner();
     return new Response(null, { status: 204, headers: privateNoStore });
   } catch (error) {
-    return edit.kind === "status" ? productFailure(error) : refuse("Değişiklik kaydedilemedi.", 500);
+    return edit.kind === "access" ? refuse("Değişiklik kaydedilemedi.", 500) : productFailure(error);
   } finally {
     // A status change can reach Shopier before a later step fails.
     if (edit.kind === "status") catalogChangedByOwner();
+  }
+}
+
+export async function DELETE(_request: Request, { params }: RouteContext<"/api/yonetim/courses/[courseId]">) {
+  const viewer = await ownerRoute();
+  if (viewer instanceof Response) return viewer;
+  const courseId = z.uuid().safeParse((await params).courseId);
+  if (!courseId.success) return refuse("Geçersiz istek.");
+  try {
+    await deleteStoredFiles(await akademi().owner.deleteCourse(viewer.user.id, courseId.data));
+    return new Response(null, { status: 204, headers: privateNoStore });
+  } catch (error) {
+    return productFailure(error);
+  } finally {
+    catalogChangedByOwner();
   }
 }
