@@ -8,8 +8,8 @@ import { Reveal } from "@/components/reveal";
 import { articleMeta, eyebrow, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
-  title: "Yazılarım",
-  description: "Nilgün Oygur'un kişisel gelişim, farkındalık ve dönüşüm üzerine yazılarını keşfedin.",
+  title: "Kişisel Gelişim ve Farkındalık Yazıları",
+  description: "Nilgün Oygur'un bilinçaltı, meditasyon, kuantum, doğal taşlar ve etkili iletişim üzerine kişisel gelişim ve farkındalık yazılarını okuyun.",
   alternates: { canonical: "/blog" },
 };
 export default function Blog() {
