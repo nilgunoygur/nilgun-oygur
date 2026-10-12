@@ -52,8 +52,10 @@ export const courses = [
       .map(asset),
   };
 });
+/** The reference site published this post twice; next.config.ts redirects the later copy to the first. */
+const duplicateArticle = "/blog/biliçaltının-i-nsan-yaşamını-şekillendirmesindeki-önem";
 export const articles = Object.entries(pages)
-  .filter(([path]) => path.startsWith("/blog/"))
+  .filter(([path]) => path.startsWith("/blog/") && path !== duplicateArticle)
   .map(([href, page]) => {
     const titleIndex = page.text.findIndex((x) => x.tag === "h1");
     const start = page.text.findIndex((x) => x.text === "Copy Link") + 1;
