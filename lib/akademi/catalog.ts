@@ -86,6 +86,17 @@ export function productCards(products: ShopierProduct[]): Record<string, { title
   return Object.fromEntries(products.map(product => [product.id, { title: product.title, image: productDetails(product)?.imageUrl ?? fallbackCover }]));
 }
 
+const bundleLinks = (items: (typeof bundleItems.$inferSelect)[], id: string) => ({ includes: items.filter(item => item.bundleId === id).map(item => item.courseId), inBundle: items.some(item => item.courseId === id) });
+
+/** Every course with its bundle links, oldest first. */
+export async function bundleCourses(db: Database) {
+  const [rows, items] = await Promise.all([
+    db.select({ id: courses.id, slug: courses.slug, productId: courses.shopierProductId, status: courses.status, accessDurationDays: courses.accessDurationDays }).from(courses).orderBy(asc(courses.createdAt)),
+    db.select().from(bundleItems),
+  ]);
+  return rows.map(row => ({ ...row, ...bundleLinks(items, row.id) }));
+}
+
 /** Every linked course with its live Shopier title and price, and sales counts, for the owner panel. */
 export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   const byId = new Map(products.map(product => [product.id, product]));
@@ -105,11 +116,11 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
     courses: rows.map(row => {
       const product = byId.get(row.productId);
       const details = product ? saleDetails(product) : null;
-      const includes = items.filter(item => item.bundleId === row.id).map(item => item.courseId);
+      const { includes, inBundle } = bundleLinks(items, row.id);
       // A bundle's sales are its orders; the purchases themselves belong to the included courses.
       const orders = includes.length ? ordersOf.get(row.id) ?? 0 : null;
       return {
-        ...row, sales: orders ?? row.sales, claimed: orders ?? row.claimed, title: titleOf(row.productId), includes, inBundle: items.some(item => item.courseId === row.id), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
+        ...row, sales: orders ?? row.sales, claimed: orders ?? row.claimed, title: titleOf(row.productId), includes, inBundle, priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
         blocker: !product ? "missing" as const : courseProductBlocker(product) ?? (details ? null : "unpriced" as const),
         // Raw Shopier values for the edit form.
         product: product && isEditableProduct(product) ? {

@@ -16,7 +16,7 @@ export async function studentCourse(db: Database, userId: string, course: typeof
   return grant && { course, grant, lessons: await publishedLessons(db, userId, course.id, now) };
 }
 
-/** What a student with access sees; no access check, so the owner's preview reads it too. */
+/** No access check: the owner's preview reads it too. */
 export async function publishedLessons(db: Database, userId: string, courseId: string, now = new Date()) {
   const rows = await db.select({
     id: lessons.id, title: lessons.title, description: lessons.description, kind: lessons.kind,

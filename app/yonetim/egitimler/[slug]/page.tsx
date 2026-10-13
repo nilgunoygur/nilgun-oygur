@@ -6,7 +6,7 @@ import { ownerPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { courseForRoute } from "@/lib/akademi/course-route";
 import { ownerLessons } from "@/lib/akademi/lesson-editor";
-import { akademi } from "@/lib/akademi/server";
+import { ownerBundleCourses } from "@/lib/akademi/server";
 import { attachedVideos, videoConfigured } from "@/lib/video/mux";
 import { filesConfigured } from "@/lib/files/storage";
 import { CourseEditor } from "@/components/akademi/lesson-editor";
@@ -33,7 +33,7 @@ async function Content({ params }: { params: Promise<{ slug: string }> }) {
     const videos = await attachedVideos(rows.map(row => row.asset));
     return rows.map(row => ({ ...row, video: row.asset?.muxAssetId ? videos[row.asset.muxAssetId] : undefined }));
   });
-  const [rows, { courses }] = await Promise.all([lessonsWithVideos, akademi().owner.catalogSnapshot()]);
+  const [rows, courses] = await Promise.all([lessonsWithVideos, ownerBundleCourses()]);
   const current = courses.find(item => item.id === courseId);
   const packaged = !!current?.includes.length;
   const editor = <CourseEditor courseId={courseId} rows={rows} muxConfigured={videoConfigured()} filesConfigured={filesConfigured()} />;

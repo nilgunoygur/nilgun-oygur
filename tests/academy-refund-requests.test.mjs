@@ -44,10 +44,10 @@ const audits = async id => (await db.select().from(schema.adminAuditLog).where(e
 
 test("a student asks once per purchase, and only for a course they bought", async () => {
   const f = await fixture(), { akademi } = shop();
-  assert.equal(await akademi.access.refundRequest(f.id, f.course.id), null);
+  assert.deepEqual(await akademi.access.refundState(f.id, f.course.id), { request: null, bundleProductId: null });
   assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Beklediğim gibi değildi."), "requested");
   assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Tekrar soruyorum."), "already_pending");
-  assert.equal((await akademi.access.refundRequest(f.id, f.course.id)).status, "pending");
+  assert.equal((await akademi.access.refundState(f.id, f.course.id)).request.status, "pending");
   const other = await fixture();
   assert.equal(await akademi.access.requestRefund(f.id, other.course.id, "Benim olmayan eğitim."), "no_purchase");
   assert.equal(await akademi.access.requestRefund(f.id, f.course.id, "Dördüncü deneme."), "rate_limited");
@@ -93,7 +93,7 @@ test("approval removes access even for a partial payment refund; rejection resto
   const second = await rejected.request();
   await assert.rejects(() => akademi.owner.decideRefundRequest("owner", second.id, { approve: true, amountKurus: 10001, note: "" }), /kalan tutarını aşamaz/);
   await akademi.owner.decideRefundRequest("owner", second.id, { approve: false, note: "Eğitimin yarısı izlenmiş." });
-  assert.deepEqual(await akademi.access.refundRequest(rejected.id, rejected.course.id), { status: "declined", ownerNote: "Eğitimin yarısı izlenmiş." });
+  assert.deepEqual((await akademi.access.refundState(rejected.id, rejected.course.id)).request, { status: "declined", ownerNote: "Eğitimin yarısı izlenmiş." });
   assert.deepEqual(await audits(second.id), ["refund_request.declined"]);
   assert.equal(sent.length, 1);
   assert.ok(await activeGrant(db, rejected.id, rejected.course.id), "rejection restores access");
@@ -220,20 +220,19 @@ test("a refund request for one course of a bundle covers the whole bundle", asyn
   const f = await bundleFixture(), { akademi } = shop();
   const [a, b, c] = f.included;
   assert.equal(await f.open(), 3);
-  assert.equal(await akademi.access.purchasedBundle(f.id, a.id), f.bundle.shopierProductId);
+  assert.deepEqual(await akademi.access.refundState(f.id, a.id), { request: null, bundleProductId: f.bundle.shopierProductId });
   assert.equal(await akademi.access.requestRefund(f.id, a.id, "Paketi iade etmek istiyorum."), "requested");
   assert.equal(await akademi.access.requestRefund(f.id, b.id, "Diğer eğitim için de."), "already_pending", "one request per bundle order");
   assert.equal(await f.open(), 0, "every course of the bundle is closed while the request is pending");
   assert.equal(await f.listed(), 3);
   assert.ok((await activeCourseAccess(db, f.id, f.now)).every(item => item.refundPending));
-  for (const course of f.included) assert.equal((await akademi.access.refundRequest(f.id, course.id)).status, "pending", "each course page shows the request");
+  for (const course of f.included) assert.equal((await akademi.access.refundState(f.id, course.id)).request.status, "pending", "each course page shows the request");
   const [listed] = (await akademi.owner.refundRequests({ status: "pending", search: f.order.id })).items;
-  assert.deepEqual([listed.bundled, listed.amountKurus, listed.productId, listed.course], [true, 30000, f.bundle.shopierProductId, f.bundle.slug], "the owner sees the bundle and what was paid for it");
+  assert.deepEqual([listed.bundled, listed.amountKurus, listed.productId, listed.course, listed.courseId], [true, 30000, f.bundle.shopierProductId, f.bundle.slug, f.bundle.id], "the owner sees the bundle and what was paid for it");
 
-  // Declined: all three open again.
   await akademi.owner.decideRefundRequest("owner", listed.id, { approve: false, note: "Süre doldu." });
   assert.equal(await f.open(), 3);
-  assert.equal((await akademi.access.refundRequest(f.id, c.id)).status, "declined");
+  assert.equal((await akademi.access.refundState(f.id, c.id)).request.status, "declined");
 });
 
 test("approving a bundle refund removes every course, also when Shopier treats it as partial", async () => {
@@ -247,7 +246,6 @@ test("approving a bundle refund removes every course, also when Shopier treats i
   assert.equal(await f.listed(), 0, "the bundle's courses leave the student's list");
   assert.equal(await akademi.access.requestRefund(f.id, f.included[2].id, "Yine."), "refunded");
 
-  // Buying one of the courses again alone starts fresh and leaves the other two closed.
   const again = shopierOrderSchema.parse({ id: String(sequence++), paymentStatus: "paid", dateCreated: "2026-10-04T12:00:00+0300", currency: "TRY",
     billingInfo: { email: `${f.id}@example.com` }, lineItems: [{ productId: f.included[0].shopierProductId, total: "100.00" }] });
   await recordShopierOrder(db, again);
@@ -259,10 +257,9 @@ test("approving a bundle refund removes every course, also when Shopier treats i
 test("a course bought alone is untouched by a refund request on a bundle that does not contain its purchase", async () => {
   const f = await bundleFixture(), { akademi } = shop();
   const [course] = await db.insert(schema.courses).values({ slug: `single-${f.id}`, shopierProductId: `${f.id}9`, accessDurationDays: 30 }).returning();
-  const single = { course };
   await recordShopierOrder(db, shopierOrderSchema.parse({ id: String(sequence++), paymentStatus: "paid", dateCreated: "2026-10-02T10:00:00+0300", currency: "TRY",
     billingInfo: { email: `${f.id}@example.com` }, lineItems: [{ productId: `${f.id}9`, total: "100.00" }] }));
   await akademi.access.requestRefund(f.id, f.included[0].id, "Paket.");
-  assert.ok(await activeGrant(db, f.id, single.course.id, f.now), "only the bundle is suspended");
-  assert.equal(await akademi.access.refundRequest(f.id, single.course.id), null);
+  assert.ok(await activeGrant(db, f.id, course.id, f.now), "only the bundle is suspended");
+  assert.equal((await akademi.access.refundState(f.id, course.id)).request, null);
 });

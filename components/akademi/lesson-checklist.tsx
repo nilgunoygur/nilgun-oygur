@@ -4,7 +4,6 @@ import { createContext, use, useRef, useState, useTransition } from "react";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, CalendarDays, Check, ChevronDown, CirclePlay, Headphones, LockKeyhole, Paperclip, Video } from "lucide-react";
 import { checkLessonAccess, getPlayback, joinLive, updateProgress } from "@/app/akademi/hesabim/[slug]/actions";
-import { previewPlayback } from "@/app/yonetim/egitimler/[slug]/actions";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { lessonPrerequisites } from "@/lib/akademi/lesson-sequence";
@@ -24,14 +23,8 @@ import { LessonVideo } from "./lesson-video";
 type Lesson = NonNullable<Awaited<ReturnType<typeof studentCourse>>>["lessons"][number];
 
 const studentCalls = { getPlayback, joinLive, updateProgress };
-type Calls = typeof studentCalls;
-/** The owner's preview plays with owner tokens, saves nothing and joins no meeting. */
-const previewCalls: Calls = {
-  getPlayback: previewPlayback,
-  joinLive: async () => ({ error: "Önizlemede Zoom bağlantısı açılmaz. Öğrenciler burada katılım bağlantılarını görür." }),
-  updateProgress: async () => ({ ok: true }),
-};
-const LessonCalls = createContext(studentCalls);
+export type LessonCalls = typeof studentCalls;
+const Calls = createContext(studentCalls);
 async function celebrate() {
   const confetti = (await import("canvas-confetti")).default;
   void confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 }, colors: ["#224c40", "#4b999c", "#f1f5e9", "#e7d7bc"], disableForReducedMotion: true });
@@ -44,7 +37,8 @@ const kinds = {
   live: { label: "CANLI BULUŞMA", done: "Katıldım", locked: "", hint: "", again: "tekrar açabilirsiniz" },
 };
 
-export function LessonChecklist({ lessons, preview = false, empty }: { lessons: Lesson[]; preview?: boolean; empty?: React.ReactNode }) {
+/** `preview` replaces the server calls and opens every lesson: no access poll, no sequence. */
+export function LessonChecklist({ lessons, preview, empty }: { lessons: Lesson[]; preview?: LessonCalls; empty?: React.ReactNode }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
@@ -59,7 +53,6 @@ export function LessonChecklist({ lessons, preview = false, empty }: { lessons: 
     gcTime: 0,
   });
   const accessLost = access.data?.allowed === false;
-  // The preview opens every lesson without watching the ones before it.
   const prerequisites = lessonPrerequisites(preview ? [] : lessons, completed);
   const recorded = lessons.filter(lesson => lesson.kind !== "live");
   const done = recorded.filter(lesson => completed.has(lesson.id)).length;
@@ -73,19 +66,19 @@ export function LessonChecklist({ lessons, preview = false, empty }: { lessons: 
     if (value && recorded.some(lesson => lesson.id === id) && recorded.every(lesson => next.has(lesson.id))) void celebrate();
   }
   if (accessLost) return <Alert><LockKeyhole /><AlertTitle>Derslere erişiminiz durduruldu</AlertTitle><AlertDescription>İade talebiniz veya eğitim erişiminizin durumu değişti. Güncel durum hesabınızda gösterilir.</AlertDescription></Alert>;
-  return <LessonCalls value={preview ? previewCalls : studentCalls}>
+  return <Calls value={preview ?? studentCalls}>
     <div className="mb-9 flex flex-wrap items-end justify-between gap-5 rounded-[24px] bg-mist p-7">
       <div><p className="mb-2 text-[11px] font-semibold tracking-[1.6px] text-forest">HER ADIM SİZİNLE</p><h2 className="text-[28px]">{done === recorded.length && recorded.length ? "Bu yolculuğu tamamladınız." : "Kendi ritminizde ilerleyin."}</h2><p className="mt-2 text-sm text-stone">Bir dersi sonuna kadar izlediğinizde veya dinlediğinizde tamamlanır. Bir sonraki kayıtlı ders, önceki ders tamamlandığında açılır. Canlı Zoom buluşmalarını bu sıradan bağımsız açabilirsiniz.</p></div>
       <div className="w-full sm:w-52"><p className="mb-3 text-sm"><strong className="text-2xl text-forest">{done}</strong> / {recorded.length} kayıtlı ders tamamlandı</p><progress aria-label="Eğitim ilerlemesi" className="h-2 w-full overflow-hidden rounded-full accent-forest" max={Math.max(recorded.length, 1)} value={done} /></div>
     </div>
     {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" />{empty ?? <><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></>}</div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
-  </LessonCalls>;
+  </Calls>;
 }
 
 function LessonCard({ lesson, index, completed, prerequisite, open, onOpen, onComplete }: { lesson: Lesson; index: number; completed: boolean; prerequisite: string | null; open: boolean; onOpen: () => void; onComplete: (value: boolean) => void }) {
   const [pending, startTransition] = useTransition();
   const [destination, setDestination] = useState<ReturnType<typeof zoomLinks> | null>(null);
-  const { joinLive, updateProgress } = use(LessonCalls);
+  const { joinLive, updateProgress } = use(Calls);
   const isLive = lesson.kind === "live", isAudio = lesson.kind === "audio";
   const text = kinds[lesson.kind];
   const hasRecording = lesson.liveView === "recorded";
@@ -148,7 +141,7 @@ function LivePreparation() {
 
 /** Saves the position at most every 15 seconds, one save at a time. */
 function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds: number) => void) {
-  const { updateProgress } = use(LessonCalls);
+  const { updateProgress } = use(Calls);
   const lastSaved = useRef(0);
   const position = useRef(startTime);
   const saves = useRef(Promise.resolve());
@@ -168,7 +161,7 @@ function useSavedPosition(lessonId: string, startTime: number, onTime: (seconds:
 type PlayerProps = { lessonId: string; title: string; startTime: number; onTime: (seconds: number) => void; onEnded: () => void };
 
 type Playback = Awaited<ReturnType<typeof getPlayback>>;
-async function requestPlayback(getPlayback: Calls["getPlayback"], lessonId: string) {
+async function requestPlayback(getPlayback: LessonCalls["getPlayback"], lessonId: string) {
   const playback = await getPlayback(lessonId);
   if (playback.error) toast.error(playback.error);
   return playback;
@@ -189,7 +182,7 @@ const stillAllowed = (query: { state: { data?: { allowed: boolean | null } } }) 
 // The audio player asks for another token only when playback fails.
 function AudioLesson({ lessonId, title, duration, peaks, startTime, onTime, onEnded }: PlayerProps & { duration: number; peaks: number[] | null }) {
   const { savePosition } = useSavedPosition(lessonId, startTime, onTime);
-  const { getPlayback } = use(LessonCalls);
+  const { getPlayback } = use(Calls);
   const { data: playback, isError } = useQuery({ queryKey: lessonQueryKeys.playback("audio", lessonId), queryFn: () => requestPlayback(getPlayback, lessonId), ...playbackQuery, meta: { errorToast: "Ses kaydı başlatılamadı. Dersi kapatıp yeniden açın." } });
   const source = playback && playable(playback);
   if (isError) return null;
@@ -218,7 +211,7 @@ function Homework({ documents }: { documents: Document[] }) {
 function LessonPlayer({ lessonId, title, startTime, onTime, onEnded }: PlayerProps) {
   const { position, savePosition } = useSavedPosition(lessonId, startTime, onTime);
   const playing = useRef(false);
-  const { getPlayback } = use(LessonCalls);
+  const { getPlayback } = use(Calls);
   // Each renewal remounts the player, so it records where to resume; a failed one leaves the current player running.
   const { data: playback, isError } = useQuery({
     queryKey: lessonQueryKeys.playback("video", lessonId),

@@ -32,7 +32,9 @@ const productFields = {
 };
 export const productKeys = Object.keys(productFields) as (keyof typeof productFields)[];
 /** One form for create and edit; an edit ignores the course fields. */
-export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean(), includes: bundleCourseIds }).refine(cheaper, cheaperIssue);
+export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean(), packaged: z.boolean(), includes: bundleCourseIds }).refine(cheaper, cheaperIssue)
+  .refine(value => !value.packaged || value.includes.length > 0, { message: "Pakete en az bir eğitim ekleyin.", path: ["includes"] })
+  .transform(value => value.packaged ? value : { ...value, includes: [] });
 export const productChangeSchema = z.object(productFields).partial().refine(cheaper, cheaperIssue);
 const refundNote = z.string().trim().max(500, "Not en fazla 500 karakter olabilir.");
 export const refundDecisionSchema = z.discriminatedUnion("decision", [
