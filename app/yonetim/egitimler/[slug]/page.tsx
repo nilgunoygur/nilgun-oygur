@@ -1,14 +1,18 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { Eye } from "lucide-react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ownerPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
 import { courseForRoute } from "@/lib/akademi/course-route";
 import { ownerLessons } from "@/lib/akademi/lesson-editor";
-import { courseCards } from "@/lib/akademi/server";
+import { akademi } from "@/lib/akademi/server";
 import { attachedVideos, videoConfigured } from "@/lib/video/mux";
 import { filesConfigured } from "@/lib/files/storage";
 import { CourseEditor } from "@/components/akademi/lesson-editor";
+import { PackagePanel } from "@/components/akademi/package-panel";
+import { OwnerBackLink } from "@/components/akademi/owner-back-link";
+import { buttonVariants } from "@/components/ui/button";
 import { ownerSection, accountTitle, kicker, pageWidth } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/spinner";
@@ -29,6 +33,19 @@ async function Content({ params }: { params: Promise<{ slug: string }> }) {
     const videos = await attachedVideos(rows.map(row => row.asset));
     return rows.map(row => ({ ...row, video: row.asset?.muxAssetId ? videos[row.asset.muxAssetId] : undefined }));
   });
-  const [rows, cards] = await Promise.all([lessonsWithVideos, courseCards()]);
-  return <><Link className="mb-8 inline-block text-sm underline underline-offset-4" href="/yonetim/egitimler">← Eğitimler ve satışlar</Link><header className="mb-9"><p className={kicker}>AKADEMİ YÖNETİMİ · DERS İÇERİKLERİ</p><h1 className={accountTitle}>{cards[course.shopierProductId]?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir.</p></header><CourseEditor courseId={courseId} rows={rows} muxConfigured={videoConfigured()} filesConfigured={filesConfigured()} /></>;
+  const [rows, { courses }] = await Promise.all([lessonsWithVideos, akademi().owner.catalogSnapshot()]);
+  const current = courses.find(item => item.id === courseId);
+  const packaged = !!current?.includes.length;
+  const editor = <CourseEditor courseId={courseId} rows={rows} muxConfigured={videoConfigured()} filesConfigured={filesConfigured()} />;
+  return <>
+    <OwnerBackLink href="/yonetim/egitimler">Eğitimler ve satışlar</OwnerBackLink>
+    <header className="mb-9 flex flex-wrap items-end justify-between gap-5">
+      <div><p className={kicker}>AKADEMİ YÖNETİMİ · {packaged ? "PAKET" : "DERS İÇERİKLERİ"}</p><h1 className={accountTitle}>{current?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">{packaged ? "Bu ürün bir paket: kendi dersi yoktur, içindeki eğitimleri birlikte satar. Adı, görseli ve fiyatı Shopier’den gelir." : "Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir."}</p></div>
+      {!packaged && <Link href={`/yonetim/egitimler/${course.slug}/onizleme`} className={buttonVariants({ variant: "outline", size: "pill" })}><Eye />Öğrenci gözüyle önizle</Link>}
+    </header>
+    {packaged ? <>
+      <PackagePanel course={current} courses={courses} />
+      {rows.length > 0 && <details className="mt-10 text-sm text-stone"><summary className="cursor-pointer underline underline-offset-4">Bu ürüne daha önce eklenmiş {rows.length} ders var; paket olduğu için öğrencilere gösterilmez</summary><div className="mt-6">{editor}</div></details>}
+    </> : editor}
+  </>;
 }
