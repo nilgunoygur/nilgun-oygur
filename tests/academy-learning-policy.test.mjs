@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema.ts";
 import { activeCourseAccess, activeGrant, recordShopierOrder } from "../lib/akademi/course-access.ts";
 import { accessibleLesson, accessibleFile, liveDestination, saveProgress, studentCourse } from "../lib/akademi/learning.ts";
-import { requestRefund, latestRefundRequest } from "../lib/akademi/refund-requests.ts";
+import { requestRefund, refundState } from "../lib/akademi/refund-requests.ts";
 import { decideRefundRequest } from "../lib/akademi/owner-commands.ts";
 import { shopierOrderSchema, shopierRefundSchema } from "../lib/shopier/api.ts";
 import { lessonPrerequisites } from "../lib/akademi/lesson-sequence.ts";
@@ -79,5 +79,5 @@ test("a refund request suspends all content; rejection restores access; approval
   await recordShopierOrder(db, paidAgain);
   const restored = await activeGrant(db, f.id, f.course.id, now);
   assert.equal(restored.startsAt.toISOString(), now.toISOString(), "a refund-approved purchase cannot extend the next purchase");
-  assert.equal(await latestRefundRequest(db, f.id, f.course.id), null, "the old refund cannot hide the new purchase");
+  assert.equal((await refundState(db, f.id, f.course.id)).request, null, "the old refund cannot hide the new purchase");
 });

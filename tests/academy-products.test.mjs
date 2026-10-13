@@ -116,12 +116,16 @@ test("the owner catalog carries what the edit form needs, in the owner's plain-t
 });
 
 test("product forms accept lira amounts, treat an empty discount as none and send partial edits", () => {
-  const form = { title: " Nefes ", description: "", price: "950,5".replace(",", "."), discountedPrice: "", listed: true, inStock: true, accessDays: "365", publish: false, includes: [] };
+  const form = { title: " Nefes ", description: "", price: "950,5".replace(",", "."), discountedPrice: "", listed: true, inStock: true, accessDays: "365", publish: false, packaged: false, includes: [] };
   const parsed = productFormSchema.parse(form);
   assert.deepEqual([parsed.title, parsed.price, parsed.discountedPrice, parsed.accessDays], ["Nefes", 950.5, null, 365]);
   assert.deepEqual(productFormSchema.parse(parsed), parsed, "the server re-parses what the form submits");
   assert.equal(productFormSchema.safeParse({ ...form, discountedPrice: "950.5" }).success, false);
   assert.equal(productFormSchema.safeParse({ ...form, price: "9.999" }).success, false);
+  const course = "00000000-0000-4000-8000-000000000001";
+  assert.deepEqual(productFormSchema.parse({ ...form, includes: [course] }).includes, [], "an ordinary course includes nothing");
+  assert.deepEqual(productFormSchema.parse({ ...form, packaged: true, includes: [course] }).includes, [course]);
+  assert.deepEqual(productFormSchema.safeParse({ ...form, packaged: true }).error.issues[0].path, ["includes"], "a package needs a course");
   assert.deepEqual(productChangeSchema.parse({ discountedPrice: null }), { discountedPrice: null });
   assert.deepEqual(productChangeSchema.parse({ price: 1200, listed: false }), { price: 1200, listed: false });
   assert.equal(productChangeSchema.safeParse({ price: 100, discountedPrice: 100 }).success, false);

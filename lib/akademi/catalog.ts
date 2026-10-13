@@ -86,6 +86,17 @@ export function productCards(products: ShopierProduct[]): Record<string, { title
   return Object.fromEntries(products.map(product => [product.id, { title: product.title, image: productDetails(product)?.imageUrl ?? fallbackCover }]));
 }
 
+const bundleLinks = (items: (typeof bundleItems.$inferSelect)[], id: string) => ({ includes: items.filter(item => item.bundleId === id).map(item => item.courseId), inBundle: items.some(item => item.courseId === id) });
+
+/** Every course with its bundle links, oldest first. */
+export async function bundleCourses(db: Database) {
+  const [rows, items] = await Promise.all([
+    db.select({ id: courses.id, slug: courses.slug, productId: courses.shopierProductId, status: courses.status, accessDurationDays: courses.accessDurationDays }).from(courses).orderBy(asc(courses.createdAt)),
+    db.select().from(bundleItems),
+  ]);
+  return rows.map(row => ({ ...row, ...bundleLinks(items, row.id) }));
+}
+
 /** Every linked course with its live Shopier title and price, and sales counts, for the owner panel. */
 export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
   const byId = new Map(products.map(product => [product.id, product]));
@@ -95,7 +106,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
       id: courses.id, slug: courses.slug, productId: courses.shopierProductId, status: courses.status, accessDurationDays: courses.accessDurationDays,
       sales: count(shopierPurchases.id), claimed: sql<number>`count(${shopierPurchases.userId})::int`,
     }).from(courses).leftJoin(shopierPurchases, eq(shopierPurchases.courseId, courses.id)).groupBy(courses.id).orderBy(desc(courses.createdAt)),
-    db.select({ id: shopierPurchases.id, order: shopierPurchases.shopierOrderId, productId: courses.shopierProductId, email: shopierPurchases.buyerEmail, amount: shopierPurchases.amountKurus, at: shopierPurchases.purchasedAt, claimed: isNotNull(shopierPurchases.userId) })
+    db.select({ id: shopierPurchases.id, order: shopierPurchases.shopierOrderId, productId: courses.shopierProductId, bundleId: shopierPurchases.bundleId, email: shopierPurchases.buyerEmail, amount: shopierPurchases.amountKurus, at: shopierPurchases.purchasedAt, claimed: isNotNull(shopierPurchases.userId) })
       .from(shopierPurchases).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).orderBy(desc(shopierPurchases.purchasedAt)).limit(25),
     db.select().from(bundleItems),
     db.select({ bundleId: shopierPurchases.bundleId, orders: countDistinct(shopierPurchases.shopierOrderId) }).from(shopierPurchases).where(isNotNull(shopierPurchases.bundleId)).groupBy(shopierPurchases.bundleId),
@@ -105,11 +116,11 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
     courses: rows.map(row => {
       const product = byId.get(row.productId);
       const details = product ? saleDetails(product) : null;
-      const includes = items.filter(item => item.bundleId === row.id).map(item => item.courseId);
+      const { includes, inBundle } = bundleLinks(items, row.id);
       // A bundle's sales are its orders; the purchases themselves belong to the included courses.
       const orders = includes.length ? ordersOf.get(row.id) ?? 0 : null;
       return {
-        ...row, sales: orders ?? row.sales, claimed: orders ?? row.claimed, title: titleOf(row.productId), includes, inBundle: items.some(item => item.courseId === row.id), priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
+        ...row, sales: orders ?? row.sales, claimed: orders ?? row.claimed, title: titleOf(row.productId), includes, inBundle, priceKurus: details?.priceKurus ?? null, discounted: Boolean(product?.priceData.discount),
         blocker: !product ? "missing" as const : courseProductBlocker(product) ?? (details ? null : "unpriced" as const),
         // Raw Shopier values for the edit form.
         product: product && isEditableProduct(product) ? {
@@ -118,7 +129,10 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
         } : null,
       };
     }),
-    recentSales: recent.map(sale => ({ ...sale, title: titleOf(sale.productId) })),
+    recentSales: recent.map(({ bundleId, ...sale }) => {
+      const bundle = bundleId && rows.find(row => row.id === bundleId);
+      return { ...sale, title: titleOf(sale.productId), bundle: bundle ? titleOf(bundle.productId) : null };
+    }),
   };
 }
 

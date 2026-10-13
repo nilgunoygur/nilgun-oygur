@@ -147,7 +147,8 @@ export async function previewPlayback(lessonId: string) {
     await requireOwner();
     const [row] = await getDatabase().select({ asset: videoAssets }).from(lessons).innerJoin(videoAssets, eq(lessons.videoAssetId, videoAssets.id)).where(eq(lessons.id, z.uuid().parse(lessonId)));
     if (row?.asset.status !== "ready" || !row.asset.signedPlaybackId) return { error: "Dosya henüz hazır değil." };
-    return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, ownerTokenExpiry()) };
+    const expiresAt = ownerTokenExpiry();
+    return { playbackId: row.asset.signedPlaybackId, tokens: playbackTokens(row.asset.signedPlaybackId, expiresAt), expiresAt };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 

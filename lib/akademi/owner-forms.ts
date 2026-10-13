@@ -23,7 +23,7 @@ const lira = (label: string) => number(label, 1, 10_000_000, "price").refine(val
 const cheaper = (value: { price?: number; discountedPrice?: number | null }) => value.discountedPrice == null || value.price === undefined || value.discountedPrice < value.price;
 const cheaperIssue = { message: "İndirimli fiyat normal fiyattan düşük olmalıdır.", path: ["discountedPrice"] };
 const productFields = {
-  title: z.string().trim().min(3, "Eğitim adı en az 3 karakter olmalıdır.").max(150, "Eğitim adı en fazla 150 karakter olabilir."),
+  title: z.string().trim().min(3, "Ad en az 3 karakter olmalıdır.").max(150, "Ad en fazla 150 karakter olabilir."),
   description: z.string().trim().max(20_000, "Açıklama en fazla 20.000 karakter olabilir."),
   price: lira("Fiyat"),
   discountedPrice: z.union([z.null(), z.literal("").transform(() => null), lira("İndirimli fiyat")]),
@@ -32,7 +32,9 @@ const productFields = {
 };
 export const productKeys = Object.keys(productFields) as (keyof typeof productFields)[];
 /** One form for create and edit; an edit ignores the course fields. */
-export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean(), includes: bundleCourseIds }).refine(cheaper, cheaperIssue);
+export const productFormSchema = z.object({ ...productFields, accessDays, publish: z.boolean(), packaged: z.boolean(), includes: bundleCourseIds }).refine(cheaper, cheaperIssue)
+  .refine(value => !value.packaged || value.includes.length > 0, { message: "Pakete en az bir eğitim ekleyin.", path: ["includes"] })
+  .transform(value => value.packaged ? value : { ...value, includes: [] });
 export const productChangeSchema = z.object(productFields).partial().refine(cheaper, cheaperIssue);
 const refundNote = z.string().trim().max(500, "Not en fazla 500 karakter olabilir.");
 export const refundDecisionSchema = z.discriminatedUnion("decision", [

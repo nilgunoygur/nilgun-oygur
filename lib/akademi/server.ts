@@ -4,7 +4,7 @@ import { config } from "@/lib/config";
 import { getDatabase } from "@/lib/db";
 import { getShopier } from "@/lib/shopier";
 import { createAkademi, type Akademi } from "./akademi";
-import { CATALOG_TAG, type CatalogCourse } from "./catalog";
+import { bundleCourses, CATALOG_TAG, fallbackCover, type CatalogCourse } from "./catalog";
 import type { RefundListParams } from "./owner-forms";
 
 // The server-only edge of the composition root: the env-built Akademi, and the cached catalog reads.
@@ -45,6 +45,12 @@ export async function courseCards(): Promise<Record<string, { title: string; ima
   cacheLife(catalogLife);
   if (!config().enabled.catalog) return {};
   try { return await akademi().catalog.cards(); } catch { return {}; }
+}
+
+/** Every course with its bundle links, titled from the cached catalog. */
+export async function ownerBundleCourses() {
+  const [list, cards] = await Promise.all([bundleCourses(getDatabase()), courseCards()]);
+  return list.map(course => ({ ...course, title: cards[course.productId]?.title ?? "Akademi eğitimi", image: cards[course.productId]?.image ?? fallbackCover }));
 }
 
 /** Titled from the cached catalog, not a Shopier call per request. */

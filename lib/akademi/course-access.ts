@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { alias, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { bundleItems, courseAccess, courses, lessonProgress, lessons, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { buyerEmail, productTotalKurus, type ShopierOrder } from "../shopier/api.ts";
 import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
@@ -86,7 +87,7 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
     await tx.update(shopierPurchases).set({ userId, claimedAt: now }).where(eq(shopierPurchases.id, purchase.id));
     const [current] = await tx.select().from(courseAccess)
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
-    const [approved] = current?.sourcePurchaseId ? await tx.select({ id: refundRequests.id }).from(refundRequests).where(and(eq(refundRequests.purchaseId, current.sourcePurchaseId), eq(refundRequests.status, "approved"))).limit(1) : [];
+    const [approved] = current ? await tx.select({ id: courseAccess.id }).from(courseAccess).where(and(eq(courseAccess.id, current.id), refundForGrant("approved"))) : [];
     const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(approved ? null : current, purchase.purchasedAt, purchase.accessDurationDays);
     // A partial refund revokes nothing, so progress is dropped here.
     if (approved) await forgetProgress(tx, userId, purchase.courseId);
@@ -162,7 +163,15 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   return outcome;
 }
 
-const refundForGrant = (...statuses: ("pending" | "approved")[]) => sql<boolean>`exists (select 1 from ${refundRequests} where ${refundRequests.purchaseId} = ${courseAccess.sourcePurchaseId} and ${inArray(refundRequests.status, statuses)})`;
+type PurchaseRef = { id: AnyPgColumn; shopierOrderId: AnyPgColumn; bundleId: AnyPgColumn };
+/** Purchases refunded together: the same one, or two courses of one bundle order. */
+export const sameRefundUnit = (a: PurchaseRef, b: PurchaseRef) => and(eq(a.shopierOrderId, b.shopierOrderId), or(eq(a.id, b.id), eq(a.bundleId, b.bundleId)));
+
+const asked = alias(shopierPurchases, "asked"), held = alias(shopierPurchases, "held");
+/** A request on any purchase of the grant's refund unit counts. */
+const refundForGrant = (...statuses: ("pending" | "approved")[]) => sql<boolean>`exists (select 1 from ${refundRequests}
+  join ${shopierPurchases} as ${asked} on ${eq(asked.id, refundRequests.purchaseId)} join ${shopierPurchases} as ${held} on ${eq(held.id, courseAccess.sourcePurchaseId)}
+  where ${inArray(refundRequests.status, statuses)} and ${sameRefundUnit(asked, held)})`;
 export type ActiveAccess = AccessGrant & { id: string; slug: string; shopierProductId: string; refundPending: boolean };
 
 /** Unexpired grants, soonest expiry first; approved refunds are omitted. */

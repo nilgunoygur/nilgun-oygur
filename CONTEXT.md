@@ -4,11 +4,13 @@
 
 **Sellable course**: a published course whose product is in stock, digital and priced in TRY above zero. Changing a course's status from the app sets its Shopier store visibility first (published is listed, anything else hidden), and the product editor cannot hide a published course. Repeating the status command repairs drift from edits made in Shopier. Decided only by the Catalog module.
 
-**Bundle** (paket): a course whose purchase grants its included courses instead of itself. It is an ordinary Shopier product (Shopier has no bundles) with its own price, page and access duration; the owner picks its contents under "Paket içeriği". One level only: a bundle never contains a bundle.
+**Bundle** (paket): a course whose purchase grants its included courses instead of itself. It is an ordinary Shopier product (Shopier has no bundles) with its own price, page and access duration; the owner picks its contents when creating it as a "Paket" or later under "Paket içeriği", and its management page lists those courses instead of a lesson editor. Lessons added to it before it became a bundle are kept but shown to nobody. One level only: a bundle never contains a bundle.
+
+**Owner preview**: the student's course page opened by the owner from the management panel, without a purchase. For a package it shows the courses a buyer receives, each opening its own preview. For a course it shows published lessons only, opens every lesson regardless of sequence, plays with owner tokens, saves no progress and opens no Zoom link.
 
 **Purchase**: one paid Shopier order line for a course, keyed by order and course, matched to a student by the buyer email. A bundle line becomes one purchase per included course, each remembering the bundle, lasting the bundle's access duration, with the line total split evenly between them.
 
-**Refund request**: a student's request to refund the purchase behind their current access to a course. The owner approves it (the site asks Shopier to refund an amount) or declines it with a note. A pending request suspends all course content. Rejection restores access; approval removes the course from the student, including partial payment refunds.
+**Refund request**: a student's request to refund the purchase behind their current access to a course. The owner approves it (the site asks Shopier to refund an amount) or declines it with a note. A pending request suspends all course content. Rejection restores access; approval removes the course from the student, including partial payment refunds. For a course bought in a bundle the request is about the whole bundle order: one request per order, it suspends and on approval removes every course of the bundle, and the owner sees the bundle and its full price.
 
 **Grant** (course access): a student's right to one course from `startsAt` until `expiresAt`, from a purchase or an audited owner grant. At most one unrevoked grant per student and course; a repeat purchase extends it.
 
