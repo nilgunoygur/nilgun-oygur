@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Eye } from "lucide-react";
+import { Eye, Package } from "lucide-react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ownerPage } from "@/lib/auth/viewer";
 import { getDatabase } from "@/lib/db";
@@ -10,7 +10,7 @@ import { akademi } from "@/lib/akademi/server";
 import { attachedVideos, videoConfigured } from "@/lib/video/mux";
 import { filesConfigured } from "@/lib/files/storage";
 import { CourseEditor } from "@/components/akademi/lesson-editor";
-import { PackagePanel } from "@/components/akademi/package-panel";
+import { PackageContentsButton, PackagePanel } from "@/components/akademi/package-panel";
 import { OwnerBackLink } from "@/components/akademi/owner-back-link";
 import { buttonVariants } from "@/components/ui/button";
 import { ownerSection, accountTitle, kicker, pageWidth } from "@/lib/styles";
@@ -40,8 +40,11 @@ async function Content({ params }: { params: Promise<{ slug: string }> }) {
   return <>
     <OwnerBackLink href="/yonetim/egitimler">Eğitimler ve satışlar</OwnerBackLink>
     <header className="mb-9 flex flex-wrap items-end justify-between gap-5">
-      <div><p className={kicker}>AKADEMİ YÖNETİMİ · {packaged ? "PAKET" : "DERS İÇERİKLERİ"}</p><h1 className={accountTitle}>{current?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">{packaged ? "Bu ürün bir paket: kendi dersi yoktur, içindeki eğitimleri birlikte satar. Adı, görseli ve fiyatı Shopier’den gelir." : "Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir."}</p></div>
-      {!packaged && <Link href={`/yonetim/egitimler/${course.slug}/onizleme`} className={buttonVariants({ variant: "outline", size: "pill" })}><Eye />Öğrenci gözüyle önizle</Link>}
+      <div><p className={kicker}>AKADEMİ YÖNETİMİ · {packaged ? "PAKET" : "DERS İÇERİKLERİ"}</p><h1 className={accountTitle}>{current?.title ?? "Akademi eğitimi"}</h1><p className="leading-relaxed text-stone">{packaged ? "Bu ürün bir paket: kendi dersi yoktur, içindeki eğitimleri birlikte satar. Satın alan öğrenci her eğitimi hesabında ayrı ayrı görür. Adı, görseli ve fiyatı Shopier’den gelir." : "Öğrencilerinizin göreceği dersleri burada hazırlayın. Eğitim adı, görseli ve fiyatı Shopier’den gelir."}</p></div>
+      <div className="flex flex-wrap gap-2">
+        {current && !packaged && !current.inBundle && <PackageContentsButton course={current} courses={courses}><Package />Pakete dönüştür</PackageContentsButton>}
+        <Link href={`/yonetim/egitimler/${course.slug}/onizleme`} className={buttonVariants({ variant: "outline", size: "pill" })}><Eye />Öğrenci gözüyle önizle</Link>
+      </div>
     </header>
     {packaged ? <>
       <PackagePanel course={current} courses={courses} />

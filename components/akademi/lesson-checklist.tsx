@@ -44,7 +44,7 @@ const kinds = {
   live: { label: "CANLI BULUŞMA", done: "Katıldım", locked: "", hint: "", again: "tekrar açabilirsiniz" },
 };
 
-export function LessonChecklist({ lessons, preview = false }: { lessons: Lesson[]; preview?: boolean }) {
+export function LessonChecklist({ lessons, preview = false, empty }: { lessons: Lesson[]; preview?: boolean; empty?: React.ReactNode }) {
   const [completed, setCompleted] = useState(() => new Set(lessons.filter(l => l.completedAt).map(l => l.id)));
   const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
@@ -78,7 +78,7 @@ export function LessonChecklist({ lessons, preview = false }: { lessons: Lesson[
       <div><p className="mb-2 text-[11px] font-semibold tracking-[1.6px] text-forest">HER ADIM SİZİNLE</p><h2 className="text-[28px]">{done === recorded.length && recorded.length ? "Bu yolculuğu tamamladınız." : "Kendi ritminizde ilerleyin."}</h2><p className="mt-2 text-sm text-stone">Bir dersi sonuna kadar izlediğinizde veya dinlediğinizde tamamlanır. Bir sonraki kayıtlı ders, önceki ders tamamlandığında açılır. Canlı Zoom buluşmalarını bu sıradan bağımsız açabilirsiniz.</p></div>
       <div className="w-full sm:w-52"><p className="mb-3 text-sm"><strong className="text-2xl text-forest">{done}</strong> / {recorded.length} kayıtlı ders tamamlandı</p><progress aria-label="Eğitim ilerlemesi" className="h-2 w-full overflow-hidden rounded-full accent-forest" max={Math.max(recorded.length, 1)} value={done} /></div>
     </div>
-    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" /><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
+    {lessons.length === 0 ? <div className="rounded-[24px] border border-dashed border-border p-12 text-center"><CirclePlay className="mx-auto mb-4 size-9 text-primary" />{empty ?? <><h2 className="text-2xl">Dersleriniz hazırlanıyor.</h2><p className="mt-3 text-stone">Erişiminiz aktif. Yayınlanan dersleri burada göreceksiniz.</p></>}</div> : <div className="grid gap-4">{lessons.map((lesson, index) => <LessonCard key={lesson.id} lesson={lesson} index={index} completed={completed.has(lesson.id)} prerequisite={prerequisites.get(lesson.id)?.title ?? null} open={selected === lesson.id && !prerequisites.get(lesson.id)} onOpen={() => setSelected(selected === lesson.id ? null : lesson.id)} onComplete={value => complete(lesson.id, value)} />)}</div>}
   </LessonCalls>;
 }
 

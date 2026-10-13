@@ -1,4 +1,5 @@
-import { and, desc, eq, gt, isNull, ilike, or, count } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, ilike, or, count, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { courseAccess, courses, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { containsPattern } from "../db/search.ts";
 import type { Database } from "../db/types.ts";
@@ -13,20 +14,38 @@ export type RefundNotification = { encryptionKey: string; siteUrl: string };
 
 type RefundRequestOutcome = "requested" | "no_purchase" | "already_pending" | "refunded";
 
-/** A request is about the purchase behind the student's current access to the course. */
-export async function requestRefund(db: Database, userId: string, courseId: string, reason: string, notification?: RefundNotification): Promise<RefundRequestOutcome> {
-  const [purchase] = await db.select({ id: shopierPurchases.id, orderId: shopierPurchases.shopierOrderId, amountKurus: shopierPurchases.amountKurus, currency: shopierPurchases.currency, course: courses.slug, name: user.name, email: user.email }).from(courseAccess)
+/** The purchases one request answers for: the purchase itself, or every course bought with it in the same bundle order. */
+const refundUnit = (purchase: { id: string; orderId: string; bundleId: string | null }) => purchase.bundleId
+  ? and(eq(shopierPurchases.shopierOrderId, purchase.orderId), eq(shopierPurchases.bundleId, purchase.bundleId)) : eq(shopierPurchases.id, purchase.id);
+const bundles = alias(courses, "bundles");
+
+/** The purchase behind the student's current access to the course. */
+async function currentPurchase(db: Database, userId: string, courseId: string) {
+  const [purchase] = await db.select({ id: shopierPurchases.id, orderId: shopierPurchases.shopierOrderId, bundleId: shopierPurchases.bundleId, currency: shopierPurchases.currency,
+    course: courses.slug, bundle: bundles.slug, bundleProductId: bundles.shopierProductId, name: user.name, email: user.email }).from(courseAccess)
     .innerJoin(shopierPurchases, eq(shopierPurchases.id, courseAccess.sourcePurchaseId)).innerJoin(courses, eq(courses.id, courseAccess.courseId)).innerJoin(user, eq(user.id, courseAccess.userId))
+    .leftJoin(bundles, eq(bundles.id, shopierPurchases.bundleId))
     .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
+  return purchase;
+}
+
+/** The bundle product the student's current access to this course was bought in, if any. */
+export const purchasedBundle = async (db: Database, userId: string, courseId: string) => (await currentPurchase(db, userId, courseId))?.bundleProductId ?? null;
+
+/** One request per purchase, or per bundle order: it then covers every course of the bundle. */
+export async function requestRefund(db: Database, userId: string, courseId: string, reason: string, notification?: RefundNotification): Promise<RefundRequestOutcome> {
+  const purchase = await currentPurchase(db, userId, courseId);
   if (!purchase) return "no_purchase";
   if (await hasFullRefund(db, purchase.orderId)) return "refunded";
+  const unit = await db.select({ id: shopierPurchases.id, amountKurus: shopierPurchases.amountKurus }).from(shopierPurchases).where(refundUnit(purchase));
   const id = crypto.randomUUID();
   // Rendered here so the transaction holds its row lock only for the writes.
-  const email = notification && { key: notification.encryptionKey, message: await refundRequestEmail({ requestId: id, name: purchase.name, email: purchase.email, course: purchase.course, orderId: purchase.orderId,
-    amount: formatMoney(purchase.amountKurus, purchase.currency), reason, siteUrl: notification.siteUrl.replace(/\/$/, "") }) };
+  const email = notification && { key: notification.encryptionKey, message: await refundRequestEmail({ requestId: id, name: purchase.name, email: purchase.email, course: purchase.bundle ?? purchase.course, orderId: purchase.orderId,
+    amount: formatMoney(unit.reduce((sum, item) => sum + item.amountKurus, 0), purchase.currency), reason, siteUrl: notification.siteUrl.replace(/\/$/, "") }) };
   return db.transaction(async tx => {
-    // Row lock: a repeat submission cannot race an owner approval.
-    const existing = await tx.select({ status: refundRequests.status }).from(refundRequests).where(and(eq(refundRequests.purchaseId, purchase.id), or(eq(refundRequests.status, "pending"), eq(refundRequests.status, "approved")))).for("update");
+    // Row locks, the purchases first: a repeat submission cannot race an owner approval or a request for another course of the bundle.
+    await tx.select({ id: shopierPurchases.id }).from(shopierPurchases).where(refundUnit(purchase)).for("update");
+    const existing = await tx.select({ status: refundRequests.status }).from(refundRequests).where(and(inArray(refundRequests.purchaseId, unit.map(item => item.id)), or(eq(refundRequests.status, "pending"), eq(refundRequests.status, "approved")))).for("update");
     if (existing.some(row => row.status === "approved")) return "refunded";
     if (existing.some(row => row.status === "pending")) return "already_pending";
     const [inserted] = await tx.insert(refundRequests).values({ id, purchaseId: purchase.id, userId, reason }).onConflictDoNothing().returning({ id: refundRequests.id });
@@ -39,16 +58,22 @@ export async function requestRefund(db: Database, userId: string, courseId: stri
 export async function latestRefundRequest(db: Database, userId: string, courseId: string) {
   const [current] = await db.select({ purchaseId: courseAccess.sourcePurchaseId }).from(courseAccess).where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, courseId), isNull(courseAccess.revokedAt))).limit(1);
   if (current && !current.purchaseId) return null;
+  const purchase = current && await currentPurchase(db, userId, courseId);
   const [request] = await db.select({ status: refundRequests.status, ownerNote: refundRequests.ownerNote }).from(refundRequests)
     .innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId))
-    .where(and(eq(refundRequests.userId, userId), eq(shopierPurchases.courseId, courseId), current?.purchaseId ? eq(refundRequests.purchaseId, current.purchaseId) : undefined)).orderBy(desc(refundRequests.createdAt)).limit(1);
+    .where(and(eq(refundRequests.userId, userId), purchase ? refundUnit(purchase) : eq(shopierPurchases.courseId, courseId))).orderBy(desc(refundRequests.createdAt)).limit(1);
   return request ?? null;
 }
 
+/** The product the student paid for: the bundle when the course came in one. */
+const soldProductId = sql<string>`coalesce(${bundles.shopierProductId}, ${courses.shopierProductId})`;
+/** What the request's purchases cost together. */
+const unitAmountKurus = sql<number>`(select sum(p.amount_kurus) from ${shopierPurchases} p where p.id = ${shopierPurchases.id} or (p.bundle_id = ${shopierPurchases.bundleId} and p.shopier_order_id = ${shopierPurchases.shopierOrderId}))::int`;
+
 /** Pending requests, and decided ones for `refundNoticeDays` after the decision. */
 export function studentRefundRequests(db: Database, userId: string, now: Date) {
-  return db.select({ id: refundRequests.id, courseId: courses.id, productId: courses.shopierProductId, orderId: shopierPurchases.shopierOrderId, status: refundRequests.status, ownerNote: refundRequests.ownerNote })
-    .from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId))
+  return db.select({ id: refundRequests.id, courseId: courses.id, productId: soldProductId, orderId: shopierPurchases.shopierOrderId, status: refundRequests.status, ownerNote: refundRequests.ownerNote })
+    .from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).leftJoin(bundles, eq(bundles.id, shopierPurchases.bundleId))
     .where(and(eq(refundRequests.userId, userId), or(eq(refundRequests.status, "pending"), gt(refundRequests.decidedAt, new Date(now.getTime() - refundNoticeDays * 86_400_000)))))
     .orderBy(desc(refundRequests.createdAt), desc(refundRequests.id)).limit(10);
 }
@@ -59,15 +84,15 @@ export async function listRefundRequests(db: Database, { status = "all", search 
   const pattern = containsPattern(search);
   const where = and(status !== "all" ? eq(refundRequests.status, status) : undefined, search ? or(ilike(user.name, pattern), ilike(user.email, pattern), ilike(shopierPurchases.shopierOrderId, pattern), ilike(courses.slug, pattern)) : undefined);
   const [items, [total], counts] = await Promise.all([
-    db.select({ id: refundRequests.id, orderId: shopierPurchases.shopierOrderId, courseId: courses.id, productId: courses.shopierProductId, course: courses.slug, name: user.name, email: user.email,
-      reason: refundRequests.reason, amountKurus: shopierPurchases.amountKurus, currency: shopierPurchases.currency, at: refundRequests.createdAt, status: refundRequests.status,
+    db.select({ id: refundRequests.id, orderId: shopierPurchases.shopierOrderId, courseId: courses.id, productId: soldProductId, course: sql<string>`coalesce(${bundles.slug}, ${courses.slug})`, bundled: isNotNull(shopierPurchases.bundleId), name: user.name, email: user.email,
+      reason: refundRequests.reason, amountKurus: unitAmountKurus, currency: shopierPurchases.currency, at: refundRequests.createdAt, status: refundRequests.status,
       refundAmountKurus: refundRequests.amountKurus, ownerNote: refundRequests.ownerNote, decidedAt: refundRequests.decidedAt, shopierRefundId: refundRequests.shopierRefundId, completed: shopierRefunds.id,
-    }).from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).innerJoin(user, eq(user.id, refundRequests.userId)).leftJoin(shopierRefunds, eq(shopierRefunds.id, refundRequests.shopierRefundId))
+    }).from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).innerJoin(user, eq(user.id, refundRequests.userId)).leftJoin(bundles, eq(bundles.id, shopierPurchases.bundleId)).leftJoin(shopierRefunds, eq(shopierRefunds.id, refundRequests.shopierRefundId))
       .where(where).orderBy(desc(refundRequests.createdAt), desc(refundRequests.id)).limit(refundPageSize).offset((page - 1) * refundPageSize),
     db.select({ value: count() }).from(refundRequests).innerJoin(shopierPurchases, eq(shopierPurchases.id, refundRequests.purchaseId)).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).innerJoin(user, eq(user.id, refundRequests.userId)).where(where),
     db.select({ status: refundRequests.status, value: count() }).from(refundRequests).groupBy(refundRequests.status),
   ]);
-  return { items: items.map(item => ({ ...item, at: item.at.toISOString(), decidedAt: item.decidedAt?.toISOString() ?? null, completed: Boolean(item.completed) })),
+  return { items: items.map(item => ({ ...item, bundled: Boolean(item.bundled), at: item.at.toISOString(), decidedAt: item.decidedAt?.toISOString() ?? null, completed: Boolean(item.completed) })),
     total: total.value, pages: Math.max(1, Math.ceil(total.value / refundPageSize)),
     counts: { pending: 0, approved: 0, declined: 0, ...Object.fromEntries(counts.map(row => [row.status, row.value])) } as Record<RefundStatus, number> };
 }

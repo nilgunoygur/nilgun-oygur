@@ -201,3 +201,68 @@ test("the refund management list preserves decision history, filters and paginat
   assert.ok(second.items.length > 0);
   assert.ok(second.items.every(row => !first.items.some(other => row.id === other.id)));
 });
+
+/** A student who bought a ₺300 bundle of three courses. */
+async function bundleFixture() {
+  const id = String(sequence++);
+  await db.insert(schema.user).values({ id, name: "Paket", email: `${id}@example.com`, emailVerified: true });
+  const [bundle, ...included] = await db.insert(schema.courses).values([0, 1, 2, 3].map(n => ({ slug: `bundle-${id}-${n}`, shopierProductId: `${id}${n}`, accessDurationDays: 30 }))).returning();
+  await db.insert(schema.bundleItems).values(included.map(course => ({ bundleId: bundle.id, courseId: course.id })));
+  const order = shopierOrderSchema.parse({ id: String(sequence++), paymentStatus: "paid", dateCreated: "2026-10-01T10:00:00+0300", currency: "TRY",
+    billingInfo: { email: `${id}@example.com` }, lineItems: [{ productId: `${id}0`, total: "300.00" }] });
+  await recordShopierOrder(db, order);
+  const now = new Date("2026-10-05T10:00:00+0300");
+  return { id, bundle, included, order, now, open: async () => (await Promise.all(included.map(course => activeGrant(db, id, course.id, now)))).filter(Boolean).length,
+    listed: async () => (await activeCourseAccess(db, id, now)).length };
+}
+
+test("a refund request for one course of a bundle covers the whole bundle", async () => {
+  const f = await bundleFixture(), { akademi } = shop();
+  const [a, b, c] = f.included;
+  assert.equal(await f.open(), 3);
+  assert.equal(await akademi.access.purchasedBundle(f.id, a.id), f.bundle.shopierProductId);
+  assert.equal(await akademi.access.requestRefund(f.id, a.id, "Paketi iade etmek istiyorum."), "requested");
+  assert.equal(await akademi.access.requestRefund(f.id, b.id, "Diğer eğitim için de."), "already_pending", "one request per bundle order");
+  assert.equal(await f.open(), 0, "every course of the bundle is closed while the request is pending");
+  assert.equal(await f.listed(), 3);
+  assert.ok((await activeCourseAccess(db, f.id, f.now)).every(item => item.refundPending));
+  for (const course of f.included) assert.equal((await akademi.access.refundRequest(f.id, course.id)).status, "pending", "each course page shows the request");
+  const [listed] = (await akademi.owner.refundRequests({ status: "pending", search: f.order.id })).items;
+  assert.deepEqual([listed.bundled, listed.amountKurus, listed.productId, listed.course], [true, 30000, f.bundle.shopierProductId, f.bundle.slug], "the owner sees the bundle and what was paid for it");
+
+  // Declined: all three open again.
+  await akademi.owner.decideRefundRequest("owner", listed.id, { approve: false, note: "Süre doldu." });
+  assert.equal(await f.open(), 3);
+  assert.equal((await akademi.access.refundRequest(f.id, c.id)).status, "declined");
+});
+
+test("approving a bundle refund removes every course, also when Shopier treats it as partial", async () => {
+  const f = await bundleFixture(), { akademi, sent } = shop();
+  await akademi.access.requestRefund(f.id, f.included[0].id, "İade.");
+  const [request] = (await akademi.owner.refundRequests({ status: "pending", search: f.order.id })).items;
+  await assert.rejects(() => akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 30001, note: "" }), OwnerInputError);
+  await akademi.owner.decideRefundRequest("owner", request.id, { approve: true, amountKurus: 30000, note: "" });
+  assert.deepEqual(sent.map(item => item.amountKurus), [30000]);
+  assert.equal(await f.open(), 0);
+  assert.equal(await f.listed(), 0, "the bundle's courses leave the student's list");
+  assert.equal(await akademi.access.requestRefund(f.id, f.included[2].id, "Yine."), "refunded");
+
+  // Buying one of the courses again alone starts fresh and leaves the other two closed.
+  const again = shopierOrderSchema.parse({ id: String(sequence++), paymentStatus: "paid", dateCreated: "2026-10-04T12:00:00+0300", currency: "TRY",
+    billingInfo: { email: `${f.id}@example.com` }, lineItems: [{ productId: f.included[0].shopierProductId, total: "100.00" }] });
+  await recordShopierOrder(db, again);
+  assert.equal(await f.open(), 1);
+  const grant = await activeGrant(db, f.id, f.included[0].id, f.now);
+  assert.equal(grant.startsAt.toISOString(), again.dateCreated.toISOString(), "the refunded bundle's days are not carried over");
+});
+
+test("a course bought alone is untouched by a refund request on a bundle that does not contain its purchase", async () => {
+  const f = await bundleFixture(), { akademi } = shop();
+  const [course] = await db.insert(schema.courses).values({ slug: `single-${f.id}`, shopierProductId: `${f.id}9`, accessDurationDays: 30 }).returning();
+  const single = { course };
+  await recordShopierOrder(db, shopierOrderSchema.parse({ id: String(sequence++), paymentStatus: "paid", dateCreated: "2026-10-02T10:00:00+0300", currency: "TRY",
+    billingInfo: { email: `${f.id}@example.com` }, lineItems: [{ productId: `${f.id}9`, total: "100.00" }] }));
+  await akademi.access.requestRefund(f.id, f.included[0].id, "Paket.");
+  assert.ok(await activeGrant(db, f.id, single.course.id, f.now), "only the bundle is suspended");
+  assert.equal(await akademi.access.refundRequest(f.id, single.course.id), null);
+});

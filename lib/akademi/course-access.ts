@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql, type SQLWrapper } from "drizzle-orm";
 import { bundleItems, courseAccess, courses, lessonProgress, lessons, refundRequests, shopierPurchases, shopierRefunds, user } from "../db/schema.ts";
 import { buyerEmail, productTotalKurus, type ShopierOrder } from "../shopier/api.ts";
 import { hasActiveAccess, purchaseWindow, type AccessGrant } from "./access-policy.ts";
@@ -86,7 +86,7 @@ export async function claimPurchase(db: Database, purchaseId: string, userId: st
     await tx.update(shopierPurchases).set({ userId, claimedAt: now }).where(eq(shopierPurchases.id, purchase.id));
     const [current] = await tx.select().from(courseAccess)
       .where(and(eq(courseAccess.userId, userId), eq(courseAccess.courseId, purchase.courseId), isNull(courseAccess.revokedAt)));
-    const [approved] = current?.sourcePurchaseId ? await tx.select({ id: refundRequests.id }).from(refundRequests).where(and(eq(refundRequests.purchaseId, current.sourcePurchaseId), eq(refundRequests.status, "approved"))).limit(1) : [];
+    const [approved] = current?.sourcePurchaseId ? await tx.select({ id: courseAccess.id }).from(courseAccess).where(and(eq(courseAccess.id, current.id), refundRequested(courseAccess.sourcePurchaseId, "approved"))) : [];
     const { extendsPrevious, startsAt, expiresAt } = purchaseWindow(approved ? null : current, purchase.purchasedAt, purchase.accessDurationDays);
     // A partial refund revokes nothing, so progress is dropped here.
     if (approved) await forgetProgress(tx, userId, purchase.courseId);
@@ -162,7 +162,12 @@ export async function claimShopierOrder(db: Database, order: ShopierOrder | null
   return outcome;
 }
 
-const refundForGrant = (...statuses: ("pending" | "approved")[]) => sql<boolean>`exists (select 1 from ${refundRequests} where ${refundRequests.purchaseId} = ${courseAccess.sourcePurchaseId} and ${inArray(refundRequests.status, statuses)})`;
+type OpenRefund = "pending" | "approved";
+/** Whether a refund request covers this purchase: its own, or one for any course bought in the same bundle order. */
+export const refundRequested = (purchaseId: SQLWrapper | string, ...statuses: OpenRefund[]) => sql<boolean>`exists (select 1 from ${refundRequests}
+  join ${shopierPurchases} asked on asked.id = ${refundRequests.purchaseId} join ${shopierPurchases} held on held.id = ${purchaseId}
+  where ${inArray(refundRequests.status, statuses)} and (asked.id = held.id or (asked.bundle_id = held.bundle_id and asked.shopier_order_id = held.shopier_order_id)))`;
+const refundForGrant = (...statuses: OpenRefund[]) => refundRequested(courseAccess.sourcePurchaseId, ...statuses);
 export type ActiveAccess = AccessGrant & { id: string; slug: string; shopierProductId: string; refundPending: boolean };
 
 /** Unexpired grants, soonest expiry first; approved refunds are omitted. */

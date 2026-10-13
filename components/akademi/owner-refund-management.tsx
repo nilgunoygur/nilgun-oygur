@@ -54,7 +54,7 @@ export function OwnerRefundManagement({ initialData }: { initialData: OwnerRefun
         <TableHeader><TableRow><TableHead className="w-[42%] pl-5 sm:w-[24%]">Öğrenci</TableHead><TableHead className="hidden sm:table-cell sm:w-[30%]">Eğitim</TableHead><TableHead className="w-[23%] text-right sm:w-[12%]">Tutar</TableHead><TableHead className="hidden sm:table-cell sm:w-[20%]">Durum</TableHead><TableHead className="w-[35%] pr-5 text-right sm:w-[14%]"><span className="sr-only">İşlem</span></TableHead></TableRow></TableHeader>
         <TableBody>{data.items.map(row => <TableRow key={row.id}>
           <TableCell className="py-4 pl-5"><p className="truncate font-medium">{row.name}</p><p className="mt-1 truncate font-mono text-xs text-muted-foreground">#{row.orderId}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground sm:hidden">{row.course}</p><p className="mt-2 text-xs text-muted-foreground sm:hidden">{statusLabel(row)}</p></TableCell>
-          <TableCell className="hidden py-4 sm:table-cell"><p className="line-clamp-2 whitespace-normal font-medium">{row.course}</p></TableCell>
+          <TableCell className="hidden py-4 sm:table-cell"><p className="line-clamp-2 whitespace-normal font-medium">{row.course}</p>{row.bundled && <Badge variant="secondary" className="mt-1">Paket</Badge>}</TableCell>
           <TableCell className="text-right tabular-nums">{formatMoney(row.refundAmountKurus ?? row.amountKurus, row.currency)}</TableCell>
           <TableCell className="hidden sm:table-cell"><Badge variant={row.status === "pending" ? "outline" : "secondary"}>{statusLabel(row)}</Badge></TableCell>
           <TableCell className="pr-5 text-right"><Button variant="outline" size="sm" onClick={() => { setSelected(row); setDecision(null); }} aria-label={`${row.name} için iade talebini incele`}>İncele</Button></TableCell>
@@ -67,7 +67,7 @@ export function OwnerRefundManagement({ initialData }: { initialData: OwnerRefun
         <DialogHeader className="pr-8"><DialogTitle className="leading-snug tracking-normal">{decision === "approve" ? "İadeyi onayla" : decision === "decline" ? "Talebi reddet" : "İade talebi"}</DialogTitle><DialogDescription>{selected && `${selected.name} · Sipariş #${selected.orderId}`}</DialogDescription></DialogHeader>
         {selected && <>
           {!decision && <><dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-            <div className="col-span-2"><dt className="text-xs text-muted-foreground">Eğitim</dt><dd className="mt-1"><Link href={`/yonetim/egitimler/${selected.courseId}`} className="font-medium hover:underline">{selected.course}</Link></dd></div>
+            <div className="col-span-2"><dt className="text-xs text-muted-foreground">{selected.bundled ? "Paket" : "Eğitim"}</dt><dd className="mt-1"><Link href={`/yonetim/egitimler/${selected.courseId}`} className="font-medium hover:underline">{selected.course}</Link>{selected.bundled && <p className="mt-1 text-xs text-muted-foreground">Talep paketteki tüm eğitimleri kapsar; hepsinin dersleri şu anda kapalı.</p>}</dd></div>
             <div className="col-span-2"><dt className="text-xs text-muted-foreground">E-posta</dt><dd className="mt-1 break-all">{selected.email}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Ödenen tutar</dt><dd className="mt-1">{formatMoney(selected.amountKurus, selected.currency)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Talep tarihi</dt><dd className="mt-1">{dateTimeLabel.format(new Date(selected.at))}</dd></div>

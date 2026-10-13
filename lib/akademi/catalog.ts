@@ -95,7 +95,7 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
       id: courses.id, slug: courses.slug, productId: courses.shopierProductId, status: courses.status, accessDurationDays: courses.accessDurationDays,
       sales: count(shopierPurchases.id), claimed: sql<number>`count(${shopierPurchases.userId})::int`,
     }).from(courses).leftJoin(shopierPurchases, eq(shopierPurchases.courseId, courses.id)).groupBy(courses.id).orderBy(desc(courses.createdAt)),
-    db.select({ id: shopierPurchases.id, order: shopierPurchases.shopierOrderId, productId: courses.shopierProductId, email: shopierPurchases.buyerEmail, amount: shopierPurchases.amountKurus, at: shopierPurchases.purchasedAt, claimed: isNotNull(shopierPurchases.userId) })
+    db.select({ id: shopierPurchases.id, order: shopierPurchases.shopierOrderId, productId: courses.shopierProductId, bundleId: shopierPurchases.bundleId, email: shopierPurchases.buyerEmail, amount: shopierPurchases.amountKurus, at: shopierPurchases.purchasedAt, claimed: isNotNull(shopierPurchases.userId) })
       .from(shopierPurchases).innerJoin(courses, eq(courses.id, shopierPurchases.courseId)).orderBy(desc(shopierPurchases.purchasedAt)).limit(25),
     db.select().from(bundleItems),
     db.select({ bundleId: shopierPurchases.bundleId, orders: countDistinct(shopierPurchases.shopierOrderId) }).from(shopierPurchases).where(isNotNull(shopierPurchases.bundleId)).groupBy(shopierPurchases.bundleId),
@@ -118,7 +118,10 @@ export async function ownerCatalog(db: Database, products: ShopierProduct[]) {
         } : null,
       };
     }),
-    recentSales: recent.map(sale => ({ ...sale, title: titleOf(sale.productId) })),
+    recentSales: recent.map(({ bundleId, ...sale }) => {
+      const bundle = bundleId && rows.find(row => row.id === bundleId);
+      return { ...sale, title: titleOf(sale.productId), bundle: bundle ? titleOf(bundle.productId) : null };
+    }),
   };
 }
 

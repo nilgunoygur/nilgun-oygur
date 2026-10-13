@@ -7,7 +7,7 @@ import { requestRefund } from "@/app/akademi/hesabim/actions";
 import { refundRequestSchema } from "@/lib/akademi/claim-schema";
 import { FormShell, SubmitButton, submitAction, TextareaField } from "./form-fields";
 
-export function RefundRequestForm({ courseId }: { courseId: string }) {
+export function RefundRequestForm({ courseId, bundle }: { courseId: string; bundle?: string }) {
   const form = useForm({ resolver: zodResolver(refundRequestSchema), mode: "onTouched", defaultValues: { reason: "" } });
   const client = useQueryClient();
   // No success state: the action's refresh replaces this form, and the header menu picks up the new notice.
@@ -17,7 +17,8 @@ export function RefundRequestForm({ courseId }: { courseId: string }) {
 
   return <FormShell form={form} onSubmit={submit}>
     <TextareaField control={form.control} name="reason" label="İade nedeniniz" rows={4} maxLength={1000}
-      description="Talebi gönderdiğinizde tüm derslere erişiminiz durdurulur. Talep reddedilirse erişiminiz yeniden açılır; onaylanırsa eğitim hesabınızdan kaldırılır ve ödemeniz Shopier üzerinden iade edilir." />
+      description={bundle ? `Bu eğitimi “${bundle}” ile aldınız; iade talebi paketteki tüm eğitimleri kapsar. Talebi gönderdiğinizde hepsinin derslerine erişiminiz durdurulur. Talep reddedilirse erişiminiz yeniden açılır; onaylanırsa paketteki eğitimler hesabınızdan kaldırılır ve ödemeniz Shopier üzerinden iade edilir.`
+        : "Talebi gönderdiğinizde tüm derslere erişiminiz durdurulur. Talep reddedilirse erişiminiz yeniden açılır; onaylanırsa eğitim hesabınızdan kaldırılır ve ödemeniz Shopier üzerinden iade edilir."} />
     <div><SubmitButton variant="outline" pendingLabel="Gönderiliyor…">İade talebi gönder</SubmitButton></div>
   </FormShell>;
 }

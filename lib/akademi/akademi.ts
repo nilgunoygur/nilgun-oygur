@@ -11,7 +11,7 @@ import { consumeAttempt } from "./rate-limit.ts";
 import { studentContact } from "./student-contact.ts";
 import { partialRefundReviews, recordNewShopierRefunds, recordShopierRefund } from "./refunds.ts";
 import type { RefundListParams } from "./owner-forms.ts";
-import { latestRefundRequest, pendingRefundCount, requestRefund, listRefundRequests, studentRefundRequests, type RefundNotification } from "./refund-requests.ts";
+import { latestRefundRequest, pendingRefundCount, purchasedBundle, requestRefund, listRefundRequests, studentRefundRequests, type RefundNotification } from "./refund-requests.ts";
 
 type Dependencies = {
   db: Database;
@@ -49,6 +49,7 @@ export function createAkademi({ db, shopier, refundNotification, now = () => new
         return requestRefund(db, userId, courseId, reason, refundNotification);
       },
       refundRequest: (userId: string, courseId: string) => latestRefundRequest(db, userId, courseId),
+      purchasedBundle: (userId: string, courseId: string) => purchasedBundle(db, userId, courseId),
       /** The newest request per course; an approved one is dropped once the course is bought again, and only a decided one can be dismissed. */
       async refundNotices(userId: string) {
         const requests = await studentRefundRequests(db, userId, now());
