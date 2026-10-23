@@ -77,7 +77,8 @@ export const updateOwnerProduct = (courseId: string, changes: Partial<ProductVal
 export const createOwnerCourse = (course: ProductValues, image: File | null) => ownerFetch("/api/yonetim/courses", { method: "POST", body: withCover(course, image) }, "Eğitim oluşturulamadı.");
 export const decideOwnerRefundRequest = (requestId: string, decision: RefundDecisionInput) => ownerFetch(`/api/yonetim/refund-requests/${requestId}`,
   { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(decision) }, "İade talebi sonuçlandırılamadı.");
-export const syncOwnerCatalog = () => ownerFetch("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.");
+/** How many courses were deleted because their Shopier product is gone. */
+export const syncOwnerCatalog = async () => z.object({ deleted: z.number() }).parse(await (await ownerFetch("/api/yonetim/courses/sync", { method: "POST" }, "Shopier eşitlemesi başarısız oldu.")).json());
 
 export function ownerCatalogQueryOptions(initialData: OwnerCatalogSnapshot) {
   return queryOptions({

@@ -1,9 +1,10 @@
-import { and, asc, count, countDistinct, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { bundleItems, courses, shopierPurchases } from "../db/schema.ts";
+import { and, asc, count, countDistinct, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { bundleItems, courseAccess, courses, lessons, modules, shopierPurchases } from "../db/schema.ts";
 import type { Database } from "../db/types.ts";
 import { courseProductBlocker, isCourseProduct, isEditableProduct, parsePriceKurus, productDetails, type ShopierProduct } from "../shopier/api.ts";
 import { descriptionHtml, descriptionMarkup, descriptionText } from "../shopier/description.ts";
 import { normalizeSlug } from "../route-slug.ts";
+import { removeLessons } from "./lesson-editor.ts";
 import { courseSlug } from "./slug.ts";
 
 // Catalog: the only module that decides what a sellable course is. Shopier owns title, description, image
@@ -12,7 +13,7 @@ import { courseSlug } from "./slug.ts";
 /** Cache tag for everything the public catalog shows. Invalidate it whenever products or courses change. */
 export const CATALOG_TAG = "akademi-catalog";
 
-export type ProductSource = { listProducts(): Promise<{ products: ShopierProduct[]; ids: Set<string> }> };
+export type ProductSource = { listProducts(): Promise<{ products: ShopierProduct[]; ids: Set<string> }>; getProduct(id: string): Promise<ShopierProduct | null> };
 
 export const fallbackCover = "/images/akademi/academy-art-v1.png";
 
@@ -152,14 +153,42 @@ export async function applyShopierProduct(db: Database, product: ShopierProduct)
   return isCourseProduct(product) && await linkCourse(db, product) ? "added" : "ignored";
 }
 
-/** Links new course products and archives courses whose product is gone; owner-archived courses stay archived. */
+/** Why a course must stay: its purchases and students keep it as their record, and a bundle keeps the courses it sells. */
+export async function deletionBlocker(db: Database, courseId: string) {
+  const [sold] = await db.select({ id: shopierPurchases.id }).from(shopierPurchases).where(or(eq(shopierPurchases.courseId, courseId), eq(shopierPurchases.bundleId, courseId))).limit(1);
+  const [granted] = await db.select({ id: courseAccess.id }).from(courseAccess).where(eq(courseAccess.courseId, courseId)).limit(1);
+  if (sold || granted) return "sold" as const;
+  const [bundled] = await db.select({ id: bundleItems.bundleId }).from(bundleItems).where(eq(bundleItems.courseId, courseId)).limit(1);
+  return bundled ? "bundled" as const : null;
+}
+
+/** Deletes a course with its lessons and modules; returns the removed PDFs' pathnames. Check `deletionBlocker` in the same transaction first. */
+export async function removeCourse(tx: Database, courseId: string) {
+  const files = await removeLessons(tx, eq(lessons.courseId, courseId));
+  await tx.delete(modules).where(eq(modules.courseId, courseId));
+  await tx.delete(bundleItems).where(eq(bundleItems.bundleId, courseId));
+  await tx.delete(courses).where(eq(courses.id, courseId));
+  return files;
+}
+
+/** Links new course products. A course whose product is gone is deleted when nothing keeps it, otherwise archived; owner-archived courses stay archived. */
 export async function syncCatalogFromShopier(db: Database, shopier: ProductSource) {
   const { products, ids } = await shopier.listProducts();
-  const linked = await db.select({ id: courses.id, productId: courses.shopierProductId, status: courses.status }).from(courses);
+  const linked = await db.select({ id: courses.id, slug: courses.slug, productId: courses.shopierProductId, status: courses.status }).from(courses);
   const known = new Set(linked.map(course => course.productId));
-  const result = { added: 0, archived: 0 };
+  const result = { added: 0, archived: 0, deleted: [] as string[], files: [] as string[] };
   for (const course of linked) {
-    if (course.status === "archived" || ids.has(course.productId)) continue;
+    if (ids.has(course.productId)) continue;
+    if (!await deletionBlocker(db, course.id)) {
+      // Shopier sends no delete event. Each product is confirmed gone on its own, so a short list never deletes a course.
+      if (await shopier.getProduct(course.productId)) continue;
+      const files = await db.transaction(async (tx) => {
+        const [current] = await tx.select({ id: courses.id }).from(courses).where(eq(courses.id, course.id)).for("update");
+        return current && !await deletionBlocker(tx, course.id) ? removeCourse(tx, course.id) : null;
+      });
+      if (files) { result.deleted.push(course.slug); result.files.push(...files); continue; }
+    }
+    if (course.status === "archived") continue;
     await db.update(courses).set({ status: "archived" }).where(eq(courses.id, course.id));
     result.archived++;
   }

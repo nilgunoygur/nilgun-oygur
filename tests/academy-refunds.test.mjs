@@ -197,7 +197,7 @@ test("reconciliation handles recent refunds of old orders; claims fail closed wh
   const f = await fixture(), oldOrder = f.order();
   await recordShopierOrder(db, oldOrder);
   const returned = refund(oldOrder);
-  const shopier = { listSucceededRefunds: async () => [returned], listOrdersSince: async () => [], listProducts: async () => ({ products: [], ids: new Set([f.course.shopierProductId]) }) };
+  const shopier = { listSucceededRefunds: async () => [returned], listOrdersSince: async () => [], listProducts: async () => ({ products: [], ids: new Set([f.course.shopierProductId]) }), getProduct: async () => null };
   const akademi = createAkademi({ db, shopier });
   assert.equal((await akademi.access.replayRecentOrders()).refunds, 1);
   assert.equal(await f.current(), undefined);

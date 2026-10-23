@@ -58,7 +58,7 @@ export function OwnerCourseManagement({ initialData, filesConfigured }: { initia
     onSettled: invalidate,
   });
   const savingId = update.isPending ? update.variables.course.id : null;
-  const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: () => toast.success("Shopier ürünleri eşitlendi."), onSettled: invalidate });
+  const sync = useMutation({ mutationFn: syncOwnerCatalog, onSuccess: ({ deleted }) => toast.success(deleted ? `Shopier ürünleri eşitlendi. Shopier’de silinen ${deleted} eğitim siteden de kaldırıldı.` : "Shopier ürünleri eşitlendi."), onSettled: invalidate });
 
   const courses = data.courses;
   const published = courses.filter(item => item.status === "published").length;
