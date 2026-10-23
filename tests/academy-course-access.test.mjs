@@ -152,7 +152,7 @@ test("webhooks must be signed, are applied once, and failures are retried", asyn
   assert.ok(!failed.errorDetails.includes("c@example.com"));
 });
 
-test("the Shopier product API is the catalog: link course products, archive deleted ones", async () => {
+test("the Shopier product API is the catalog: link course products, archive sold ones whose product is deleted", async () => {
   const { parsePriceKurus, productDetails, isCourseProduct, shopierProductSchema: schemaOf } = await import("../lib/shopier/api.ts");
   assert.equal(parsePriceKurus("950"), 95000);
   assert.equal(parsePriceKurus("2.490,50"), 249050);
@@ -173,19 +173,54 @@ test("the Shopier product API is the catalog: link course products, archive dele
     product({ id: "60000003", title: "Gizli", customListing: true }),
     product({ id: "60000004", title: "Tükendi", stockStatus: "outOfStock" }),
   ];
-  const source = (products, extraIds = []) => ({ listProducts: async () => ({ products, ids: new Set([...products.map(p => p.id), ...extraIds]) }) });
-  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 2, archived: 1 });
+  const source = (products, extraIds = []) => ({
+    listProducts: async () => ({ products, ids: new Set([...products.map(p => p.id), ...extraIds]) }),
+    getProduct: async () => null,
+  });
+  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 2, archived: 1, deleted: [], files: [] });
   const bySlug = Object.fromEntries((await db.select().from(schema.courses)).map(c => [c.slug, c]));
   assert.equal(bySlug["yeni-kurs"].status, "published");
   assert.equal(bySlug["yeni-kurs"].shopierProductId, "60000001");
   assert.equal(bySlug["gizli"].status, "draft", "a product hidden from the Shopier store waits for the owner to publish it");
-  assert.equal(bySlug["diger"].status, "archived");
+  assert.equal(bySlug["diger"].status, "archived", "a sold course stays as the record of its purchases");
   for (const slug of ["kitap", "tukendi"]) assert.equal(bySlug[slug], undefined);
-  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 0, archived: 0 });
+  assert.deepEqual(await syncCatalogFromShopier(db, source(catalog)), { added: 0, archived: 0, deleted: [], files: [] });
   // A product that fails validation still counts as existing, and a failed list call archives nothing.
   assert.equal((await syncCatalogFromShopier(db, source([], ["51075042", "60000001", "60000003"]))).archived, 0);
   await assert.rejects(() => syncCatalogFromShopier(db, { listProducts: async () => { throw new Error("503"); } }));
   assert.equal((await db.select().from(schema.courses).where(eq(schema.courses.slug, "yeni-kurs")))[0].status, "published");
+});
+
+test("a course whose Shopier product is deleted goes with it once Shopier confirms, unless a bundle keeps it", async () => {
+  const [gone, bundled, pack, unlisted] = await db.insert(schema.courses).values([
+    { slug: "silinen", shopierProductId: "61000001" },
+    { slug: "paketteki", shopierProductId: "61000002" },
+    { slug: "paket-x", shopierProductId: "61000003" },
+    { slug: "listede-yok", shopierProductId: "61000004" },
+  ]).returning();
+  const [section] = await db.insert(schema.modules).values({ courseId: gone.id, title: "Program" }).returning();
+  const [lesson] = await db.insert(schema.lessons).values({ courseId: gone.id, moduleId: section.id, slug: "ders", title: "Ders", kind: "live" }).returning();
+  await db.insert(schema.lessonFiles).values({ lessonId: lesson.id, name: "odev.pdf", pathname: "lessons/silinen.pdf", mime: "application/pdf", sizeBytes: 10 });
+  await db.insert(schema.bundleItems).values({ bundleId: pack.id, courseId: bundled.id });
+  const asked = [];
+  const shopier = {
+    listProducts: async () => ({ products: [], ids: new Set(["51075042", "60000001", "60000003", "61000003"]) }),
+    // 61000004 is missing from a short list but Shopier still has it.
+    getProduct: async (id) => { asked.push(id); return id === "61000004" ? { id } : null; },
+  };
+
+  assert.deepEqual(await syncCatalogFromShopier(db, shopier), { added: 0, archived: 1, deleted: ["silinen"], files: ["lessons/silinen.pdf"] });
+  assert.deepEqual(asked.sort(), ["61000001", "61000004"], "only a course that could be deleted is confirmed with Shopier");
+  const bySlug = Object.fromEntries((await db.select().from(schema.courses)).map(c => [c.slug, c]));
+  assert.equal(bySlug["silinen"], undefined);
+  assert.equal((await db.select().from(schema.lessons).where(eq(schema.lessons.courseId, gone.id))).length, 0);
+  assert.equal((await db.select().from(schema.modules).where(eq(schema.modules.courseId, gone.id))).length, 0);
+  assert.equal(bySlug["paketteki"].status, "archived", "a bundle still sells it");
+  assert.equal(bySlug["listede-yok"].status, "published");
+  assert.equal(bySlug["diger"].status, "archived");
+
+  await db.delete(schema.bundleItems).where(eq(schema.bundleItems.bundleId, pack.id));
+  for (const course of [bundled, pack, unlisted]) await db.delete(schema.courses).where(eq(schema.courses.id, course.id));
 });
 
 test("product webhooks link new course products and flag changes for cache refresh", async () => {

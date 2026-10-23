@@ -1,10 +1,9 @@
 import { and, eq, inArray, or } from "drizzle-orm";
-import { adminAuditLog, bundleItems, courseAccess, courses, lessons, modules, refundRequests, shopierPurchases } from "../db/schema.ts";
+import { adminAuditLog, bundleItems, courses, refundRequests, shopierPurchases } from "../db/schema.ts";
 import { audited } from "../db/audit.ts";
 import type { Database } from "../db/types.ts";
 import { isEditableProduct, ShopierError, toKurus, type NewProduct, type ProductChanges, type ShopierClient } from "../shopier/api.ts";
-import { linkCourse } from "./catalog.ts";
-import { removeLessons } from "./lesson-editor.ts";
+import { deletionBlocker, linkCourse, removeCourse } from "./catalog.ts";
 import { formatMoney } from "./format.ts";
 import { refundableKurus } from "./refunds.ts";
 
@@ -63,21 +62,15 @@ export async function deleteCourse(db: Database, actorId: string, courseId: stri
   const check = async (tx: Database) => {
     const [current] = await tx.select({ status: courses.status }).from(courses).where(eq(courses.id, courseId)).for("update");
     if (current?.status !== "archived") throw new OwnerInputError("Yalnızca arşivdeki eğitimler silinebilir.");
-    const [sold] = await tx.select({ id: shopierPurchases.id }).from(shopierPurchases).where(or(eq(shopierPurchases.courseId, courseId), eq(shopierPurchases.bundleId, courseId))).limit(1);
-    const [granted] = await tx.select({ id: courseAccess.id }).from(courseAccess).where(eq(courseAccess.courseId, courseId)).limit(1);
-    if (sold || granted) throw new OwnerInputError("Satışı veya öğrencisi olan eğitim silinemez; kayıtları korunması için arşivde kalır.");
-    const [bundled] = await tx.select({ id: bundleItems.bundleId }).from(bundleItems).where(eq(bundleItems.courseId, courseId)).limit(1);
-    if (bundled) throw new OwnerInputError("Bu eğitim bir paketin içinde. Önce paket içeriğinden çıkarın.");
+    const blocker = await deletionBlocker(tx, courseId);
+    if (blocker) throw new OwnerInputError(blocker === "sold" ? "Satışı veya öğrencisi olan eğitim silinemez; kayıtları korunması için arşivde kalır." : "Bu eğitim bir paketin içinde. Önce paket içeriğinden çıkarın.");
   };
   await check(db);
   // Shopier first: a product left there would be linked again by the next sync.
   await withShopier(db, actorId, { resourceType: "course", resourceId: courseId }, "course.product_delete", `ürün ${course.shopierProductId} silinsin`, () => shopier.deleteProduct(course.shopierProductId));
   return db.transaction(async (tx) => {
     await check(tx);
-    const files = await removeLessons(tx, eq(lessons.courseId, courseId));
-    await tx.delete(modules).where(eq(modules.courseId, courseId));
-    await tx.delete(bundleItems).where(eq(bundleItems.bundleId, courseId));
-    await tx.delete(courses).where(eq(courses.id, courseId));
+    const files = await removeCourse(tx, courseId);
     await tx.insert(adminAuditLog).values({ actorId, action: "course.delete", resourceType: "course", resourceId: courseId, reason: `“${course.slug}” eğitimi silindi (Shopier ürünü ${course.shopierProductId})` });
     return files;
   });
@@ -166,9 +159,10 @@ export async function decideRefundRequest(db: Database, actorId: string, request
 }
 
 /** Runs the catalog sync, then records who asked for it. */
-export function syncCatalogAsOwner(db: Database, actorId: string, sync: () => Promise<{ added: number; archived: number }>) {
+export function syncCatalogAsOwner<T extends { added: number; archived: number; deleted: string[] }>(db: Database, actorId: string, sync: () => Promise<T>) {
   return sync().then(async (result) => {
-    await audited(db, actorId, { action: "catalog.sync", resourceType: "catalog", resourceId: "shopier", reason: `Shopier ile eşitlendi (+${result.added}, arşiv ${result.archived})` }, async () => true);
+    const deleted = result.deleted.length ? `, silinen ${result.deleted.length}: ${result.deleted.join(", ")}` : "";
+    await audited(db, actorId, { action: "catalog.sync", resourceType: "catalog", resourceId: "shopier", reason: `Shopier ile eşitlendi (+${result.added}, arşiv ${result.archived}${deleted})` }, async () => true);
     return result;
   });
 }

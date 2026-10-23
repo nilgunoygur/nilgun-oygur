@@ -36,6 +36,6 @@
 
 **Provider event**: a verified webhook delivery (Shopier today, Mux later), applied once and stored only as a payload hash.
 
-**Deleting a course**: only an archived course that was never sold or granted, and is in no bundle. It removes the lessons and the Shopier product too; a product deleted in Shopier only archives its course (Shopier sends no delete event, so the sync notices), and the owner deletes it from there. Sold courses stay archived as the record of their purchases.
+**Deleting a course**: only a course that was never sold or granted, and is in no bundle. The owner deletes an archived one, which removes the lessons and the Shopier product too. A product deleted in Shopier takes its course with it: Shopier sends no delete event, so the catalog sync notices the product is gone, confirms it with Shopier, and deletes the course. Sold or bundled courses are only archived, as the record of their purchases.
 
 **Reconciliation**: the daily replay of recent Shopier orders and catalog sync that recovers anything a webhook missed.
